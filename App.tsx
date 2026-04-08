@@ -1,45 +1,64 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useEffect } from 'react';
+import { StatusBar } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { Provider, useDispatch } from 'react-redux';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { store } from './src/store';
+import type { AppDispatch } from './src/store';
+import RootStackNavigator from './src/navigation/RootStackNavigator';
+import { Colors } from './src/theme';
+import { bootstrapFirebaseMessaging, setupForegroundNotificationListener } from './src/services/firebase/messaging';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+// ─── Inner app: has access to the Redux store ─────────────────────────────────
+
+const AppInner: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+
+  useEffect(() => {
+    let unsubscribeForeground: () => void = () => {};
+
+    // Bootstrap must finish before we attach the foreground listener so that
+    // the native Firebase module is guaranteed to be ready.
+    bootstrapFirebaseMessaging(dispatch).then(() => {
+      unsubscribeForeground = setupForegroundNotificationListener(dispatch);
+    }).catch(err => {
+      console.warn('[App] Firebase setup error:', err);
+    });
+
+    return () => {
+      unsubscribeForeground();
+    };
+  }, [dispatch]);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
-}
-
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
+    <NavigationContainer>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Colors.background}
+        translucent={false}
       />
-    </View>
+      <RootStackNavigator />
+    </NavigationContainer>
+  );
+};
+
+// ─── Root: provides the Redux store ──────────────────────────────────────────
+
+function App(): React.JSX.Element {
+  return (
+    <Provider store={store}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <BottomSheetModalProvider>
+            <AppInner />
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
 
 export default App;

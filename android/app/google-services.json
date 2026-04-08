@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "422835272274",
+    "project_id": "m-optic-216a9",
+    "storage_bucket": "m-optic-216a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422835272274:android:3ac44403904e3b5032fd8b",
+        "android_client_info": {
+          "package_name": "app.moptic.cross"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXcN-6tMOu38aBZxTjJYMSGFbNqRx3BXc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
