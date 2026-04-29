@@ -6,8 +6,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Provider, useDispatch } from 'react-redux';
 
-import { store } from './src/store';
+import { store, persistor } from './src/store';
 import type { AppDispatch } from './src/store';
+import { PersistGate } from 'redux-persist/integration/react';
 import RootStackNavigator from './src/navigation/RootStackNavigator';
 import { Colors } from './src/theme';
 import { bootstrapFirebaseMessaging, setupForegroundNotificationListener } from './src/services/firebase/messaging';
@@ -37,8 +38,8 @@ const AppInner: React.FC = () => {
     <NavigationContainer>
       <StatusBar
         barStyle="dark-content"
-        backgroundColor={Colors.background}
-        translucent={false}
+        backgroundColor="transparent"
+        translucent={true}
       />
       <RootStackNavigator />
     </NavigationContainer>
@@ -50,13 +51,15 @@ const AppInner: React.FC = () => {
 function App(): React.JSX.Element {
   return (
     <Provider store={store}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <BottomSheetModalProvider>
-            <AppInner />
-          </BottomSheetModalProvider>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
+      <PersistGate loading={null} persistor={persistor}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.primary }}>
+          <SafeAreaProvider>
+            <BottomSheetModalProvider>
+              <AppInner />
+            </BottomSheetModalProvider>
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </PersistGate>
     </Provider>
   );
 }

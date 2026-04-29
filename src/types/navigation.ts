@@ -21,6 +21,9 @@ export type GlassItem = {
 };
 
 export type RootStackParamList = {
+  Splash: undefined;
+  Login: undefined;
+  Register: undefined;
   Main: undefined;
   GlassDetail: { glass: GlassItem };
 };
@@ -28,7 +31,7 @@ export type RootStackParamList = {
 export type BottomTabParamList = {
   Home: undefined;
   Glass: undefined;
-  Report: undefined;
+  Scan: undefined;
   Store: undefined;
   Profile: undefined;
 };

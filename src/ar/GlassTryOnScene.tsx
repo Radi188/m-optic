@@ -1,10 +1,17 @@
 /**
- * GlassTryOnScene
- * Front camera + MediaPipe FaceMesh → crisp vector wayfarer glasses.
- * Drawn entirely with Canvas 2D — no raster image, no pixelation, any resolution.
+ * GlassTryOnScene — real-time AR glasses try-on
+ *
+ * Uses the same oculos.obj as GlassModelScene:
+ *  1. OBJ text fetched from Metro in the RN JS thread, embedded in HTML.
+ *  2. Parsed + rendered by Three.js on an alpha-transparent canvas
+ *     overlaid on the mirrored front-camera video.
+ *  3. MediaPipe FaceMesh drives position / rotation / scale every frame.
  */
-import React, { useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, Alert, Linking,
+  ActivityIndicator, Image,
+} from 'react-native';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
@@ -12,7 +19,22 @@ import type { GlassItem } from '../types/navigation';
 
 interface Props { glass: GlassItem; }
 
-function buildHtml(glassName: string, accentColor: string): string {
+const OBJ_URI = Image.resolveAssetSource(
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../assets/models/oculos.obj'),
+).uri;
+
+function escapeObj(raw: string): string {
+  return raw
+    .replace(/\\/g, '\\\\')
+    .replace(/`/g,  '\\`')
+    .replace(/\${/g, '\\${');
+}
+
+function buildHtml(glass: GlassItem, objText: string): string {
+  const accentHex = Colors.primary;
+  const safeObj   = escapeObj(objText);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -20,301 +42,307 @@ function buildHtml(glassName: string, accentColor: string): string {
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000}
+    /* mirrored camera feed */
     #video{
       position:absolute;top:0;left:0;width:100%;height:100%;
-      object-fit:cover;
-      transform:scaleX(-1);
+      object-fit:cover;transform:scaleX(-1);z-index:0;
     }
-    #overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+    /* transparent Three.js canvas on top */
+    #ar-canvas{
+      position:absolute;top:0;left:0;width:100%;height:100%;
+      pointer-events:none;z-index:1;
+    }
     #status{
       position:absolute;top:18px;left:50%;transform:translateX(-50%);
       background:rgba(0,0,0,0.55);color:#fff;
       font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;
-      padding:6px 16px;border-radius:20px;white-space:nowrap;transition:background 0.4s;
+      padding:6px 16px;border-radius:20px;white-space:nowrap;
+      transition:background .4s;z-index:2;
     }
     #loading{
       position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-      color:rgba(255,255,255,0.65);font-family:-apple-system,sans-serif;
-      font-size:14px;text-align:center;line-height:1.8;pointer-events:none;
+      color:rgba(255,255,255,.7);font-family:-apple-system,sans-serif;
+      font-size:14px;text-align:center;line-height:1.9;pointer-events:none;z-index:2;
     }
     .spinner{
-      width:34px;height:34px;
-      border:3px solid rgba(255,255,255,0.15);
-      border-top-color:rgba(255,255,255,0.85);
-      border-radius:50%;animation:spin 0.8s linear infinite;
-      margin:0 auto 10px;
+      width:36px;height:36px;
+      border:3px solid rgba(255,255,255,.15);
+      border-top-color:rgba(255,255,255,.85);
+      border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px;
     }
     @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
-<canvas id="overlay"></canvas>
+<canvas id="ar-canvas"></canvas>
 <div id="status">Point camera at your face</div>
-<div id="loading"><div class="spinner"></div>Loading…</div>
+<div id="loading"><div class="spinner"></div>Initialising AR…</div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js"       crossorigin="anonymous"></script>
 
 <script>
 (function(){
-  const video   = document.getElementById('video');
-  const canvas  = document.getElementById('overlay');
-  const status  = document.getElementById('status');
-  const loading = document.getElementById('loading');
-  const ctx     = canvas.getContext('2d');
+'use strict';
 
-  const ACCENT      = '${accentColor}';
-  const FRAME_COLOR = '#0D0D0D';
-  const NAME        = \`${glassName}\`;
+const ACCENT     = '${accentHex}';
+const GLASS_NAME = '${glass.name.replace(/'/g, "\\'")}';
 
-  function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
-  resize();
-  window.addEventListener('resize', resize);
+const video   = document.getElementById('video');
+const loading = document.getElementById('loading');
+const status  = document.getElementById('status');
 
-  // Landmark → mirrored canvas pixel (video is CSS-flipped scaleX(-1))
-  function px(lm){ return { x:(1-lm.x)*canvas.width, y:lm.y*canvas.height, z:lm.z }; }
+// ── Three.js — transparent overlay ───────────────────────────────────────────
+const canvas   = document.getElementById('ar-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000, 0);   // fully transparent
 
-  // Rounded-rect path (reusable, drawn relative to current transform origin)
-  function roundRect(x, y, w, h, r){
-    r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
-    ctx.beginPath();
-    ctx.moveTo(x+r, y);
-    ctx.lineTo(x+w-r, y);    ctx.arcTo(x+w, y,   x+w, y+r,   r);
-    ctx.lineTo(x+w, y+h-r);  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
-    ctx.lineTo(x+r, y+h);    ctx.arcTo(x,   y+h, x,   y+h-r, r);
-    ctx.lineTo(x, y+r);      ctx.arcTo(x,   y,   x+r, y,     r);
-    ctx.closePath();
-  }
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.001, 200);
+camera.position.z = 10;
 
-  // Hex color → r,g,b string for rgba()
-  function hexRgb(hex){
-    const h = hex.replace('#','');
-    return [
-      parseInt(h.slice(0,2),16),
-      parseInt(h.slice(2,4),16),
-      parseInt(h.slice(4,6),16),
-    ].join(',');
-  }
-  const ACCENT_RGB = hexRgb(ACCENT);
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+const key  = new THREE.DirectionalLight(0xfff8ee, 2.0); key.position.set(2, 4, 6);  scene.add(key);
+const fill = new THREE.DirectionalLight(0xddeeff, 0.7); fill.position.set(-3, 1, 3); scene.add(fill);
 
-  // ── Main draw ───────────────────────────────────────────────────────────────
-  function drawGlasses(lm){
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color:      new THREE.Color('#0F0B08'),
+  metalness:  0.60,
+  roughness:  0.25,
+  clearcoat:  0.70,
+  clearcoatRoughness: 0.12,
+});
 
-    // ── Landmarks ──────────────────────────────────────────────────────────────
-    // Left eye  (screen-left):  outer=263, inner=362, top=386, bot=374
-    // Right eye (screen-right): outer=33,  inner=133, top=159, bot=145
-    // Temples: 234 (left), 454 (right)  ← full face width reference
-    const lOut = px(lm[263]), lInn = px(lm[362]);
-    const lTop = px(lm[386]), lBot = px(lm[374]);
-    const rOut = px(lm[33]),  rInn = px(lm[133]);
-    const rTop = px(lm[159]), rBot = px(lm[145]);
-    const lTemple = px(lm[234]);
-    const rTemple = px(lm[454]);
+// ── OBJ parser (same as GlassModelScene) ─────────────────────────────────────
+function parseOBJ(text) {
+  const positions = [], normals = [], uvs = [];
+  const posOut = [], normOut = [], uvOut = [];
 
-    // Eye centres
-    const lCX = (lOut.x + lInn.x) / 2,  lCY = (lTop.y + lBot.y) / 2;
-    const rCX = (rOut.x + rInn.x) / 2,  rCY = (rTop.y + rBot.y) / 2;
-    const cx  = (lCX + rCX) / 2;
-    const cy  = (lCY + rCY) / 2;
+  function addVert(tok) {
+    const parts = tok.split('/');
+    const vi = parseInt(parts[0], 10) || 0;
+    const ti = parseInt(parts[1], 10) || 0;
+    const ni = parseInt(parts[2], 10) || 0;
 
-    // ── Head pose ──────────────────────────────────────────────────────────────
-    // Yaw from z-depth of mirrored outer-eye landmarks
-    const rawYaw = (lm[263].z - lm[33].z) * 3.0;
-    const yaw    = Math.max(-1, Math.min(1, rawYaw));
-    // Roll from slope of the eye-centre line
-    const roll   = Math.atan2(rCY - lCY, rCX - lCX);
+    const pi = (vi > 0 ? vi - 1 : positions.length / 3 + vi) * 3;
+    posOut.push(positions[pi] || 0, positions[pi+1] || 0, positions[pi+2] || 0);
 
-    // ── Sizing — temple-to-temple (how real frames are measured) ──────────────
-    const templeSpan = Math.abs(rTemple.x - lTemple.x);
-    const frameW     = templeSpan * 0.88;   // total visible front width
-    const bridgeW    = frameW * 0.085;      // nose-bridge gap
-    const lensW      = (frameW - bridgeW) / 2;
-
-    // Real wayfarer lens height ≈ 72–78% of lens width (tall, covering the eye fully)
-    const lensH = lensW * 0.75;
-
-    const ft = Math.max(4, lensH * 0.125); // frame stroke thickness
-    const cr = lensH * 0.20;               // corner radius
-
-    // ── Perspective squish on yaw ──────────────────────────────────────────────
-    const perspX = Math.max(0.10, Math.cos(yaw * Math.PI * 0.48));
-
-    // ── All drawing happens in local space centred on (cx, cy) ────────────────
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(roll);
-    ctx.scale(perspX, 1);
-
-    // Lens origin offsets from centre (0,0)
-    const lLX = -frameW / 2;          // left edge of left lens
-    const rLX =  bridgeW / 2;         // left edge of right lens
-    const lY  = -lensH  / 2;          // top of both lenses (vertically centred on eyes)
-
-    // ── 1. Drop shadow ──────────────────────────────────────────────────────────
-    ctx.shadowColor   = 'rgba(0,0,0,0.70)';
-    ctx.shadowBlur    = lensH * 0.25;
-    ctx.shadowOffsetY = lensH * 0.08;
-
-    // ── 2. Lens tint fill ───────────────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.22)';
-    roundRect(lLX, lY, lensW, lensH, cr); ctx.fill();
-    roundRect(rLX, lY, lensW, lensH, cr); ctx.fill();
-
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-
-    // ── 3. Outer frame stroke ───────────────────────────────────────────────────
-    ctx.strokeStyle = FRAME_COLOR;
-    ctx.lineWidth   = ft;
-    ctx.lineJoin    = 'round';
-    roundRect(lLX, lY, lensW, lensH, cr); ctx.stroke();
-    roundRect(rLX, lY, lensW, lensH, cr); ctx.stroke();
-
-    // ── 4. Thick top bar — the wayfarer signature ───────────────────────────────
-    ctx.lineWidth = ft * 1.8;
-    ctx.lineCap   = 'round';
-    ctx.strokeStyle = FRAME_COLOR;
-    ctx.beginPath(); ctx.moveTo(lLX + cr, lY); ctx.lineTo(lLX + lensW - cr, lY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(rLX + cr, lY); ctx.lineTo(rLX + lensW - cr, lY); ctx.stroke();
-
-    // ── 5. Nose bridge (curved) ─────────────────────────────────────────────────
-    ctx.lineWidth   = ft * 0.70;
-    ctx.strokeStyle = FRAME_COLOR;
-    ctx.beginPath();
-    ctx.moveTo(lLX + lensW, -ft * 0.15);
-    ctx.quadraticCurveTo(0, ft * 1.4, rLX, -ft * 0.15);
-    ctx.stroke();
-
-    // ── 6. Nose pads (small ovals on the bridge) ────────────────────────────────
-    ctx.fillStyle = '#333';
-    ctx.save();
-    ctx.translate(lLX + lensW + bridgeW * 0.18, ft * 0.55);
-    ctx.scale(1, 1.6);
-    ctx.beginPath(); ctx.arc(0, 0, ft * 0.28, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.translate(rLX - bridgeW * 0.18, ft * 0.55);
-    ctx.scale(1, 1.6);
-    ctx.beginPath(); ctx.arc(0, 0, ft * 0.28, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-
-    // ── 7. Hinge dots ───────────────────────────────────────────────────────────
-    ctx.fillStyle = '#2A2A2A';
-    const hY = lY + lensH * 0.20;
-    ctx.beginPath(); ctx.arc(lLX,       hY, ft * 0.55, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(rLX+lensW, hY, ft * 0.55, 0, Math.PI * 2); ctx.fill();
-
-    // ── 8. Temple arms (fade in as you turn) ────────────────────────────────────
-    const tLen  = templeSpan * 0.28;
-    const lAlpha = Math.max(0, Math.min(1, (-yaw + 0.12) / 0.60));
-    const rAlpha = Math.max(0, Math.min(1, ( yaw + 0.12) / 0.60));
-
-    ctx.lineWidth   = ft * 1.10;
-    ctx.lineCap     = 'round';
-    ctx.strokeStyle = FRAME_COLOR;
-
-    if(lAlpha > 0.02){
-      ctx.globalAlpha = lAlpha;
-      ctx.beginPath();
-      ctx.moveTo(lLX, hY);
-      ctx.lineTo(lLX - tLen * lAlpha, hY + lensH * 0.04);
-      ctx.stroke();
-    }
-    if(rAlpha > 0.02){
-      ctx.globalAlpha = rAlpha;
-      ctx.beginPath();
-      ctx.moveTo(rLX + lensW, hY);
-      ctx.lineTo(rLX + lensW + tLen * rAlpha, hY + lensH * 0.04);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // ── 9. Inner accent line (thin coloured rim inside the frame) ───────────────
-    const ip = ft * 0.65;
-    ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.55)';
-    ctx.lineWidth   = ft * 0.18;
-    roundRect(lLX + ip, lY + ip, lensW - ip*2, lensH - ip*2, cr * 0.6); ctx.stroke();
-    roundRect(rLX + ip, lY + ip, lensW - ip*2, lensH - ip*2, cr * 0.6); ctx.stroke();
-
-    // ── 10. Specular glare (top-left highlight on each lens) ────────────────────
-    const glareH = lensH * 0.38;
-    const shine  = ctx.createLinearGradient(0, lY, 0, lY + glareH);
-    shine.addColorStop(0, 'rgba(255,255,255,0.20)');
-    shine.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = shine;
-    const gp = ft * 0.5;
-    roundRect(lLX + gp, lY + gp, lensW - gp*2, glareH, cr * 0.5); ctx.fill();
-    roundRect(rLX + gp, lY + gp, lensW - gp*2, glareH, cr * 0.5); ctx.fill();
-
-    ctx.restore();
-  }
-
-  // ── Camera ───────────────────────────────────────────────────────────────────
-  if(!navigator.mediaDevices?.getUserMedia){
-    window.ReactNativeWebView.postMessage(JSON.stringify({type:'cameraError',reason:'unsupported'}));
-    return;
-  }
-  navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} },
-    audio:false,
-  }).then(stream => {
-    video.srcObject = stream;
-    video.play().catch(()=>{});
-  }).catch(err => {
-    window.ReactNativeWebView.postMessage(
-      JSON.stringify({type:'cameraError', reason: err.name || 'unknown'})
-    );
-  });
-
-  // ── MediaPipe FaceMesh ────────────────────────────────────────────────────────
-  let faceFound = false;
-
-  function onResults(results){
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(results.multiFaceLandmarks?.length){
-      if(!faceFound){
-        faceFound = true;
-        loading.style.display = 'none';
-        status.textContent = NAME + ' — try on';
-        status.style.background = ACCENT + 'CC';
-      }
-      drawGlasses(results.multiFaceLandmarks[0]);
+    if (ni) {
+      const nii = (ni > 0 ? ni - 1 : normals.length / 3 + ni) * 3;
+      normOut.push(normals[nii] || 0, normals[nii+1] || 0, normals[nii+2] || 0);
     } else {
-      if(faceFound){
-        faceFound = false;
-        status.textContent = 'Point camera at your face';
-        status.style.background = 'rgba(0,0,0,0.55)';
+      normOut.push(0, 0, 1);
+    }
+    if (ti) {
+      const uvi = (ti > 0 ? ti - 1 : uvs.length / 2 + ti) * 2;
+      uvOut.push(uvs[uvi] || 0, uvs[uvi+1] || 0);
+    } else {
+      uvOut.push(0, 0);
+    }
+  }
+
+  for (const rawLine of text.split('\\n')) {
+    const line  = rawLine.trim();
+    if (!line || line[0] === '#') continue;
+    const parts = line.split(/\\s+/);
+    const cmd   = parts[0];
+    if      (cmd === 'v')  positions.push(+parts[1], +parts[2], +parts[3]);
+    else if (cmd === 'vn') normals.push(+parts[1], +parts[2], +parts[3]);
+    else if (cmd === 'vt') uvs.push(+parts[1], +(parts[2] || 0));
+    else if (cmd === 'f') {
+      const verts = parts.slice(1);
+      for (let i = 1; i < verts.length - 1; i++) {
+        addVert(verts[0]);
+        addVert(verts[i]);
+        addVert(verts[i + 1]);
       }
     }
   }
 
-  function initFaceMesh(){
-    if(typeof FaceMesh === 'undefined' || typeof Camera === 'undefined'){
-      return setTimeout(initFaceMesh, 250);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(posOut, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(normOut, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvOut, 2));
+  if (!normals.length) geo.computeVertexNormals();
+  return geo;
+}
+
+// ── Parse + centre the model ──────────────────────────────────────────────────
+let glassGroup  = null;
+let MODEL_WIDTH = 1.0;   // raw X-span after centring (used for AR scale)
+
+try {
+  const geo = parseOBJ(\`${safeObj}\`);
+  geo.computeBoundingBox();
+  const box = geo.boundingBox;
+
+  // Centre at origin
+  const cx = (box.max.x + box.min.x) / 2;
+  const cy = (box.max.y + box.min.y) / 2;
+  const cz = (box.max.z + box.min.z) / 2;
+  geo.translate(-cx, -cy, -cz);
+
+  MODEL_WIDTH = box.max.x - box.min.x;   // width in raw OBJ units (≈1.547)
+
+  const mesh = new THREE.Mesh(geo, glassMat);
+  glassGroup = new THREE.Group();
+  glassGroup.add(mesh);
+  glassGroup.visible = false;
+  scene.add(glassGroup);
+} catch (e) {
+  console.warn('OBJ parse error:', e.message);
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+(function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+})();
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ── Face pose → Three.js transform ───────────────────────────────────────────
+function applyFacePose(lm) {
+  if (!glassGroup) return;
+
+  const W = innerWidth, H = innerHeight;
+  // Mirror X to match CSS-flipped video
+  function px(l) { return { x: (1 - l.x) * W, y: l.y * H, z: l.z }; }
+
+  // Eye-centre landmarks
+  const lTop = px(lm[386]), lBot = px(lm[374]);
+  const rTop = px(lm[159]), rBot = px(lm[145]);
+  const lOut = px(lm[263]), lInn = px(lm[362]);
+  const rOut = px(lm[33]),  rInn = px(lm[133]);
+
+  const lCX = (lOut.x + lInn.x) / 2,  lCY = (lTop.y + lBot.y) / 2;
+  const rCX = (rOut.x + rInn.x) / 2,  rCY = (rTop.y + rBot.y) / 2;
+  const eyeMidX = (lCX + rCX) / 2;
+  const eyeMidY = (lCY + rCY) / 2;
+
+  // ── Width: use temple-to-temple landmarks (234 / 454) ─────────────────────
+  // This is how real glasses are sized — they span from temple to temple.
+  // Target = 90 % of temple span so the frame sits just inside the hairline.
+  const lTemple = px(lm[234]);
+  const rTemple = px(lm[454]);
+  const templePx    = Math.abs(rTemple.x - lTemple.x);
+
+  // ── Vertical position ─────────────────────────────────────────────────────
+  // Nose-bridge landmark 6 sits right between the eyes on the bridge.
+  // Place the glasses centre there — the frame naturally covers both eyes.
+  const noseBridge = px(lm[6]);
+  const faceCX     = eyeMidX;
+  // 60 % eye-midpoint + 40 % nose-bridge so glasses sit slightly lower,
+  // matching where real nose-pads rest.
+  const faceCY     = eyeMidY * 0.60 + noseBridge.y * 0.40;
+
+  // ── Head pose ─────────────────────────────────────────────────────────────
+  const rawYaw = (lm[263].z - lm[33].z) * 3.5;
+  const yaw    = Math.max(-1, Math.min(1, rawYaw));
+  const roll   = Math.atan2(rCY - lCY, rCX - lCX);
+  const noseTip = px(lm[1]);
+  const pitch   = ((noseTip.y - eyeMidY) / H) * 1.5;
+
+  // ── Pixel → Three.js world coords ────────────────────────────────────────
+  const camZ   = camera.position.z;
+  const vFOV   = camera.fov * Math.PI / 180;
+  const worldH = 2 * Math.tan(vFOV / 2) * camZ;
+  const worldW = worldH * (W / H);
+
+  const wX = (faceCX / W - 0.5) *  worldW;
+  const wY = (faceCY / H - 0.5) * -worldH;
+
+  // ── Scale ────────────────────────────────────────────────────────────────
+  // Real glasses span slightly beyond the temples — 1.05× gives a natural fit.
+  const worldTemple = (templePx / W) * worldW;
+  const targetWidth = worldTemple * 1.05;
+  const scale       = targetWidth / MODEL_WIDTH;
+
+  glassGroup.position.set(wX, wY, 0);
+  glassGroup.scale.setScalar(scale);
+  glassGroup.rotation.order = 'YXZ';
+  // Negate yaw: MediaPipe reads unflipped pixels; the video is CSS-mirrored.
+  // Without negation the glasses rotate opposite to the head turn direction.
+  glassGroup.rotation.y = -yaw;
+  glassGroup.rotation.x =  pitch;
+  glassGroup.rotation.z = -roll;
+}
+
+// ── Camera stream ─────────────────────────────────────────────────────────────
+if (!navigator.mediaDevices?.getUserMedia) {
+  window.ReactNativeWebView?.postMessage(
+    JSON.stringify({ type: 'cameraError', reason: 'unsupported' })
+  );
+  return;
+}
+navigator.mediaDevices.getUserMedia({
+  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+  audio: false,
+}).then(stream => {
+  video.srcObject = stream;
+  video.play().catch(() => {});
+}).catch(err => {
+  window.ReactNativeWebView?.postMessage(
+    JSON.stringify({ type: 'cameraError', reason: err.name || 'unknown' })
+  );
+});
+
+// ── MediaPipe FaceMesh ────────────────────────────────────────────────────────
+let faceFound = false;
+
+function onResults(results) {
+  if (results.multiFaceLandmarks?.length) {
+    if (!faceFound) {
+      faceFound = true;
+      loading.style.display = 'none';
+      if (glassGroup) glassGroup.visible = true;
+      status.textContent    = GLASS_NAME + ' — try on';
+      status.style.background = ACCENT + 'CC';
     }
-    loading.style.display = 'block';
-    const faceMesh = new FaceMesh({
-      locateFile: f => 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/' + f,
-    });
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.55,
-      minTrackingConfidence: 0.55,
-    });
-    faceMesh.onResults(onResults);
-
-    const cam = new Camera(video, {
-      onFrame: async () => { await faceMesh.send({ image: video }); },
-      width: 640, height: 480,
-    });
-    cam.start()
-      .then(() => { loading.style.display = 'none'; })
-      .catch(e => { loading.innerHTML = 'Camera error:<br>' + e.message; });
+    applyFacePose(results.multiFaceLandmarks[0]);
+  } else {
+    if (faceFound) {
+      faceFound = false;
+      if (glassGroup) glassGroup.visible = false;
+      status.textContent    = 'Point camera at your face';
+      status.style.background = 'rgba(0,0,0,0.55)';
+    }
   }
+}
 
-  if(document.readyState === 'complete'){ initFaceMesh(); }
-  else { window.addEventListener('load', initFaceMesh); }
+function initFaceMesh() {
+  if (typeof FaceMesh === 'undefined' || typeof Camera === 'undefined') {
+    return setTimeout(initFaceMesh, 250);
+  }
+  loading.style.display = 'block';
+  const fm = new FaceMesh({
+    locateFile: f => 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/' + f,
+  });
+  fm.setOptions({
+    maxNumFaces: 1, refineLandmarks: true,
+    minDetectionConfidence: 0.55, minTrackingConfidence: 0.55,
+  });
+  fm.onResults(onResults);
+
+  const cam = new Camera(video, {
+    onFrame: async () => { await fm.send({ image: video }); },
+    width: 640, height: 480,
+  });
+  cam.start()
+    .then(() => { loading.style.display = 'none'; })
+    .catch(e => { loading.innerHTML = 'Camera error:<br>' + e.message; });
+}
+
+if (document.readyState === 'complete') initFaceMesh();
+else window.addEventListener('load', initFaceMesh);
 
 })();
 </script>
@@ -326,10 +354,22 @@ function buildHtml(glassName: string, accentColor: string): string {
 
 const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const webviewRef = useRef<WebView>(null);
+  const [objText,   setObjText]   = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    setObjText(null);
+    setLoadError(false);
+    fetch(OBJ_URI)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(setObjText)
+      .catch(e => { console.warn('[TryOn] OBJ fetch failed:', e); setLoadError(true); });
+  }, []);
 
   const html = useMemo(
-    () => buildHtml(glass.name, Colors.primary),
-    [glass.name],
+    () => (objText ? buildHtml(glass, objText) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [glass.id, objText],
   );
 
   const openSettings = useCallback(() => {
@@ -342,7 +382,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
       if (msg.type === 'cameraError') {
         Alert.alert(
           'Camera Access Required',
-          'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera and enable it for MOptic.',
+          'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: openSettings },
@@ -351,6 +391,27 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
       }
     } catch {}
   }, [openSettings]);
+
+  if (!html && !loadError) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={Colors.primary} size="large" />
+        <Text style={styles.loadingText}>Loading glasses model…</Text>
+      </View>
+    );
+  }
+
+  if (loadError || !html) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorIcon}>⚠</Text>
+        <Text style={styles.errorTitle}>Could not load model</Text>
+        <Text style={styles.errorSub}>
+          Make sure Metro bundler is running{'\n'}and the device is on the same network.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -367,7 +428,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
         allowsInlineMediaPlayback
         mediaCapturePermissionGrantType="grant"
         onMessage={onMessage}
-        onError={e => console.warn('TryOn WebView error:', e.nativeEvent)}
+        onError={e => console.warn('[TryOn] WebView error:', e.nativeEvent)}
       />
 
       <View style={styles.bottomBar}>
@@ -376,7 +437,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
           <Text style={styles.glassBrand}>{glass.brand} · ${glass.price}</Text>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>LIVE</Text>
+          <Text style={styles.badgeText}>3D LIVE</Text>
         </View>
       </View>
     </View>
@@ -389,22 +450,28 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   webview:   { flex: 1, backgroundColor: '#000' },
 
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.80)',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+  center: {
+    flex: 1, backgroundColor: '#000',
+    alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingHorizontal: Spacing.xl,
   },
-  glassInfo: { flex: 1 },
-  glassName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
-  glassBrand: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  loadingText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
+  errorIcon:   { fontSize: 36, color: '#F7A440' },
+  errorTitle:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  errorSub:    { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 20 },
 
+  bottomBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+  },
+  glassInfo:  { flex: 1 },
+  glassName:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  glassBrand: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
   badge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm, paddingVertical: 4,
     borderRadius: BorderRadius.sm,
   },
-  badgeText: { fontSize: 10, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
+  badgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 1 },
 });

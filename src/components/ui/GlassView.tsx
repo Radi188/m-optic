@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { Colors, BorderRadius, Shadow } from '../../theme';
 
 type GlassIntensity = 'ultralight' | 'light' | 'medium' | 'heavy';
 
 interface GlassViewProps {
   children?: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   intensity?: GlassIntensity;
   /** Show the specular top-edge highlight */
   highlight?: boolean;

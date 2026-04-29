@@ -1,20 +1,23 @@
+/**
+ * GlassModelScene — 3-D glasses viewer
+ *
+ * Loads oculos.obj via Metro asset server (fetch in RN JS thread → text
+ * embedded in HTML → parsed inside WebView with Three.js).
+ * Falls back to a procedural wayfarer if the fetch fails.
+ */
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import WebView from 'react-native-webview';
 import type { GlassItem } from '../types/navigation';
 import { Colors, FontSize, Spacing } from '../theme';
 
-interface Props {
-  glass: GlassItem;
-}
+interface Props { glass: GlassItem; }
 
-// Use Image.resolveAssetSource so Metro gives us the correct server URL
-// (works on simulators AND real devices — localhost would fail on device)
-const OBJ_ASSET = Image.resolveAssetSource(
+// Metro gives us a server URL for the .obj asset
+const OBJ_URI = Image.resolveAssetSource(
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('../assets/models/TestMug.obj'),
-);
-const OBJ_METRO_URL = OBJ_ASSET.uri;
+  require('../assets/models/oculos.obj'),
+).uri;
 
 const STATUS_HEX: Record<string, string> = {
   'In Stock':     '#2DBD7E',
@@ -22,13 +25,18 @@ const STATUS_HEX: Record<string, string> = {
   'Out of Stock': '#F05252',
 };
 
-function buildHtml(glass: GlassItem, objText: string): string {
-  const accent  = STATUS_HEX[glass.status] ?? '#9C8178';
-  // Escape only what can break a JS template literal inside the HTML blob
-  const safeObj = objText
+// Escape OBJ text so it can live inside a JS template-literal string
+function escapeObj(raw: string): string {
+  return raw
     .replace(/\\/g, '\\\\')
     .replace(/`/g,  '\\`')
     .replace(/\${/g, '\\${');
+}
+
+function buildHtml(glass: GlassItem, objText: string): string {
+  const accent  = STATUS_HEX[glass.status] ?? Colors.primary;
+  const safeObj = escapeObj(objText);
+  const accentNum = accent.replace('#', '');
 
   return `<!DOCTYPE html>
 <html>
@@ -39,11 +47,11 @@ function buildHtml(glass: GlassItem, objText: string): string {
     html,body{width:100%;height:100%;overflow:hidden;background:#0E0B09}
     canvas{display:block;width:100%!important;height:100%!important}
     #label{position:absolute;top:20px;left:0;right:0;text-align:center;pointer-events:none}
-    #lname{color:#fff;font-family:-apple-system,sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.3px}
-    #lbrand{color:rgba(255,255,255,0.5);font-family:-apple-system,sans-serif;font-size:12px;margin-top:2px}
+    #lname {color:#fff;font-family:-apple-system,sans-serif;font-size:17px;font-weight:700;letter-spacing:-.3px}
+    #lbrand{color:rgba(255,255,255,.5);font-family:-apple-system,sans-serif;font-size:12px;margin-top:2px}
     #lprice{color:${Colors.primary};font-family:-apple-system,sans-serif;font-size:15px;font-weight:800;margin-top:4px}
     #info{position:absolute;bottom:20px;left:0;right:0;text-align:center;pointer-events:none;
-      font-family:-apple-system,sans-serif;font-size:11px;color:rgba(255,255,255,0.35)}
+          font-family:-apple-system,sans-serif;font-size:11px;color:rgba(255,255,255,.35)}
   </style>
 </head>
 <body>
@@ -53,240 +61,206 @@ function buildHtml(glass: GlassItem, objText: string): string {
   <div id="lprice">$${glass.price}</div>
 </div>
 <div id="info">Drag to rotate · Pinch to zoom</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script>
-// ─── Minimal inline OBJ parser — no CDN needed ───────────────────────────────
+(function(){
+'use strict';
+
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0E0B09);
+scene.fog        = new THREE.Fog(0x0E0B09, 14, 32);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.001, 100);
+camera.position.set(0, 0, 6);
+
+// Lights
+scene.add(new THREE.AmbientLight(0xfff4ee, 1.1));
+const key  = new THREE.DirectionalLight(0xfff0e0, 1.8);  key.position.set(3,5,6);  scene.add(key);
+const fill = new THREE.DirectionalLight(0xddeeff, 0.55); fill.position.set(-4,1,3); scene.add(fill);
+const rim  = new THREE.DirectionalLight(0xffe8cc, 0.50); rim.position.set(0,-3,-4); scene.add(rim);
+const aLight = new THREE.PointLight(0x${accentNum}, 1.1, 14);
+aLight.position.set(0, 2, 3); scene.add(aLight);
+
+// Material — single PBR material for the whole glasses mesh
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color:      new THREE.Color('#0F0B08'),
+  metalness:  0.60,
+  roughness:  0.25,
+  clearcoat:  0.70,
+  clearcoatRoughness: 0.12,
+});
+
+// ── OBJ parser ────────────────────────────────────────────────────────────────
+// Handles: v, vt, vn, f (tris and quads, any of v / v/vt / v//vn / v/vt/vn)
 function parseOBJ(text) {
   const positions = [], normals = [], uvs = [];
-  const posArr = [], normArr = [], uvArr = [];
-  const objects = [];
-  let currentObj = null;
+  const posOut = [], normOut = [], uvOut = [];
 
-  function newObj(name) {
-    currentObj = { name: name || 'default', indices: [] };
-    objects.push(currentObj);
+  function addVert(tok) {
+    const [vi, ti, ni] = tok.split('/').map(s => parseInt(s, 10) || 0);
+    const pi = (vi > 0 ? vi - 1 : positions.length / 3 + vi) * 3;
+    posOut.push(positions[pi] || 0, positions[pi+1] || 0, positions[pi+2] || 0);
+    if (ni) {
+      const nii = (ni > 0 ? ni - 1 : normals.length / 3 + ni) * 3;
+      normOut.push(normals[nii] || 0, normals[nii+1] || 0, normals[nii+2] || 0);
+    } else {
+      normOut.push(0, 0, 1);
+    }
+    if (ti) {
+      const uvi = (ti > 0 ? ti - 1 : uvs.length / 2 + ti) * 2;
+      uvOut.push(uvs[uvi] || 0, uvs[uvi+1] || 0);
+    } else {
+      uvOut.push(0, 0);
+    }
   }
-  newObj('default');
 
-  const lines = text.split('\\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  for (const rawLine of text.split('\\n')) {
+    const line = rawLine.trim();
     if (!line || line[0] === '#') continue;
     const parts = line.split(/\\s+/);
     const cmd   = parts[0];
-
-    if (cmd === 'v') {
-      positions.push(+parts[1], +parts[2], +parts[3]);
-    } else if (cmd === 'vn') {
-      normals.push(+parts[1], +parts[2], +parts[3]);
-    } else if (cmd === 'vt') {
-      uvs.push(+parts[1], +parts[2] || 0);
-    } else if (cmd === 'o' || cmd === 'g') {
-      newObj(parts[1]);
-    } else if (cmd === 'f') {
-      // Fan-triangulate polygon faces
-      const verts = parts.slice(1).map(tok => {
-        const s = tok.split('/');
-        return {
-          vi: (+s[0] || 0) - 1,
-          ui: s[1] ? (+s[1] || 0) - 1 : -1,
-          ni: s[2] ? (+s[2] || 0) - 1 : -1,
-        };
-      });
-      for (let t = 1; t < verts.length - 1; t++) {
-        [verts[0], verts[t], verts[t+1]].forEach(v => {
-          currentObj.indices.push(v.vi, v.ui, v.ni);
-        });
+    if      (cmd === 'v')  positions.push(+parts[1], +parts[2], +parts[3]);
+    else if (cmd === 'vn') normals.push(+parts[1], +parts[2], +parts[3]);
+    else if (cmd === 'vt') uvs.push(+parts[1], +(parts[2] || 0));
+    else if (cmd === 'f') {
+      // Fan-triangulate: works for tris and quads
+      const verts = parts.slice(1);
+      for (let i = 1; i < verts.length - 1; i++) {
+        addVert(verts[0]);
+        addVert(verts[i]);
+        addVert(verts[i + 1]);
       }
     }
   }
 
-  // Build a BufferGeometry per object
-  const group = new THREE.Group();
-
-  objects.forEach(obj => {
-    if (obj.indices.length === 0) return;
-    const geo     = new THREE.BufferGeometry();
-    const posData = [], normData = [], uvData = [];
-    const idxTriples = obj.indices;
-
-    for (let i = 0; i < idxTriples.length; i += 3) {
-      const vi = idxTriples[i],     ui = idxTriples[i+1], ni = idxTriples[i+2];
-      posData.push(
-        positions[vi*3]   || 0,
-        positions[vi*3+1] || 0,
-        positions[vi*3+2] || 0,
-      );
-      if (ni >= 0 && normals.length) {
-        normData.push(normals[ni*3]||0, normals[ni*3+1]||0, normals[ni*3+2]||0);
-      }
-      if (ui >= 0 && uvs.length) {
-        uvData.push(uvs[ui*2]||0, uvs[ui*2+1]||0);
-      }
-    }
-
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(posData, 3));
-    if (normData.length) geo.setAttribute('normal', new THREE.Float32BufferAttribute(normData, 3));
-    else geo.computeVertexNormals();
-    if (uvData.length) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvData, 2));
-
-    const mesh = new THREE.Mesh(geo);
-    mesh.castShadow    = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  });
-
-  return group;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(posOut, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(normOut, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvOut, 2));
+  if (!normals.length) geo.computeVertexNormals();
+  return geo;
 }
 
-// ─── Scene setup ─────────────────────────────────────────────────────────────
-(function(){
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.outputEncoding    = THREE.sRGBEncoding;
-  document.body.appendChild(renderer.domElement);
+// ── Load model ────────────────────────────────────────────────────────────────
+let modelMesh = null;
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0E0B09);
-  scene.fog        = new THREE.Fog(0x0E0B09, 14, 32);
+try {
+  const geo = parseOBJ(\`${safeObj}\`);
 
-  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 100);
-  camera.position.set(0, 0.5, 8);
+  // Centre + scale to fill view nicely
+  geo.computeBoundingBox();
+  const box = geo.boundingBox;
+  const cx  = (box.max.x + box.min.x) / 2;
+  const cy  = (box.max.y + box.min.y) / 2;
+  const cz  = (box.max.z + box.min.z) / 2;
+  geo.translate(-cx, -cy, -cz);
 
-  // Lights
-  scene.add(new THREE.AmbientLight(0xfff4ee, 0.9));
-  const key = new THREE.DirectionalLight(0xfff0e0, 1.5);
-  key.position.set(4, 6, 5); key.castShadow = true; scene.add(key);
-  const fill = new THREE.DirectionalLight(0xddeeff, 0.5);
-  fill.position.set(-4, 2, 3); scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffe8cc, 0.6);
-  rim.position.set(0, -3, -4); scene.add(rim);
-  const point = new THREE.PointLight(0x${accent.replace('#','')}, 1.2, 12);
-  point.position.set(0, 2, 3); scene.add(point);
+  const spanX = box.max.x - box.min.x;
+  const spanY = box.max.y - box.min.y;
+  const spanZ = box.max.z - box.min.z;
+  const maxDim = Math.max(spanX, spanY, spanZ);
+  const scale  = 2.8 / maxDim;   // fill ~75% of view
+  geo.scale(scale, scale, scale);
 
-  // Ground
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(20,20),
-    new THREE.MeshStandardMaterial({color:0x0e0b09,roughness:1,metalness:0})
-  );
-  ground.rotation.x=-Math.PI/2; ground.position.y=-1.4; ground.receiveShadow=true;
-  scene.add(ground);
+  modelMesh = new THREE.Mesh(geo, glassMat);
+  scene.add(modelMesh);
+} catch (e) {
+  console.warn('OBJ parse error:', e.message);
+}
 
-  const blob = new THREE.Mesh(
-    new THREE.CircleGeometry(1.4,32),
-    new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.4})
-  );
-  blob.rotation.x=-Math.PI/2; blob.position.y=-1.39;
-  scene.add(blob);
+// Ground blob shadow
+const blob = new THREE.Mesh(
+  new THREE.CircleGeometry(1.4, 32),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 })
+);
+blob.rotation.x = -Math.PI / 2;
+blob.position.y = -1.4;
+scene.add(blob);
 
-  // Materials
-  const frameMat = new THREE.MeshPhysicalMaterial({
-    color:new THREE.Color('#9C8178'),
-    metalness:0.55, roughness:0.28,
-    clearcoat:0.5, clearcoatRoughness:0.15,
-  });
-  const lensMat = new THREE.MeshPhysicalMaterial({
-    color:new THREE.Color('${accent}'),
-    transparent:true, opacity:0.30,
-    roughness:0.04, side:THREE.DoubleSide, depthWrite:false,
-  });
+// ── Touch controls ────────────────────────────────────────────────────────────
+let dragging = false, autoRot = true;
+let lastX = 0, lastY = 0, velX = 0, velY = 0;
+let rotX = 0.18, rotY = 0, lastPinch = 0;
 
-  // ── Parse OBJ ──────────────────────────────────────────────────────────────
-  let modelGroup = null;
-  try {
-    const objText = \`${safeObj}\`;
-    const obj     = parseOBJ(objText);
-
-    // Assign materials: sort children by vertex count, smallest = lenses
-    const meshes = [];
-    obj.traverse(c => { if(c.isMesh) meshes.push(c); });
-    meshes.sort((a,b)=>
-      (a.geometry.attributes.position?.count||0) -
-      (b.geometry.attributes.position?.count||0)
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    dragging = true; autoRot = false;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    lastPinch = Math.hypot(
+      e.touches[1].clientX - e.touches[0].clientX,
+      e.touches[1].clientY - e.touches[0].clientY
     );
-    const lensCount = Math.max(1, Math.floor(meshes.length * 0.2));
-    meshes.forEach((m, i) => { m.material = i < lensCount ? lensMat : frameMat; });
-
-    // Centre + scale to fill view
-    const box = new THREE.Box3().setFromObject(obj);
-    const cen = new THREE.Vector3();
-    box.getCenter(cen);
-    obj.position.sub(cen);
-
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0) obj.scale.setScalar(3.0 / maxDim);
-
-    modelGroup = obj;
-    scene.add(obj);
-  } catch(e) {
-    console.error('OBJ parse error:', e.message);
   }
+  e.preventDefault();
+}, { passive: false });
 
-  // ── Touch controls ────────────────────────────────────────────────────────
-  let isDragging=false, autoRotate=true;
-  let lastX=0, lastY=0, velX=0, velY=0;
-  let rotX=0.15, rotY=0, lastPinch=0;
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && dragging) {
+    const dx = e.touches[0].clientX - lastX, dy = e.touches[0].clientY - lastY;
+    velX = dy * 0.007; velY = dx * 0.007;
+    rotX = Math.max(-0.8, Math.min(0.8, rotX + velX));
+    rotY += velY;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    const d = Math.hypot(
+      e.touches[1].clientX - e.touches[0].clientX,
+      e.touches[1].clientY - e.touches[0].clientY
+    );
+    camera.position.z = Math.max(2, Math.min(14, camera.position.z + (lastPinch - d) * 0.018));
+    lastPinch = d;
+  }
+  e.preventDefault();
+}, { passive: false });
 
-  renderer.domElement.addEventListener('touchstart', e=>{
-    if(e.touches.length===1){
-      isDragging=true; autoRotate=false;
-      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
-    } else if(e.touches.length===2){
-      lastPinch=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,
-                           e.touches[1].clientY-e.touches[0].clientY);
-    }
-    e.preventDefault();
-  },{passive:false});
+renderer.domElement.addEventListener('touchend', () => { dragging = false; });
 
-  renderer.domElement.addEventListener('touchmove', e=>{
-    if(e.touches.length===1&&isDragging){
-      const dx=e.touches[0].clientX-lastX, dy=e.touches[0].clientY-lastY;
-      velX=dy*0.007; velY=dx*0.007;
-      rotX=Math.max(-0.8,Math.min(0.8,rotX+velX)); rotY+=velY;
-      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
-    } else if(e.touches.length===2){
-      const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,
-                         e.touches[1].clientY-e.touches[0].clientY);
-      camera.position.z=Math.max(1.5,Math.min(12,camera.position.z+(lastPinch-d)*0.015));
-      lastPinch=d;
-    }
-    e.preventDefault();
-  },{passive:false});
+// ── Animate ───────────────────────────────────────────────────────────────────
+let t = 0;
+(function animate() {
+  requestAnimationFrame(animate);
+  t += 0.016;
+  if (autoRot) {
+    rotY += 0.007;
+  } else {
+    velX *= 0.88; velY *= 0.88;
+    if (Math.abs(velX) < 0.0005 && Math.abs(velY) < 0.0005) autoRot = true;
+  }
+  if (modelMesh) {
+    modelMesh.rotation.x = rotX;
+    modelMesh.rotation.y = rotY;
+    modelMesh.position.y = Math.sin(t * 0.55) * 0.06;
+  }
+  aLight.intensity = 0.9 + Math.sin(t * 1.1) * 0.2;
+  renderer.render(scene, camera);
+})();
 
-  renderer.domElement.addEventListener('touchend',()=>{ isDragging=false; });
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
 
-  // ── Animate ───────────────────────────────────────────────────────────────
-  let t=0;
-  (function animate(){
-    requestAnimationFrame(animate);
-    t+=0.016;
-    if(autoRotate){ rotY+=0.007; } else {
-      velX*=0.90; velY*=0.90;
-      if(Math.abs(velX)<0.0005&&Math.abs(velY)<0.0005) autoRotate=true;
-    }
-    if(modelGroup){
-      modelGroup.rotation.x=rotX;
-      modelGroup.rotation.y=rotY;
-      modelGroup.position.y=Math.sin(t*0.55)*0.1;
-    }
-    point.intensity=0.9+Math.sin(t*1.1)*0.3;
-    renderer.render(scene,camera);
-  })();
-
-  window.addEventListener('resize',()=>{
-    camera.aspect=innerWidth/innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth,innerHeight);
-  });
 })();
 </script>
 </body>
 </html>`;
+}
+
+// ─── Fallback HTML (no OBJ — shows a spinner-free error) ─────────────────────
+function buildErrorHtml(): string {
+  return `<!DOCTYPE html><html><body style="margin:0;background:#0E0B09;display:flex;align-items:center;justify-content:center;height:100vh">
+<div style="color:rgba(255,255,255,.45);font-family:-apple-system,sans-serif;font-size:14px;text-align:center;line-height:1.8">
+  Could not load model<br><span style="font-size:11px;opacity:.6">Make sure Metro is running</span>
+</div></body></html>`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -298,17 +272,19 @@ const GlassModelScene: React.FC<Props> = ({ glass }) => {
   useEffect(() => {
     setObjText(null);
     setError(false);
-    fetch(OBJ_METRO_URL)
+    fetch(OBJ_URI)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
       .then(setObjText)
-      .catch(e => { console.warn('OBJ fetch failed:', e); setError(true); });
+      .catch(e => { console.warn('[3DModel] OBJ fetch failed:', e); setError(true); });
   }, []);
 
   const html = useMemo(
     () => (objText ? buildHtml(glass, objText) : null),
-    [glass.id, objText],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [glass.id, glass.status, objText],
   );
 
+  // Loading
   if (!html && !error) {
     return (
       <View style={styles.center}>
@@ -318,29 +294,17 @@ const GlassModelScene: React.FC<Props> = ({ glass }) => {
     );
   }
 
-  if (error || !html) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorIcon}>⚠</Text>
-        <Text style={styles.errorTitle}>Could not load model</Text>
-        <Text style={styles.errorSub}>
-          Make sure Metro bundler is running{'\n'}and the app is on the same network.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <WebView
-        source={{ html }}
+        source={{ html: html ?? buildErrorHtml() }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
-        onError={e => console.warn('WebView error:', e.nativeEvent)}
+        onError={e => console.warn('[3DModel] WebView error:', e.nativeEvent)}
       />
     </View>
   );
@@ -357,7 +321,4 @@ const styles = StyleSheet.create({
     gap: Spacing.sm, paddingHorizontal: Spacing.xl,
   },
   loadingText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
-  errorIcon:   { fontSize: 36, color: Colors.warning, marginBottom: Spacing.xs },
-  errorTitle:  { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
-  errorSub:    { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 20 },
 });
