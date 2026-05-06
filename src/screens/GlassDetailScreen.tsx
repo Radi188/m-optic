@@ -19,9 +19,39 @@ import { Colors, Spacing, FontSize, BorderRadius, Shadow } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
 import GlassModelScene from '../ar/GlassModelScene';
 import GlassTryOnScene from '../ar/GlassTryOnScene';
+import GlassesSpecSection from '../components/ui/GlassesDetail/GlassessSpecSection';
+import GlassesImageDescription from '../components/ui/GlassesDetail/GlassesImageDescription';
+import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
+import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
+
+const dummyHtml = `
+  <div>
+    <h2>Premium Eyewear Frame</h2>
+    <p>
+      This stylish eyewear frame is designed for everyday comfort and a modern look.
+      Made with durable materials, it offers a lightweight feel and a secure fit for daily wear.
+    </p>
+
+    <p>
+      The frame shape is ideal for both casual and professional use, making it a versatile
+      choice for different face shapes and personal styles.
+    </p>
+
+   <p>• Frame Type: Round Frame</p>
+    <p>• Brand: Ray-Ban</p>
+    <p>• Size: Medium</p>
+    <p>• Gender: Unisex</p>
+    <p>• Material: Lightweight acetate</p>
+
+    <p>
+      Available in multiple colors, this frame combines elegance, comfort, and durability
+      for a premium eyewear experience.
+    </p>
+  </div>
+`;
 
 // ─── Per-frame mock spec data ─────────────────────────────────────────────────
 
@@ -303,6 +333,15 @@ const GlassDetailScreen: React.FC = () => {
   const openViewer = (mode: ViewMode) => setViewerMode(mode);
   const closeViewer = () => setViewerMode(null);
 
+  const [selectedColorId, setSelectedColorId] = useState('1');
+
+  const colorOptions = [
+    { id: '1', name: 'Black', value: '#000000' },
+    { id: '2', name: 'Brown', value: '#6B4423' },
+    { id: '3', name: 'Gold', value: '#D4AF37' },
+    { id: '4', name: 'Silver', value: '#C0C0C0' },
+  ];
+
   return (
     <View style={styles.root}>
       <StatusBar
@@ -346,14 +385,17 @@ const GlassDetailScreen: React.FC = () => {
       >
         {/* ── Hero Image ──────────────────────────────────────────────────── */}
         <View style={styles.heroWrap}>
-          <Image
-            source={{ uri: glass.image }}
-            style={styles.heroImage}
-            resizeMode="cover"
+          <GlassessProductImageSlider
+            images={[
+              'https://static5.lenskart.com/media/catalog/product/pro/1/thumbnail/1080x1080/9df78eab33525d08d6e5fb8d27136e95//l/i/lenskart-air-la-e17273-c2-eyeglasses__dsc7892_03_04_2025.jpg',
+              'https://static5.lenskart.com/media/catalog/product/pro/1/thumbnail/1080x1080/9df78eab33525d08d6e5fb8d27136e95//l/i/lenskart-air-la-e17273-c2-eyeglasses__dsc7891_03_04_2025.jpg',
+            ]}
+            onPressArTryOn={() => console.log('AR Try On')}
+            onPress3DModel={() => console.log('3D Model')}
           />
-          <View style={styles.brandPill}>
+          {/* <View style={styles.brandPill}>
             <Text style={styles.brandPillText}>{glass.brand}</Text>
-          </View>
+          </View> */}
         </View>
 
         {/* ── Name + Price ─────────────────────────────────────────────────── */}
@@ -368,7 +410,7 @@ const GlassDetailScreen: React.FC = () => {
         </View>
 
         {/* ── Specs ────────────────────────────────────────────────────────── */}
-        {spec && (
+        {/* {spec && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Specifications</Text>
             <View style={styles.specsCard}>
@@ -418,10 +460,24 @@ const GlassDetailScreen: React.FC = () => {
               ))}
             </View>
           </View>
-        )}
+        )} */}
+
+        <GlassesStyleSection
+          brand={glass?.brand || 'Ray-Ban'}
+          size={spec?.size || 'Medium'}
+          gender={spec?.gender || 'Unisex'}
+          frameTypeName={spec?.frame_type || glass?.frame_type || 'Round Frame'}
+          descriptionHtml={dummyHtml}
+          colors={colorOptions}
+          selectedColorId={selectedColorId}
+          onSelectColor={setSelectedColorId}
+        />
+
+        {/* Glasses Image */}
+        <GlassesImageDescription />
 
         {/* ── Stock Info ───────────────────────────────────────────────────── */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Availability</Text>
           <View style={[styles.stockCard, { borderColor: accentColor + '40' }]}>
             <View
@@ -448,7 +504,7 @@ const GlassDetailScreen: React.FC = () => {
               </View>
             </View>
           </View>
-        </View>
+        </View> */}
       </ScrollView>
 
       {/* ── Floating Action Bar ──────────────────────────────────────────────── */}
@@ -465,8 +521,12 @@ const GlassDetailScreen: React.FC = () => {
             activeOpacity={0.88}
           >
             <View style={styles.floatBtn3dHighlight} pointerEvents="none" />
-            <Ionicons name="cube-outline" size={18} color={Colors.white} />
-            <Text style={styles.floatBtn3dLabel}>3D Model</Text>
+            <Ionicons
+              name="phone-portrait-outline"
+              size={18}
+              color={Colors.white}
+            />
+            <Text style={styles.floatBtn3dLabel}>Contact Telegram</Text>
           </TouchableOpacity>
 
           {/* Try On button */}
@@ -476,8 +536,8 @@ const GlassDetailScreen: React.FC = () => {
             activeOpacity={0.88}
           >
             <View style={styles.floatBtnTryonHighlight} pointerEvents="none" />
-            <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-            <Text style={styles.floatBtnTryonLabel}>Try On</Text>
+            <Ionicons name="heart-outline" size={18} color={Colors.primary} />
+            <Text style={styles.floatBtnTryonLabel}>Add to Favorite</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -500,7 +560,7 @@ export default GlassDetailScreen;
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background },
+  root: { flex: 1, backgroundColor: Colors.white },
   scroll: { flex: 1 },
 
   // Header
@@ -546,7 +606,7 @@ const styles = StyleSheet.create({
 
   // Hero image
   heroWrap: { width: '100%', height: 300, position: 'relative' },
-  heroImage: { width: '100%', height: '80%' },
+  heroImage: { width: '100%', height: '100%' },
   heroOverlay: {
     position: 'absolute',
     top: 0,
@@ -588,6 +648,7 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
+    marginTop: Spacing.md,
   },
   nameRow: {
     flexDirection: 'row',

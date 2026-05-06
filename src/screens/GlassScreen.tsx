@@ -40,6 +40,9 @@ import {
   setSearchQuery,
   addItem,
 } from '../store/slices/glassSlice';
+import GlassCard from '../components/ui/GlassesCard/GlassesCard';
+import { brandsData } from '../components/ui/Home/BrandSection';
+import SearchTrigger from '../components/ui/Search/SearchBar';
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -58,7 +61,7 @@ const STOCK_COLORS: Record<string, string> = {
 };
 
 const { width } = Dimensions.get('window');
-const CARD_GAP = Spacing.sm;
+const CARD_GAP = Spacing.xs;
 const CARD_WIDTH = (width - Spacing.lg * 2 - CARD_GAP) / 2;
 const IMAGE_H = CARD_WIDTH * 0.9;
 
@@ -81,7 +84,8 @@ const GlassScreen: React.FC = () => {
 
   // ── Redux state ────────────────────────────────────────────────────────────
   const filtered = useAppSelector(selectFilteredGlasses);
-  const brands = useAppSelector(selectBrands);
+
+  const fullBrands = [{ name: 'All', id: 'all', logo: '' }, ...brandsData];
   const selectedBrand = useAppSelector(selectSelectedBrand);
   const searchQuery = useAppSelector(selectSearchQuery);
 
@@ -99,9 +103,11 @@ const GlassScreen: React.FC = () => {
       brand: form.brand.trim(),
       price: parseFloat(form.price) || 0,
       stock,
-      status: stock === 0 ? 'Out of Stock' : stock <= 3 ? 'Low Stock' : 'In Stock',
+      status:
+        stock === 0 ? 'Out of Stock' : stock <= 3 ? 'Low Stock' : 'In Stock',
       frameShape: 'rectangle',
-      image: 'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=400&q=75',
+      image:
+        'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=400&q=75',
       description: '',
     };
 
@@ -110,60 +116,29 @@ const GlassScreen: React.FC = () => {
     setAddModal(false);
   };
 
-  const renderCard = ({ item }: { item: GlassItem }) => {
-    const accent = STOCK_COLORS[item.status];
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('GlassDetail', { glass: item })}
-        activeOpacity={0.88}
-      >
-        <View style={styles.cardInner}>
-          {/* Image */}
-          <View style={styles.imageWrap}>
-            <Image
-              source={{ uri: item.image }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-            <View style={styles.imageOverlay} pointerEvents="none" />
-            <View style={styles.imageHighlight} pointerEvents="none" />
-            <View style={[styles.statusDot, { backgroundColor: accent }]} />
-            <View style={styles.pill3d}>
-              <Ionicons name="cube-outline" size={9} color={Colors.primary} />
-              <Text style={styles.pill3dText}> 3D</Text>
-            </View>
-          </View>
+  const formatData = (data: any[], numColumns: number) => {
+    const newData = [...data];
+    const remainder = newData.length % numColumns;
 
-          {/* Info */}
-          <View style={styles.infoArea}>
-            <Text style={styles.brandText} numberOfLines={1}>
-              {item.brand}
-            </Text>
-            <Text style={styles.frameName} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text style={styles.description} numberOfLines={2}>
-              {item.description}
-            </Text>
-            <View style={styles.infoDiv} />
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>${item.price}</Text>
-              <Badge
-                label={
-                  item.status === 'In Stock'
-                    ? `${item.stock} left`
-                    : item.status === 'Low Stock'
-                    ? 'Low'
-                    : 'Out'
-                }
-                variant={statusVariant[item.status]}
-                dot={item.status !== 'Out of Stock'}
-              />
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
+    if (remainder !== 0) {
+      for (let i = 0; i < numColumns - remainder; i++) {
+        newData.push({ id: `empty-${i}`, empty: true });
+      }
+    }
+
+    return newData;
+  };
+
+  const renderCard = ({ item }: { item: GlassItem }) => {
+    if (item.empty) {
+      return <View style={[styles.card, { opacity: 0 }]} />;
+    }
+    return (
+      <GlassCard
+        item={item}
+        onPress={() => navigation.navigate('GlassDetail', { glass: item })}
+        onTryOn={() => navigation.navigate('VirtualTryOn', { glass: item })}
+      />
     );
   };
 
@@ -176,11 +151,10 @@ const GlassScreen: React.FC = () => {
             <Text style={styles.eyebrow}>Inventory</Text>
             <Text style={styles.title}>Glass Frames</Text>
           </View>
-          <Button title="+ Add" size="sm" onPress={() => setAddModal(true)} />
+          {/* <Button title="Search" size="sm" onPress={() => setAddModal(true)} /> */}
         </View>
-
         {/* Search */}
-        <View style={styles.searchWrap}>
+        {/* <View style={styles.searchWrap}>
           <Input
             placeholder="Search frames or brand…"
             value={searchQuery}
@@ -194,6 +168,9 @@ const GlassScreen: React.FC = () => {
             }
             containerStyle={styles.searchContainer}
           />
+        </View> */}
+        <View style={styles.searchContainer}>
+          <SearchTrigger onPress={() => navigation.navigate('SearchScreen')} />
         </View>
 
         {/* Brand Tabs */}
@@ -203,35 +180,42 @@ const GlassScreen: React.FC = () => {
           contentContainerStyle={styles.tabsContent}
           style={styles.tabs}
         >
-          {brands.map(b => {
-            const active = selectedBrand === b;
+          {fullBrands.map(b => {
+            const active = selectedBrand === b.name;
+
             return (
               <TouchableOpacity
-                key={b}
-                onPress={() => dispatch(setSelectedBrand(b))}
+                key={b.id || b.name}
+                onPress={() => dispatch(setSelectedBrand(b.name))}
                 activeOpacity={0.75}
                 style={[styles.tab, active && styles.tabActive]}
               >
                 {active && (
                   <View style={styles.tabHighlight} pointerEvents="none" />
                 )}
-                <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                  {b}
-                </Text>
+
+                {/* 🔥 CONDITION */}
+                {b.name === 'All' ? (
+                  <Text
+                    style={[styles.tabText, active && styles.tabTextActive]}
+                  >
+                    All
+                  </Text>
+                ) : (
+                  <Image source={{ uri: b.logo }} style={styles.logo} />
+                )}
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-
         {/* Count */}
         <Text style={styles.countLine}>
           {filtered.length} frame{filtered.length !== 1 ? 's' : ''}
           {selectedBrand !== 'All' ? ` · ${selectedBrand}` : ''}
         </Text>
-
         {/* Grid */}
         <FlatList
-          data={filtered}
+          data={formatData(filtered, 2)}
           keyExtractor={item => item.id}
           numColumns={2}
           columnWrapperStyle={styles.row}
@@ -249,11 +233,13 @@ const GlassScreen: React.FC = () => {
             </View>
           }
         />
-
         {/* Add Modal */}
         <AppModal
           visible={addModal}
-          onClose={() => { setAddModal(false); setForm(EMPTY_FORM); }}
+          onClose={() => {
+            setAddModal(false);
+            setForm(EMPTY_FORM);
+          }}
           title="Add Glass Frame"
           actions={[
             {
@@ -263,7 +249,10 @@ const GlassScreen: React.FC = () => {
             },
             {
               label: 'Cancel',
-              onPress: () => { setAddModal(false); setForm(EMPTY_FORM); },
+              onPress: () => {
+                setAddModal(false);
+                setForm(EMPTY_FORM);
+              },
               variant: 'ghost',
             },
           ]}
@@ -315,6 +304,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
+
   eyebrow: {
     fontSize: FontSize.xs,
     color: Colors.gray500,
@@ -330,40 +320,45 @@ const styles = StyleSheet.create({
   },
 
   searchWrap: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
-  searchContainer: { marginBottom: 0 },
+  searchContainer: { marginBottom: Spacing.md },
 
-  tabs: { marginBottom: Spacing.sm },
+  tabs: { marginBottom: Spacing.md, height: 60 },
   tabsContent: { paddingHorizontal: Spacing.lg },
-  tab: {
-    marginRight: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.glassSurfaceMid,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    overflow: 'hidden',
-  },
-  tabActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-    ...Shadow.sm,
-  },
-  tabHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 6,
-    right: 6,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.40)',
-  },
   tabText: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     fontWeight: '600',
     color: Colors.gray500,
-    paddingTop: 6,
-    paddingBottom: 16,
   },
-  tabTextActive: { color: Colors.white },
+  tabTextActive: { color: Colors.primary },
+  logo: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+    transform: [{ scale: 1.4 }],
+  },
+
+  tab: {
+    width: 85,
+    height: 35,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: Colors.gray200,
+  },
+
+  tabActive: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#b09080',
+  },
+  tabHighlight: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: BorderRadius.sm,
+  },
 
   countLine: {
     fontSize: FontSize.xs,

@@ -54,6 +54,7 @@ export const deleteGlassThunk = createAsyncThunk(
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
 const INITIAL_FRAMES: GlassItem[] = [
+  
   {
     id: '1', brand: 'Ray-Ban', name: 'Classic Round', price: 120, stock: 8,
     status: 'In Stock', frameShape: 'round',
@@ -61,7 +62,7 @@ const INITIAL_FRAMES: GlassItem[] = [
     description: 'Timeless circular frames with spring hinges and UV400 lenses.',
   },
   {
-    id: '2', brand: 'Ray-Ban', name: 'Wayfarer Plus', price: 99, stock: 0,
+    id: '817', brand: 'Ray-Ban', name: 'Wayfarer Plus', price: 99, stock: 0,
     status: 'Out of Stock', frameShape: 'wayfarer',
     image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&w=400&q=75',
     description: 'Iconic squared silhouette, scratch-resistant CR-39 lenses.',
@@ -75,7 +76,7 @@ const INITIAL_FRAMES: GlassItem[] = [
   {
     id: '4', brand: 'Oakley', name: 'Aviator Pro', price: 150, stock: 2,
     status: 'Low Stock', frameShape: 'aviator',
-    image: 'https://images.unsplash.com/photo-1511499767150-a7a1371514e4?auto=format&w=400&q=75',
+    image: 'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=400&q=75',
     description: 'Lightweight aviator-style with polarized lenses and titanium finish.',
   },
   {
