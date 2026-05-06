@@ -33,6 +33,11 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Main" component={BottomTabNavigator} />
           <Stack.Screen
+            name="GlassDetail"
+            component={GlassDetailScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
             name="Login"
             component={LoginScreen}
             options={{ animation: 'slide_from_right' }}

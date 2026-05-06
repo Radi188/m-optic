@@ -9,6 +9,7 @@ export type FrameShape =
   | 'cat-eye';
 
 export type GlassItem = {
+  empty?: any;
   id: string;
   name: string;
   brand: string;
@@ -18,6 +19,7 @@ export type GlassItem = {
   image: string;
   frameShape: FrameShape;
   description?: string;
+  
 };
 
 export type RootStackParamList = {
