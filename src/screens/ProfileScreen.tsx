@@ -120,15 +120,17 @@ const ProfileScreen: React.FC = () => {
     {
       icon: 'notifications-outline',
       label: 'Notifications',
-      sub: unreadCount > 0 ? `${unreadCount} unread` : undefined,
+      sub: unreadCount > 0 ? `${unreadCount} unread` : 'All caught up',
       badge: unreadCount > 0 ? unreadCount : undefined,
+      color: '#4DA8DA',
       onPress: () => setNotifModal(true),
     },
     {
       icon: 'lock-closed-outline',
       label: 'Change Password',
-      sub: undefined,
+      sub: 'Update your credentials',
       badge: undefined,
+      color: '#9B59B6',
       onPress: () => setPwModal(true),
     },
     {
@@ -136,9 +138,19 @@ const ProfileScreen: React.FC = () => {
       label: 'Language',
       sub: 'English',
       badge: undefined,
+      color: '#2DBD7E',
       onPress: () => {},
     },
   ];
+
+  const QUICK_ACTIONS = [
+    { icon: 'eye-outline',      label: 'Refraction',  color: Colors.primary,  bg: Colors.primaryLight },
+    { icon: 'receipt-outline',  label: 'Orders',      color: '#F4A830',       bg: 'rgba(244,168,48,0.14)' },
+    { icon: 'pricetag-outline', label: 'Offers',      color: '#2DBD7E',       bg: 'rgba(45,189,126,0.14)' },
+    { icon: 'scan-outline',     label: 'Face Scan',   color: '#9B59B6',       bg: 'rgba(155,89,182,0.14)' },
+  ];
+
+  const tierProgress = Math.min((user.loyaltyPoints % 1000) / 10, 100);
 
   return (
     <View style={s.root}>
@@ -147,121 +159,182 @@ const ProfileScreen: React.FC = () => {
         contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xxl }}
       >
         {/* ── Hero ─────────────────────────────────────────────── */}
-        <LinearGradient
-          colors={['#5C4340', Colors.primary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[s.hero, { paddingTop: insets.top + Spacing.sm }]}
-        >
+        {/*
+          View wrapper guarantees full screen width — LinearGradient alone does
+          not always inherit width from an alignItems:'center' parent.
+        */}
+        <View style={[s.heroContainer, { paddingTop: insets.top }]}>
+          <LinearGradient
+            colors={['#2C1810', '#6B3D30', Colors.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Decorative soft glows for depth */}
+          <View style={s.heroBubble1} />
+          <View style={s.heroBubble2} />
+
+          {/* Top bar */}
           <View style={s.heroBar}>
-            <Text style={s.heroBarLabel}>Profile</Text>
+            <View style={{ width: 36 }} />
+            <Text style={s.heroBarLabel}>My Profile</Text>
             <TouchableOpacity style={s.editBtn} onPress={openEditModal} activeOpacity={0.8}>
-              <Ionicons name="pencil-outline" size={14} color={Colors.white} />
+              <Ionicons name="pencil-outline" size={15} color={Colors.white} />
             </TouchableOpacity>
           </View>
 
-          <View style={s.avatar}>
-            <Text style={s.avatarText}>{initials}</Text>
+          {/* Avatar */}
+          <View style={s.avatarWrap}>
+            <View style={s.avatarOuter}>
+              <View style={s.avatarInner}>
+                <Text style={s.avatarText}>{initials}</Text>
+              </View>
+            </View>
+            {user.isMember && (
+              <View style={s.memberBadge}>
+                <Ionicons name="star" size={10} color="#FFD166" />
+              </View>
+            )}
           </View>
+
           <Text style={s.heroName}>{user.name}</Text>
           <Text style={s.heroSub}>{user.phone || user.email || '—'}</Text>
 
-          <View style={s.pillsRow}>
-            {user.isMember && (
-              <View style={s.pill}>
-                <Ionicons name="star" size={10} color="rgba(255,255,255,0.9)" />
-                <Text style={s.pillText}>Member</Text>
-              </View>
-            )}
-            {user.gender && (
-              <View style={s.pill}>
-                <Ionicons name="person-outline" size={10} color="rgba(255,255,255,0.9)" />
-                <Text style={s.pillText}>{user.gender}</Text>
-              </View>
-            )}
-            <View style={s.pill}>
-              <Ionicons name="trophy-outline" size={10} color="rgba(255,255,255,0.9)" />
-              <Text style={s.pillText}>Tier {user.loyaltyTierId}</Text>
+          {/* Stat pills row */}
+          <View style={s.statRow}>
+            <View style={s.statItem}>
+              <Text style={s.statValue}>{user.loyaltyPoints.toLocaleString()}</Text>
+              <Text style={s.statLabel}>Points</Text>
+            </View>
+            <View style={s.statDivider} />
+            <View style={s.statItem}>
+              <Text style={s.statValue}>Tier {user.loyaltyTierId}</Text>
+              <Text style={s.statLabel}>Level</Text>
+            </View>
+            <View style={s.statDivider} />
+            <View style={s.statItem}>
+              <Text style={s.statValue}>{user.gender || '—'}</Text>
+              <Text style={s.statLabel}>Gender</Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* ── Body ─────────────────────────────────────────────── */}
         <View style={s.body}>
 
+          {/* Quick Actions */}
+          <View style={s.quickRow}>
+            {QUICK_ACTIONS.map(a => (
+              <TouchableOpacity key={a.label} style={s.quickItem} activeOpacity={0.75}>
+                <View style={[s.quickIcon, { backgroundColor: a.bg }]}>
+                  <Ionicons name={a.icon as any} size={20} color={a.color} />
+                </View>
+                <Text style={s.quickLabel}>{a.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Loyalty card */}
-          <GlassView intensity="light" borderRadius={BorderRadius.lg}>
-            <View style={s.loyaltyInner}>
-              <View style={s.loyaltyLeft}>
-                <View style={s.loyaltyIconBox}>
-                  <Ionicons name="star" size={20} color={Colors.primary} />
+          <View style={s.cardShadow}>
+            <GlassView intensity="light" borderRadius={BorderRadius.lg} shadow={false}>
+              <View style={s.loyaltyInner}>
+              <View style={s.loyaltyTop}>
+                <View style={s.loyaltyLeft}>
+                  <View style={s.loyaltyIconBox}>
+                    <Ionicons name="star" size={18} color={Colors.primary} />
+                  </View>
+                  <View>
+                    <Text style={s.loyaltyLabel}>Loyalty Points</Text>
+                    <Text style={s.loyaltyPoints}>{user.loyaltyPoints.toLocaleString()}</Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={s.loyaltyLabel}>Loyalty Points</Text>
-                  <Text style={s.loyaltyPoints}>{user.loyaltyPoints.toLocaleString()}</Text>
-                </View>
-              </View>
-              <View style={s.loyaltyRight}>
                 <View style={s.tierBadge}>
+                  <Ionicons name="trophy-outline" size={11} color={Colors.primary} />
                   <Text style={s.tierText}>Tier {user.loyaltyTierId}</Text>
                 </View>
-                <Text style={s.loyaltyTotal}>{user.loyaltyTotalPoints.toLocaleString()} total</Text>
               </View>
-            </View>
-          </GlassView>
+
+              {/* Progress bar */}
+              <View style={s.progressRow}>
+                <View style={s.progressTrack}>
+                  <View style={[s.progressFill, { width: `${tierProgress}%` as any }]} />
+                </View>
+                <Text style={s.progressLabel}>{user.loyaltyTotalPoints.toLocaleString()} total</Text>
+              </View>
+              <Text style={s.progressHint}>{1000 - (user.loyaltyPoints % 1000)} pts to next tier</Text>
+              </View>
+            </GlassView>
+          </View>
 
           {/* Account info */}
-          <Text style={s.sectionLabel}>Account</Text>
-          <GlassView intensity="light" borderRadius={BorderRadius.lg} style={{ overflow: 'hidden' }}>
-            {([
-              { icon: 'call-outline',     label: 'Phone',  value: user.phone || '—' },
-              { icon: 'mail-outline',     label: 'Email',  value: user.email || 'Not provided' },
-              { icon: 'location-outline', label: 'Branch', value: user.branchId ? `Branch #${user.branchId}` : '—' },
-            ] as { icon: string; label: string; value: string }[]).map((row, i, arr) => (
-              <React.Fragment key={row.label}>
-                <View style={s.infoRow}>
-                  <View style={s.iconBox}>
-                    <Ionicons name={row.icon as any} size={16} color={Colors.primary} />
-                  </View>
-                  <View style={s.rowText}>
-                    <Text style={s.rowLabel}>{row.label}</Text>
-                    <Text style={s.rowValue}>{row.value}</Text>
-                  </View>
-                </View>
-                {i < arr.length - 1 && <View style={s.sep} />}
-              </React.Fragment>
-            ))}
-          </GlassView>
+          <Text style={s.sectionLabel}>Account Details</Text>
+          <View style={s.cardShadow}>
+            <GlassView intensity="light" borderRadius={BorderRadius.lg} shadow={false}>
+              <View>
+                {([
+                  { icon: 'call-outline',     label: 'Phone',   value: user.phone || '—',                              color: '#2DBD7E' },
+                  { icon: 'mail-outline',     label: 'Email',   value: user.email || 'Not provided',                   color: '#4DA8DA' },
+                  { icon: 'location-outline', label: 'Branch',  value: user.branchId ? `Branch #${user.branchId}` : '—', color: '#F4A830' },
+                ] as { icon: string; label: string; value: string; color: string }[]).map((row, i, arr) => (
+                  <React.Fragment key={row.label}>
+                    <View style={s.infoRow}>
+                      <View style={[s.iconBox, { backgroundColor: row.color + '1A' }]}>
+                        <Ionicons name={row.icon as any} size={16} color={row.color} />
+                      </View>
+                      <View style={s.rowText}>
+                        <Text style={s.rowLabel}>{row.label}</Text>
+                        <Text style={s.rowValue}>{row.value}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={13} color={Colors.gray300} />
+                    </View>
+                    {i < arr.length - 1 && <View style={s.sep} />}
+                  </React.Fragment>
+                ))}
+              </View>
+            </GlassView>
+          </View>
 
           {/* Preferences */}
           <Text style={s.sectionLabel}>Preferences</Text>
-          <GlassView intensity="light" borderRadius={BorderRadius.lg} style={{ overflow: 'hidden' }}>
-            {SETTINGS.map((item, i, arr) => (
-              <React.Fragment key={item.label}>
-                <TouchableOpacity style={s.menuRow} onPress={item.onPress} activeOpacity={0.7}>
-                  <View style={s.iconBox}>
-                    <Ionicons name={item.icon as any} size={16} color={Colors.primary} />
-                  </View>
-                  <View style={s.rowText}>
-                    <Text style={s.menuLabel}>{item.label}</Text>
-                    {item.sub ? <Text style={s.menuSub}>{item.sub}</Text> : null}
-                  </View>
-                  {item.badge ? (
-                    <View style={s.badge}>
-                      <Text style={s.badgeText}>{item.badge}</Text>
-                    </View>
-                  ) : null}
-                  <Ionicons name="chevron-forward" size={15} color={Colors.gray300} style={{ marginLeft: 4 }} />
-                </TouchableOpacity>
-                {i < arr.length - 1 && <View style={s.sep} />}
-              </React.Fragment>
-            ))}
-          </GlassView>
+          <View style={s.cardShadow}>
+            <GlassView intensity="light" borderRadius={BorderRadius.lg} shadow={false}>
+              <View>
+                {SETTINGS.map((item, i, arr) => (
+                  <React.Fragment key={item.label}>
+                    <TouchableOpacity style={s.menuRow} onPress={item.onPress} activeOpacity={0.7}>
+                      <View style={[s.iconBox, { backgroundColor: item.color + '1A' }]}>
+                        <Ionicons name={item.icon as any} size={16} color={item.color} />
+                      </View>
+                      <View style={s.rowText}>
+                        <Text style={s.menuLabel}>{item.label}</Text>
+                        <Text style={s.menuSub}>{item.sub}</Text>
+                      </View>
+                      {item.badge ? (
+                        <View style={s.badge}>
+                          <Text style={s.badgeText}>{item.badge}</Text>
+                        </View>
+                      ) : null}
+                      <View style={s.rowChevron}>
+                        <Ionicons name="chevron-forward" size={13} color={Colors.gray300} />
+                      </View>
+                    </TouchableOpacity>
+                    {i < arr.length - 1 && <View style={s.sep} />}
+                  </React.Fragment>
+                ))}
+              </View>
+            </GlassView>
+          </View>
 
           {/* Sign out */}
           <TouchableOpacity style={s.signOutBtn} onPress={() => setLogoutModal(true)} activeOpacity={0.85}>
-            <Ionicons name="log-out-outline" size={18} color="#E74C3C" />
+            <View style={s.signOutIconWrap}>
+              <Ionicons name="log-out-outline" size={17} color="#E74C3C" />
+            </View>
             <Text style={s.signOutText}>Sign Out</Text>
+            <View style={s.signOutChevron}>
+              <Ionicons name="chevron-forward" size={14} color="rgba(231,76,60,0.4)" />
+            </View>
           </TouchableOpacity>
 
         </View>
@@ -345,88 +418,153 @@ const ProfileScreen: React.FC = () => {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
 
-  // Hero
-  hero: {
+  // Hero — View wrapper fills screen width; gradient sits inside as absoluteFill
+  heroContainer: {
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl + 8,
+    paddingBottom: Spacing.xl,
+    overflow: 'hidden',
+  },
+  heroBubble1: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(255,255,255,0.055)',
+    top: -100,
+    right: -80,
+  },
+  heroBubble2: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.038)',
+    bottom: 10,
+    left: -60,
   },
   heroBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    alignSelf: 'stretch',
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xl,
   },
   heroBarLabel: {
-    fontSize: FontSize.md,
+    flex: 1,
+    textAlign: 'center',
+    fontSize: FontSize.lg,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.95)',
+    letterSpacing: -0.2,
   },
   editBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatar: {
+
+  // Avatar — explicit 104×104 so the absolute member badge never escapes
+  avatarWrap: {
+    width: 104,
+    height: 104,
+    marginBottom: Spacing.md + 2,
+  },
+  avatarOuter: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.30)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  avatarInner: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.md,
-    ...Shadow.glow,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   avatarText: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: Colors.white,
     letterSpacing: 2,
   },
+  memberBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#3A1C10',
+    borderWidth: 2.5,
+    borderColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   heroName: {
     fontSize: 22,
     fontWeight: '800',
     color: Colors.white,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     marginBottom: 4,
     textAlign: 'center',
   },
   heroSub: {
     fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.60)',
+    color: 'rgba(255,255,255,0.52)',
     fontWeight: '400',
-    marginBottom: Spacing.lg,
-    letterSpacing: 0.1,
+    marginBottom: Spacing.xl,
     textAlign: 'center',
   },
-  pillsRow: {
+
+  // Stats row — alignSelf:'stretch' works inside alignItems:'center' parent
+  statRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md + 2,
+    paddingHorizontal: Spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
-  pill: {
-    flexDirection: 'row',
+  statItem: {
+    flex: 1,
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm + 4,
-    paddingVertical: 6,
+    gap: 2,
   },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '600',
+  statValue: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
     color: Colors.white,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.50)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
 
   // Body
@@ -436,12 +574,47 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
 
+  // Quick actions
+  quickRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  quickItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.glassSurface,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    ...Shadow.sm,
+  },
+  quickIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.gray600,
+    textAlign: 'center',
+    letterSpacing: 0.1,
+  },
+
   // Loyalty
   loyaltyInner: {
+    padding: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  loyaltyTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.lg,
   },
   loyaltyLeft: {
     flexDirection: 'row',
@@ -449,10 +622,12 @@ const s = StyleSheet.create({
     gap: Spacing.md,
   },
   loyaltyIconBox: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -462,35 +637,59 @@ const s = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   loyaltyPoints: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '900',
     color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  loyaltyRight: {
-    alignItems: 'flex-end',
-    gap: 5,
+    letterSpacing: -0.8,
   },
   tierBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: Colors.primaryLight,
     borderWidth: 1,
     borderColor: Colors.primaryGlow,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
   tierText: {
     fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
   },
-  loyaltyTotal: {
+
+  // Progress
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primaryLight,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+  },
+  progressLabel: {
     fontSize: FontSize.xs,
     color: Colors.gray400,
+    fontWeight: '600',
+  },
+  progressHint: {
+    fontSize: 10,
+    color: Colors.gray400,
     fontWeight: '500',
+    marginTop: -2,
   },
 
   // Section label
@@ -502,6 +701,12 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
     marginTop: Spacing.xs,
     marginBottom: Spacing.xs,
+  },
+
+  // Card shadow wrapper — separates elevation from overflow:hidden+borderRadius
+  cardShadow: {
+    borderRadius: BorderRadius.lg,
+    ...Shadow.sm,
   },
 
   // Info rows
@@ -516,7 +721,6 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -567,31 +771,51 @@ const s = StyleSheet.create({
   },
   badgeText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
 
-  // Separator
+  rowChevron: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+
+  // Separator — inset from icon column, flush on right
   sep: {
     height: 1,
     backgroundColor: Colors.divider,
     marginLeft: 36 + Spacing.md + Spacing.md,
+    marginRight: Spacing.md,
   },
 
   // Sign out
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.md,
     borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md + 2,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
     marginTop: Spacing.xs,
     backgroundColor: Colors.glassSurface,
     borderWidth: 1,
-    borderColor: 'rgba(231,76,60,0.18)',
+    borderColor: 'rgba(231,76,60,0.15)',
     ...Shadow.sm,
   },
+  signOutIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: 'rgba(231,76,60,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   signOutText: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
     fontWeight: '700',
     color: '#E74C3C',
+    flex: 1,
+  },
+  signOutChevron: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Modal

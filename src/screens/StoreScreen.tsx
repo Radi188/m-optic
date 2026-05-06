@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
-import RNBottomSheet, { BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import RNBottomSheet, {
+  BottomSheetScrollView,
+  BottomSheetBackdrop,
+  useBottomSheetSpringConfigs,
+} from '@gorhom/bottom-sheet';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { GlassView } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
@@ -41,7 +45,7 @@ const buildMapHTML = (locs: PlaceLocation[]): string => {
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#e8e8e8}
     #map{width:100%;height:100%;touch-action:none}
-    .leaflet-tile-pane{filter:grayscale(100%) contrast(1.1) brightness(1.05)}
+    .leaflet-tile-pane{filter:none}
 
     .leaflet-control-attribution{font-size:8px!important;opacity:.4!important;background:rgba(255,255,255,.7)!important;color:#666!important}
     .leaflet-control-attribution a{color:#888!important}
@@ -52,40 +56,9 @@ const buildMapHTML = (locs: PlaceLocation[]): string => {
     .leaflet-control-zoom a:hover{background:#fff!important}
     .leaflet-bar a:first-child{border-bottom:1px solid rgba(156,129,120,.12)!important}
 
-    .mpin{display:flex;flex-direction:column;align-items:center}
-    .mpin-body{
-      border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);
-      display:flex;align-items:center;justify-content:center;
-      border:3px solid #fff;
-      transition:width .2s,height .2s,background .2s,filter .2s
-    }
-    .mpin-body.active{
-      width:52px;height:52px;
-      background:#9C8178;
-      filter:drop-shadow(0 8px 18px rgba(156,129,120,.70))
-    }
-    .mpin-body.inactive{
-      width:38px;height:38px;
-      background:rgba(156,129,120,.60);
-      border-width:2.5px;border-color:rgba(255,255,255,.80);
-      filter:drop-shadow(0 3px 10px rgba(100,65,50,.30))
-    }
-    .mpin-letter{
-      transform:rotate(45deg);color:#fff;
-      font-weight:900;
-      font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
-      line-height:1
-    }
-    .mpin-body.active  .mpin-letter{font-size:20px}
-    .mpin-body.inactive .mpin-letter{font-size:14px}
-    .mpin-shadow{
-      border-radius:50%;
-      background:rgba(70,35,15,.16);
-      filter:blur(2px);margin-top:3px
-    }
-    .mpin-body.active  ~ .mpin-shadow{width:18px;height:5px}
-    .mpin-body.inactive~ .mpin-shadow{width:12px;height:3px}
+    .pin-wrap{display:inline-block;line-height:0}
+    .pin-active{filter:drop-shadow(0 8px 22px rgba(156,129,120,.72))}
+    .pin-inactive{filter:drop-shadow(0 3px 10px rgba(100,65,50,.28))}
   </style>
 </head>
 <body>
@@ -99,18 +72,37 @@ var map=L.map('map',{zoomControl:false,attributionControl:true,touchZoom:true,dr
           .setView([${c.lat},${c.lng}],13);
 L.control.zoom({position:'topleft'}).addTo(map);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'© <a href="https://carto.com">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-  maxZoom:19,subdomains:'abcd'
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+  maxZoom:19,subdomains:'abc'
 }).addTo(map);
 
 function makeIcon(id){
-  var a=id===activeId, sz=a?60:46;
+  var a=id===activeId;
+  var html=a
+    ? '<div class="pin-wrap pin-active">'
+      + '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="70" viewBox="0 0 56 70">'
+      + '<circle cx="28" cy="26" r="24" fill="#9C8178" stroke="white" stroke-width="3.5"/>'
+      + '<circle cx="28" cy="26" r="18.5" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>'
+      + '<text x="28" y="33" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="900" font-size="21" letter-spacing="1" fill="white">M</text>'
+      + '<line x1="18" y1="38" x2="38" y2="38" stroke="rgba(255,255,255,.45)" stroke-width="1"/>'
+      + '<path d="M17 46 L28 66 L39 46 Q28 53 17 46Z" fill="#9C8178" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>'
+      + '<ellipse cx="28" cy="68" rx="5.5" ry="2.5" fill="rgba(0,0,0,.10)"/>'
+      + '</svg></div>'
+    : '<div class="pin-wrap pin-inactive">'
+      + '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="54" viewBox="0 0 42 54">'
+      + '<circle cx="21" cy="19" r="17.5" fill="rgba(156,129,120,.7)" stroke="rgba(255,255,255,.92)" stroke-width="2.5"/>'
+      + '<circle cx="21" cy="19" r="12.5" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
+      + '<text x="21" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="900" font-size="15" letter-spacing=".5" fill="rgba(255,255,255,.95)">M</text>'
+      + '<line x1="13" y1="30" x2="29" y2="30" stroke="rgba(255,255,255,.35)" stroke-width="1"/>'
+      + '<path d="M12 34 L21 50 L30 34 Q21 40 12 34Z" fill="rgba(156,129,120,.7)" stroke="rgba(255,255,255,.92)" stroke-width="2" stroke-linejoin="round"/>'
+      + '<ellipse cx="21" cy="52" rx="4" ry="2" fill="rgba(0,0,0,.08)"/>'
+      + '</svg></div>';
   return L.divIcon({
     className:'',
-    html:'<div class="mpin"><div class="mpin-body '+(a?'active':'inactive')+'"><span class="mpin-letter">M</span></div><div class="mpin-shadow"></div></div>',
-    iconSize:[sz,sz+10],
-    iconAnchor:[sz/2,sz+8]
+    html:html,
+    iconSize:a?[56,70]:[42,54],
+    iconAnchor:a?[28,67]:[21,51]
   });
 }
 
@@ -251,6 +243,19 @@ const StoreScreen: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Auto-open the sheet once locations are ready
+  useEffect(() => {
+    if (!locations.length) return;
+    const t = setTimeout(() => sheetRef.current?.snapToIndex(0), 350);
+    return () => clearTimeout(t);
+  }, [locations.length]);
+
+  const animationConfigs = useBottomSheetSpringConfigs({
+    duration: 420,
+    dampingRatio: 0.92,
+    overshootClamping: true,
+  });
+
   const mapHTML        = useMemo(() => buildMapHTML(locations), [locations]);
   const snapPoints     = useMemo(() => ['44%', '75%'], []);
   const activeLocation = locations.find(l => l.placeId === activeId);
@@ -270,7 +275,13 @@ const StoreScreen: React.FC = () => {
 
   const renderBackdrop = useCallback(
     (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.25} />
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.32}
+        pressBehavior="collapse"
+      />
     ), [],
   );
 
@@ -328,7 +339,9 @@ const StoreScreen: React.FC = () => {
           ref={sheetRef}
           index={-1}
           snapPoints={snapPoints}
+          animationConfigs={animationConfigs}
           enablePanDownToClose
+          overDragResistanceFactor={12}
           bottomInset={bottomInset}
           detached
           backdropComponent={renderBackdrop}
@@ -370,9 +383,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1.5,
+    borderColor: Colors.primaryGlow,
     gap: 6,
     ...Shadow.sm,
   },

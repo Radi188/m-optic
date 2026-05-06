@@ -18,7 +18,9 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 
 type Tab = 'face' | 'refraction';
 type FaceScanStage = 'idle' | 'scanning' | 'result';
-type RefractionStage = 'intro' | 'acuity' | 'astigmatism' | 'nearVision' | 'result';
+type RefractionStage = 'intro' | 'acuity' | 'contrast' | 'astigmatism' | 'colorVision' | 'nearVision' | 'result';
+type ContrastResult = 'good' | 'reduced' | 'poor';
+type ColorResult = 'normal' | 'mild' | 'deficient';
 type FaceShape = 'Oval' | 'Round' | 'Square' | 'Heart' | 'Oblong';
 type RiskLevel = 'low' | 'medium' | 'high';
 
@@ -81,6 +83,8 @@ function computeRisk(
   acuityPassCount: number,
   astigmatism: 'equal' | 'unequal',
   nearVision: 'clear' | 'blurry',
+  contrast: ContrastResult,
+  colorVision: ColorResult,
 ): RiskLevel {
   let score = 0;
   if (acuityPassCount <= 1) score += 4;
@@ -88,7 +92,11 @@ function computeRisk(
   else if (acuityPassCount === 4) score += 1;
   if (astigmatism === 'unequal') score += 2;
   if (nearVision === 'blurry') score += 2;
-  if (score >= 5) return 'high';
+  if (contrast === 'poor') score += 3;
+  else if (contrast === 'reduced') score += 1;
+  if (colorVision === 'deficient') score += 3;
+  else if (colorVision === 'mild') score += 1;
+  if (score >= 6) return 'high';
   if (score >= 2) return 'medium';
   return 'low';
 }
@@ -157,6 +165,136 @@ function getAvailableDays(count = 10): Date[] {
 }
 
 const AVAILABLE_DAYS = getAvailableDays(10);
+
+// ─── Contrast Sensitivity Data ────────────────────────────────────────────────
+
+const CONTRAST_LEVELS = [
+  { opacity: 1.0,  letters: 'D  H  S  R  K', size: 22 },
+  { opacity: 0.55, letters: 'N  C  V  Z  O', size: 22 },
+  { opacity: 0.28, letters: 'F  P  A  T  E', size: 22 },
+  { opacity: 0.12, letters: 'L  B  M  W  U', size: 22 },
+];
+
+// ─── Ishihara-style Plate Data & HTML Generator ───────────────────────────────
+
+const CV_PLATES = [
+  {
+    number: '12',
+    hint: 'A two-digit number is hidden among the dots.',
+    question: 'What number do you see?',
+    options: ['12', '17', '21', "I can't see a number"],
+    correct: '12',
+  },
+  {
+    number: '8',
+    hint: 'Look for a single digit concealed in the pattern.',
+    question: 'What number is hidden in this plate?',
+    options: ['8', '3', '6', "I can't see a number"],
+    correct: '8',
+  },
+  {
+    number: '29',
+    hint: 'A two-digit number is concealed here.',
+    question: 'What two-digit number do you see?',
+    options: ['29', '70', '21', "I can't see a number"],
+    correct: '29',
+  },
+];
+
+function makeIshiharaHtml(number: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100vh;background:#f5f0eb;display:flex;justify-content:center;align-items:center;overflow:hidden}
+</style>
+</head>
+<body>
+<canvas id="c" width="260" height="260" style="border-radius:50%;box-shadow:0 3px 20px rgba(0,0,0,0.18)"></canvas>
+<script>
+(function(){
+var DIGITS={
+  '0':[[0,1,1,1,0],[1,0,0,0,1],[1,0,0,1,1],[1,0,1,0,1],[1,1,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
+  '1':[[0,0,1,0,0],[0,1,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,1,1,1,0]],
+  '2':[[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[1,1,1,1,1]],
+  '3':[[1,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[1,1,1,1,0]],
+  '4':[[0,0,0,1,0],[0,0,1,1,0],[0,1,0,1,0],[1,0,0,1,0],[1,1,1,1,1],[0,0,0,1,0],[0,0,0,1,0]],
+  '5':[[1,1,1,1,1],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[0,0,0,0,1],[0,0,0,0,1],[1,1,1,1,0]],
+  '6':[[0,1,1,1,1],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
+  '7':[[1,1,1,1,1],[0,0,0,0,1],[0,0,0,1,0],[0,0,1,0,0],[0,1,0,0,0],[0,1,0,0,0],[0,1,0,0,0]],
+  '8':[[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
+  '9':[[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,1],[0,0,0,0,1],[0,0,0,0,1],[0,1,1,1,0]],
+};
+var BG=['#7db648','#8bc340','#6aaa38','#5d9b2f','#9ecf55','#a2c94a','#88bd3c','#72b030'];
+var FIG=['#e05c2a','#d4401e','#e87640','#c93c18','#f08050','#d85c34','#e06844','#cc4422'];
+var NUM='${number}';
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=260,H=260,CX=130,CY=130,R=126;
+function buildMask(str){
+  var chars=str.split('');
+  var totalCols=chars.length*5+(chars.length-1)*2;
+  var grid=[];
+  for(var r=0;r<7;r++){
+    var row=new Array(totalCols).fill(0);
+    for(var d=0;d<chars.length;d++){
+      var dm=DIGITS[chars[d]];
+      var offset=d*7;
+      for(var k=0;k<5;k++) row[offset+k]=dm[r][k];
+    }
+    grid.push(row);
+  }
+  return {grid:grid,rows:7,cols:totalCols};
+}
+var m=buildMask(NUM);
+var cellW=(W*0.52)/m.cols;
+var cellH=(H*0.48)/m.rows;
+var sx=CX-m.cols*cellW/2;
+var sy=CY-m.rows*cellH/2;
+function isFig(px,py){
+  var gx=Math.floor((px-sx)/cellW);
+  var gy=Math.floor((py-sy)/cellH);
+  if(gx<0||gx>=m.cols||gy<0||gy>=m.rows)return false;
+  return m.grid[gy][gx]===1;
+}
+var seed=12345;
+function rng(){seed=((seed*1664525+1013904223)>>>0);return seed/4294967296;}
+ctx.save();
+ctx.beginPath();
+ctx.arc(CX,CY,R,0,Math.PI*2);
+ctx.fillStyle='#f0ece6';
+ctx.fill();
+ctx.clip();
+var attempts=0,placed=0;
+while(placed<480&&attempts<8000){
+  attempts++;
+  var ang=rng()*Math.PI*2;
+  var dist=Math.sqrt(rng())*(R-10);
+  var x=CX+Math.cos(ang)*dist;
+  var y=CY+Math.sin(ang)*dist;
+  var r=5.5+rng()*7.5;
+  if(Math.sqrt((x-CX)*(x-CX)+(y-CY)*(y-CY))+r>R-2)continue;
+  var fig=isFig(x,y);
+  var palette=fig?FIG:BG;
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=palette[Math.floor(rng()*palette.length)];
+  ctx.fill();
+  placed++;
+}
+ctx.restore();
+ctx.beginPath();
+ctx.arc(CX,CY,R,0,Math.PI*2);
+ctx.strokeStyle='rgba(0,0,0,0.08)';
+ctx.lineWidth=2;
+ctx.stroke();
+})();
+</script>
+</body>
+</html>`;
+}
 
 // ─── Scanner WebView HTML ─────────────────────────────────────────────────────
 
@@ -372,8 +510,8 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </View>
       <Text style={styles.heroTitle}>Eye Refraction Test</Text>
       <Text style={styles.heroSub}>
-        A quick 3-step screening to help identify potential refractive errors
-        such as myopia, hyperopia, or astigmatism.
+        A comprehensive 5-step screening to help identify potential refractive
+        errors, contrast issues, and colour vision deficiencies.
       </Text>
       <TouchableOpacity
         style={[styles.primaryBtn, { marginTop: Spacing.md, alignSelf: 'stretch' }]}
@@ -393,9 +531,19 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         desc: 'Read rows of letters at decreasing sizes to check visual acuity.',
       },
       {
+        icon: 'contrast-outline',
+        title: 'Contrast Sensitivity',
+        desc: 'Identify fading letters to detect contrast perception issues.',
+      },
+      {
         icon: 'radio-button-off-outline',
         title: 'Astigmatism Check',
         desc: 'View a radial pattern to detect uneven focus in the eye.',
+      },
+      {
+        icon: 'color-palette-outline',
+        title: 'Colour Vision',
+        desc: 'Identify numbers hidden in coloured dot plates (Ishihara-style).',
       },
       {
         icon: 'book-outline',
@@ -453,7 +601,7 @@ const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
     >
       {/* Progress */}
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 1 of 3 — Distance Vision</Text>
+        <Text style={styles.stepCounter}>Step 1 of 5 — Distance Vision</Text>
         <Text style={styles.stepCounterRight}>
           Row {rowIndex + 1}/{ACUITY_ROWS.length}
         </Text>
@@ -510,7 +658,7 @@ const AstigmatismStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 2 of 3 — Astigmatism Check</Text>
+      <Text style={styles.stepCounter}>Step 3 of 5 — Astigmatism Check</Text>
     </View>
     <View style={styles.progressTrack}>
       <View style={[styles.progressFill, { width: '40%' }]} />
@@ -572,7 +720,7 @@ const NearVisionStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 3 of 3 — Near Vision</Text>
+      <Text style={styles.stepCounter}>Step 5 of 5 — Near Vision</Text>
     </View>
     <View style={styles.progressTrack}>
       <View style={[styles.progressFill, { width: '80%' }]} />
@@ -612,6 +760,166 @@ const NearVisionStep: React.FC<{
     </TouchableOpacity>
   </ScrollView>
 );
+
+// ─── Refraction — Step 2: Contrast Sensitivity ───────────────────────────────
+
+const ContrastStep: React.FC<{
+  onComplete: (result: ContrastResult) => void;
+}> = ({ onComplete }) => {
+  const [levelIndex, setLevelIndex] = useState(0);
+
+  const handleAnswer = (canRead: boolean) => {
+    if (!canRead) {
+      if (levelIndex === 0) onComplete('poor');
+      else if (levelIndex <= 2) onComplete('reduced');
+      else onComplete('good');
+      return;
+    }
+    if (levelIndex + 1 >= CONTRAST_LEVELS.length) {
+      onComplete('good');
+    } else {
+      setLevelIndex(prev => prev + 1);
+    }
+  };
+
+  const level = CONTRAST_LEVELS[levelIndex];
+  const progress = (levelIndex / CONTRAST_LEVELS.length) * 100;
+
+  return (
+    <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 2 of 5 — Contrast Sensitivity</Text>
+        <Text style={styles.stepCounterRight}>Level {levelIndex + 1}/{CONTRAST_LEVELS.length}</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+      </View>
+
+      <View style={styles.acuityCard}>
+        <Text style={styles.acuityInstruction}>
+          Letters will progressively fade. Read them at arm's length without
+          squinting or adjusting the screen brightness.
+        </Text>
+        <View style={styles.acuityLetterBox}>
+          <Text style={[styles.acuityLetters, { fontSize: level.size, opacity: level.opacity }]}>
+            {level.letters}
+          </Text>
+          <Text style={styles.acuityLabel}>Contrast level {levelIndex + 1}</Text>
+        </View>
+        <Text style={styles.acuityQuestion}>
+          Can you clearly read all the letters above?
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.primaryBtn}
+        onPress={() => handleAnswer(true)}
+        activeOpacity={0.82}
+      >
+        <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+        <Text style={styles.primaryBtnText}>Yes, I can read them</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
+        onPress={() => handleAnswer(false)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
+        <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+          Too faint / Hard to see
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+};
+
+// ─── Refraction — Step 4: Colour Vision ──────────────────────────────────────
+
+const ColorVisionStep: React.FC<{
+  onComplete: (result: ColorResult) => void;
+}> = ({ onComplete }) => {
+  const [plateIndex, setPlateIndex] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+
+  const plate = CV_PLATES[plateIndex];
+
+  const handleAnswer = (answer: string) => {
+    const isCorrect = answer === plate.correct;
+    const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+
+    if (plateIndex + 1 >= CV_PLATES.length) {
+      if (newCorrect === CV_PLATES.length) onComplete('normal');
+      else if (newCorrect >= 1) onComplete('mild');
+      else onComplete('deficient');
+    } else {
+      setCorrectCount(newCorrect);
+      setPlateIndex(prev => prev + 1);
+    }
+  };
+
+  const progress = (plateIndex / CV_PLATES.length) * 100;
+
+  return (
+    <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 4 of 5 — Colour Vision</Text>
+        <Text style={styles.stepCounterRight}>
+          Plate {plateIndex + 1}/{CV_PLATES.length}
+        </Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+      </View>
+
+      <View style={[styles.acuityCard, { paddingBottom: Spacing.md }]}>
+        <Text style={styles.acuityInstruction}>{plate.hint}</Text>
+
+        <View style={rfStyles.plateContainer}>
+          <WebView
+            source={{ html: makeIshiharaHtml(plate.number) }}
+            style={rfStyles.plateWebView}
+            scrollEnabled={false}
+            javaScriptEnabled
+            originWhitelist={['*']}
+          />
+        </View>
+
+        <Text style={styles.acuityQuestion}>{plate.question}</Text>
+      </View>
+
+      {plate.options.map(opt => {
+        const isNone = opt === "I can't see a number";
+        return (
+          <TouchableOpacity
+            key={opt}
+            style={[
+              styles.outlineBtn,
+              { marginTop: Spacing.sm },
+              isNone && { borderColor: Colors.gray300, backgroundColor: 'transparent' },
+            ]}
+            onPress={() => handleAnswer(opt)}
+            activeOpacity={0.8}
+          >
+            <Text style={[
+              styles.outlineBtnText,
+              isNone && { color: Colors.gray500 },
+            ]}>
+              {opt}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+
+      <View style={rfStyles.footerNote}>
+        <Ionicons name="information-circle-outline" size={13} color={Colors.gray400} />
+        <Text style={rfStyles.footerNoteText}>
+          This is a self-reported screening. Results may vary with screen brightness and ambient lighting.
+        </Text>
+      </View>
+    </ScrollView>
+  );
+};
 
 // ─── Booking Modal ────────────────────────────────────────────────────────────
 
@@ -822,10 +1130,12 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
 const RefractionResult: React.FC<{
   risk: RiskLevel;
   acuityPass: number;
+  contrast: ContrastResult;
   astigmatism: 'equal' | 'unequal';
+  colorVision: ColorResult;
   nearVision: 'clear' | 'blurry';
   onRetry: () => void;
-}> = ({ risk, acuityPass, astigmatism, nearVision, onRetry }) => {
+}> = ({ risk, acuityPass, contrast, astigmatism, colorVision, nearVision, onRetry }) => {
   const cfg = RISK_CONFIG[risk];
   const [showBooking, setShowBooking] = useState(false);
 
@@ -843,12 +1153,32 @@ const RefractionResult: React.FC<{
           : 'Poor — significant blur detected',
     },
     {
+      label: 'Contrast Sensitivity',
+      ok: contrast === 'good',
+      detail:
+        contrast === 'good'
+          ? 'Normal contrast perception'
+          : contrast === 'reduced'
+          ? 'Mildly reduced contrast sensitivity'
+          : 'Significantly reduced contrast sensitivity',
+    },
+    {
       label: 'Astigmatism',
       ok: astigmatism === 'equal',
       detail:
         astigmatism === 'equal'
           ? 'No irregularity detected'
           : 'Uneven line clarity detected',
+    },
+    {
+      label: 'Colour Vision',
+      ok: colorVision === 'normal',
+      detail:
+        colorVision === 'normal'
+          ? 'Normal colour discrimination'
+          : colorVision === 'mild'
+          ? 'Possible mild colour deficiency'
+          : 'Signs of colour vision deficiency detected',
     },
     {
       label: 'Near Vision',
@@ -940,16 +1270,28 @@ const RefractionResult: React.FC<{
 const RefractionFlow: React.FC = () => {
   const [stage, setStage] = useState<RefractionStage>('intro');
   const [acuityPass, setAcuityPass] = useState(0);
+  const [contrast, setContrast] = useState<ContrastResult>('good');
   const [astigmatism, setAstigmatism] = useState<'equal' | 'unequal'>('equal');
+  const [colorVision, setColorVision] = useState<ColorResult>('normal');
   const [nearVision, setNearVision] = useState<'clear' | 'blurry'>('clear');
 
   const handleAcuityDone = (passCount: number) => {
     setAcuityPass(passCount);
+    setStage('contrast');
+  };
+
+  const handleContrastDone = (result: ContrastResult) => {
+    setContrast(result);
     setStage('astigmatism');
   };
 
   const handleAstigmatismDone = (result: 'equal' | 'unequal') => {
     setAstigmatism(result);
+    setStage('colorVision');
+  };
+
+  const handleColorVisionDone = (result: ColorResult) => {
+    setColorVision(result);
     setStage('nearVision');
   };
 
@@ -960,21 +1302,27 @@ const RefractionFlow: React.FC = () => {
 
   const handleRetry = () => {
     setAcuityPass(0);
+    setContrast('good');
     setAstigmatism('equal');
+    setColorVision('normal');
     setNearVision('clear');
     setStage('intro');
   };
 
   if (stage === 'intro') return <RefractionIntro onStart={() => setStage('acuity')} />;
   if (stage === 'acuity') return <AcuityStep onComplete={handleAcuityDone} />;
+  if (stage === 'contrast') return <ContrastStep onComplete={handleContrastDone} />;
   if (stage === 'astigmatism') return <AstigmatismStep onComplete={handleAstigmatismDone} />;
+  if (stage === 'colorVision') return <ColorVisionStep onComplete={handleColorVisionDone} />;
   if (stage === 'nearVision') return <NearVisionStep onComplete={handleNearVisionDone} />;
 
   return (
     <RefractionResult
-      risk={computeRisk(acuityPass, astigmatism, nearVision)}
+      risk={computeRisk(acuityPass, astigmatism, nearVision, contrast, colorVision)}
       acuityPass={acuityPass}
+      contrast={contrast}
       astigmatism={astigmatism}
+      colorVision={colorVision}
       nearVision={nearVision}
       onRetry={handleRetry}
     />
@@ -1525,6 +1873,21 @@ const rfStyles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray600,
     lineHeight: 20,
+  },
+
+  // Ishihara plate
+  plateContainer: {
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginVertical: Spacing.lg,
+  },
+  plateWebView: {
+    width: 260,
+    height: 260,
+    backgroundColor: 'transparent',
   },
 
   // Footer note
