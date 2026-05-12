@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   ScrollView,
   Image,
   Modal,
+  ActivityIndicator,
+  Alert,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,6 +26,7 @@ import GlassesSpecSection from '../components/ui/GlassesDetail/GlassessSpecSecti
 import GlassesImageDescription from '../components/ui/GlassesDetail/GlassesImageDescription';
 import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
+import { useProductDetail } from '../hook/useProductDetail';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -323,24 +327,88 @@ const GlassDetailScreen: React.FC = () => {
   const navigation = useNavigation<NavProps>();
   const route = useRoute<RouteProps>();
   const insets = useSafeAreaInsets();
-  const { glass } = route.params;
+  const { id } = route.params;
 
   const [viewerMode, setViewerMode] = useState<ViewMode | null>(null);
 
-  const spec = SPECS[glass.id];
-  const accentColor = STOCK_COLORS[glass.status] ?? Colors.primary;
+  const accentColor = Colors.primary;
 
   const openViewer = (mode: ViewMode) => setViewerMode(mode);
   const closeViewer = () => setViewerMode(null);
 
-  const [selectedColorId, setSelectedColorId] = useState('1');
+  const { product, related, loading, error, refetch, inquiryLink } =
+    useProductDetail(id);
 
-  const colorOptions = [
-    { id: '1', name: 'Black', value: '#000000' },
-    { id: '2', name: 'Brown', value: '#6B4423' },
-    { id: '3', name: 'Gold', value: '#D4AF37' },
-    { id: '4', name: 'Silver', value: '#C0C0C0' },
-  ];
+  const images =
+    product?.assets && product?.assets?.length > 0
+      ? product.assets.map(asset => asset.url)
+      : product?.image
+      ? [product.image]
+      : [];
+
+  const handleOpenTelegram = async () => {
+    if (!inquiryLink) {
+      Alert.alert('Unavailable', 'Telegram link is not available.');
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(inquiryLink);
+
+      if (supported) {
+        await Linking.openURL(inquiryLink);
+      } else {
+        Alert.alert('Error', 'Cannot open Telegram link.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open Telegram link.');
+    }
+  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
+
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingTitle}>Loading product...</Text>
+          <Text style={styles.loadingSubtitle}>
+            Please wait while we fetch the glasses details
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
+
+        <View style={styles.loadingCard}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={42}
+            color={Colors.error}
+          />
+          <Text style={styles.loadingTitle}>Failed to load product</Text>
+          <Text style={styles.loadingSubtitle}>{error}</Text>
+
+          <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
+            <Text style={styles.retryBtnText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -360,7 +428,7 @@ const GlassDetailScreen: React.FC = () => {
           <Ionicons name="arrow-back" size={20} color={Colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {glass.name}
+          {product?.name}
         </Text>
         <View
           style={[
@@ -372,9 +440,9 @@ const GlassDetailScreen: React.FC = () => {
           ]}
         >
           <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
-          <Text style={[styles.stockText, { color: accentColor }]}>
+          {/* <Text style={[styles.stockText, { color: accentColor }]}>
             {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
-          </Text>
+          </Text> */}
         </View>
       </View>
 
@@ -386,12 +454,16 @@ const GlassDetailScreen: React.FC = () => {
         {/* ── Hero Image ──────────────────────────────────────────────────── */}
         <View style={styles.heroWrap}>
           <GlassessProductImageSlider
-            images={[
-              'https://static5.lenskart.com/media/catalog/product/pro/1/thumbnail/1080x1080/9df78eab33525d08d6e5fb8d27136e95//l/i/lenskart-air-la-e17273-c2-eyeglasses__dsc7892_03_04_2025.jpg',
-              'https://static5.lenskart.com/media/catalog/product/pro/1/thumbnail/1080x1080/9df78eab33525d08d6e5fb8d27136e95//l/i/lenskart-air-la-e17273-c2-eyeglasses__dsc7891_03_04_2025.jpg',
-            ]}
-            onPressArTryOn={() => console.log('AR Try On')}
-            onPress3DModel={() => console.log('3D Model')}
+            images={images}
+            onPressArTryOn={() => openViewer('tryon')}
+            onPress3DModel={() => openViewer('3d')}
+            onPressImage={(index: number) =>
+              navigation.navigate('ProductImageView', {
+                images: images,
+                initialIndex: index,
+                productName: product?.name,
+              })
+            }
           />
           {/* <View style={styles.brandPill}>
             <Text style={styles.brandPillText}>{glass.brand}</Text>
@@ -401,12 +473,12 @@ const GlassDetailScreen: React.FC = () => {
         {/* ── Name + Price ─────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.nameRow}>
-            <Text style={styles.frameName}>{glass.name}</Text>
-            <Text style={styles.framePrice}>${glass.price}</Text>
+            <Text style={styles.frameName}>{product?.name}</Text>
+            <Text style={styles.framePrice}>${product?.price}</Text>
           </View>
-          {glass.description ? (
+          {/* {glass.description ? (
             <Text style={styles.description}>{glass.description}</Text>
-          ) : null}
+          ) : null} */}
         </View>
 
         {/* ── Specs ────────────────────────────────────────────────────────── */}
@@ -463,48 +535,17 @@ const GlassDetailScreen: React.FC = () => {
         )} */}
 
         <GlassesStyleSection
-          brand={glass?.brand || 'Ray-Ban'}
-          size={spec?.size || 'Medium'}
-          gender={spec?.gender || 'Unisex'}
-          frameTypeName={spec?.frame_type || glass?.frame_type || 'Round Frame'}
-          descriptionHtml={dummyHtml}
-          colors={colorOptions}
-          selectedColorId={selectedColorId}
-          onSelectColor={setSelectedColorId}
+          brand={product?.brand?.name || 'Ray-Ban'}
+          size={product?.size || 'Medium'}
+          gender={product?.gender || 'Unisex'}
+          frameTypeName={product?.frame_shape?.name || 'Round'}
+          descriptionHtml={product?.description || dummyHtml}
+          colorHex={product?.color?.hex_code || '#D1D5DB'}
+          colors={product?.color?.name || 'Black'}
         />
 
         {/* Glasses Image */}
-        <GlassesImageDescription />
-
-        {/* ── Stock Info ───────────────────────────────────────────────────── */}
-        {/* <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Availability</Text>
-          <View style={[styles.stockCard, { borderColor: accentColor + '40' }]}>
-            <View
-              style={[styles.stockAccent, { backgroundColor: accentColor }]}
-            />
-            <View style={styles.stockCardContent}>
-              <View
-                style={[
-                  styles.stockIconWrap,
-                  { backgroundColor: accentColor + '18' },
-                ]}
-              >
-                <Ionicons name="cube-outline" size={20} color={accentColor} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.stockCardStatus, { color: accentColor }]}>
-                  {glass.status}
-                </Text>
-                <Text style={styles.stockCardUnits}>
-                  {glass.stock > 0
-                    ? `${glass.stock} units available`
-                    : 'Currently out of stock'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View> */}
+        <GlassesImageDescription images={images} />
       </ScrollView>
 
       {/* ── Floating Action Bar ──────────────────────────────────────────────── */}
@@ -517,7 +558,7 @@ const GlassDetailScreen: React.FC = () => {
           {/* 3D Model button */}
           <TouchableOpacity
             style={styles.floatBtn3d}
-            onPress={() => openViewer('3d')}
+            onPress={() => handleOpenTelegram}
             activeOpacity={0.88}
           >
             <View style={styles.floatBtn3dHighlight} pointerEvents="none" />
@@ -547,7 +588,7 @@ const GlassDetailScreen: React.FC = () => {
         <ViewerModal
           visible={viewerMode !== null}
           mode={viewerMode}
-          glass={glass}
+          glass={product}
           onClose={closeViewer}
         />
       )}
@@ -890,6 +931,57 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
     letterSpacing: -0.2,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+
+  loadingCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: Colors.glassSurfaceHigh,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    ...Shadow.sm,
+  },
+
+  loadingTitle: {
+    marginTop: Spacing.md,
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.black,
+    textAlign: 'center',
+  },
+
+  loadingSubtitle: {
+    marginTop: Spacing.xs,
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary || '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  retryBtn: {
+    marginTop: Spacing.lg,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+  },
+
+  retryBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
   },
 });
 

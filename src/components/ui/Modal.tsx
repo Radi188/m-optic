@@ -37,7 +37,7 @@ const AppModal: React.FC<AppModalProps> = ({
   closeOnBackdrop = true,
   contentStyle,
 }) => {
-  const scaleAnim   = useRef(new Animated.Value(0.88)).current;
+  const scaleAnim = useRef(new Animated.Value(0.88)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -57,8 +57,16 @@ const AppModal: React.FC<AppModalProps> = ({
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(scaleAnim,   { toValue: 0.90, duration: 160, useNativeDriver: true }),
-        Animated.timing(opacityAnim, { toValue: 0,    duration: 160, useNativeDriver: true }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.9,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 160,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
@@ -96,7 +104,11 @@ const AppModal: React.FC<AppModalProps> = ({
               {/* Header */}
               <View style={styles.header}>
                 {title && <Text style={styles.title}>{title}</Text>}
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeBtn}
+                  hitSlop={8}
+                >
                   <View style={styles.closeInner}>
                     <Text style={styles.closeText}>✕</Text>
                   </View>
@@ -117,7 +129,9 @@ const AppModal: React.FC<AppModalProps> = ({
                       key={i}
                       title={action.label}
                       onPress={action.onPress}
-                      variant={action.variant ?? (i === 0 ? 'primary' : 'ghost')}
+                      variant={
+                        action.variant ?? (i === 0 ? 'primary' : 'ghost')
+                      }
                       fullWidth
                       style={i > 0 ? { marginTop: Spacing.sm } : undefined}
                     />

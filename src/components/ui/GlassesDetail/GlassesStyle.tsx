@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  useWindowDimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import RenderHTML from 'react-native-render-html';
 
@@ -18,20 +11,13 @@ import {
   Shadow,
 } from '../../../theme';
 
-type ColorItem = {
-  id: string;
-  name: string;
-  value: string;
-};
-
 interface Props {
   brand: string;
   size: string;
   gender: string;
   frameTypeName: string;
-  colors: ColorItem[];
-  selectedColorId: string;
-  onSelectColor: (id: string) => void;
+  colorHex?: string;
+  colorName?: string;
   descriptionHtml: string;
 }
 
@@ -40,43 +26,22 @@ const GlassesStyleSection: React.FC<Props> = ({
   size,
   gender,
   frameTypeName,
+  colorHex = '#D1D5DB',
+  colorName = 'Default',
   descriptionHtml,
-  colors,
-  selectedColorId,
-  onSelectColor,
 }) => {
-  const selectedColor =
-    colors.find(color => color.id === selectedColorId)?.name || 'Unknown';
-
   const { width } = useWindowDimensions();
 
   return (
     <View style={styles.section}>
-      <View style={styles.block}>
-        <Text style={styles.sectionTitle}>Color</Text>
+      <View
+        style={{ ...styles.block, flexDirection: 'row', alignItems: 'center' }}
+      >
+        <Text style={styles.sectionTitleColor}>Color</Text>
 
-        <View style={styles.colorRow}>
-          {colors.map(item => {
-            const isActive = item.id === selectedColorId;
-
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.8}
-                onPress={() => onSelectColor(item.id)}
-                style={[styles.colorItem, isActive && styles.colorItemActive]}
-              >
-                <View
-                  style={[styles.colorCircle, { backgroundColor: item.value }]}
-                />
-                <Text
-                  style={[styles.colorText, isActive && styles.colorTextActive]}
-                >
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.singleColorCard}>
+          <View style={[styles.colorCircle, { backgroundColor: colorHex }]} />
+          <Text style={styles.colorText}>{colorName}</Text>
         </View>
       </View>
 
@@ -160,6 +125,12 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: Spacing.md,
   },
+  sectionTitleColor: {
+    fontSize: FontSize.md,
+    fontWeight: '500',
+    color: Colors.text,
+    marginRight: 8,
+  },
   block: {
     marginBottom: Spacing.md,
   },
@@ -169,37 +140,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary || '#6B7280',
     marginBottom: Spacing.sm,
   },
-  frameCard: {
-    overflow: 'hidden',
 
-    borderColor: 'rgba(176,144,128,0.14)',
-  },
-
-  frameImage: {
-    width: 120,
-    height: 90,
-    backgroundColor: '#F8F5F2',
-  },
-
-  frameFooter: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 8,
-  },
-
-  frameName: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'left',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  colorItem: {
+  singleColorCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
@@ -207,10 +152,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(176,144,128,0.14)',
     ...Shadow.sm,
-  },
-  colorItemActive: {
-    borderColor: Colors.primary,
-    backgroundColor: 'rgba(176,144,128,0.08)',
   },
   colorCircle: {
     width: 18,
@@ -225,9 +166,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
   },
-  colorTextActive: {
-    color: Colors.primary,
-  },
+
   infoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -288,14 +227,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingLeft: 18,
   },
-
   htmlOl: {
     marginTop: 0,
     marginBottom: 10,
     paddingLeft: 18,
     color: Colors.black,
   },
-
   htmlLi: {
     marginBottom: 6,
     color: Colors.black,
@@ -303,24 +240,6 @@ const styles = StyleSheet.create({
   },
   htmlStrong: {
     fontWeight: '700',
-    color: Colors.text,
-  },
-  htmlH1: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 10,
-    color: Colors.text,
-  },
-  htmlH2: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: Colors.text,
-  },
-  htmlH3: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
     color: Colors.text,
   },
 });

@@ -8,50 +8,41 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import { BrandResponse } from '../../../types/brand';
 
-export const brandsData = [
-  {
-    id: '1',
-    name: 'Ray-Ban',
-    logo: 'https://i.pinimg.com/736x/c9/ff/3e/c9ff3e2e4aa3d922f994d8382c2b43ca.jpg',
-  },
-  {
-    id: '2',
-    name: 'Oakley',
-    logo: 'https://i.pinimg.com/736x/c4/60/5c/c4605c2b2ddf5ce3d7e561fc459c7f2f.jpg',
-  },
-  {
-    id: '3',
-    name: 'Gucci',
-    logo: 'https://i.pinimg.com/1200x/c4/19/06/c419067c4393752980ee0f538a5ddede.jpg',
-  },
-  {
-    id: '4',
-    name: 'Prada',
-    logo: 'https://i.pinimg.com/736x/b8/02/8f/b8028fd705c8597a23565f520665b3d5.jpg',
-  },
-  {
-    id: '5',
-    name: 'Dior',
-    logo: 'https://i.pinimg.com/736x/db/e2/7b/dbe27bf72a6f55212be196aff80b40b8.jpg',
-  },
-];
+type BrandSectionProps = {
+  title?: string;
+  brands: BrandResponse[];
+  onPressBrand?: (brand: BrandResponse) => void;
+};
 
-const BrandSection = () => {
-  const renderItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.card}>
-      <Image source={{ uri: item.logo }} style={styles.logo} />
+const BrandSection: React.FC<BrandSectionProps> = ({
+  title = 'Brands',
+  brands,
+  onPressBrand,
+}) => {
+  const renderItem = ({ item }: { item: BrandResponse }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.85}
+      onPress={() => onPressBrand?.(item)}
+    >
+      {item.logo ? (
+        <Image source={{ uri: item.logo }} style={styles.logo} />
+      ) : (
+        <Text style={styles.brandText}>{item.name}</Text>
+      )}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Brands</Text>
+      <Text style={styles.title}>{title}</Text>
 
       <FlatList
-        data={brandsData}
+        data={brands}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         horizontal
         showsHorizontalScrollIndicator={false}
       />
@@ -70,6 +61,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '700',
     marginBottom: Spacing.md,
+    color: Colors.black,
   },
 
   card: {
@@ -78,16 +70,24 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: Colors.white,
     borderRadius: 12,
-    borderWidth: 1, // 👈 ADD BORDER
-    borderColor: Colors.gray100, // 👈 soft gray border
+    borderWidth: 1,
+    borderColor: Colors.gray100,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden', // 👈 keeps rounded corners clean
+    overflow: 'hidden',
+    paddingHorizontal: 10,
   },
 
   logo: {
-    width: '85%', // 👈 increase size
+    width: '85%',
     height: '85%',
-    resizeMode: 'contain', // 👈 keep logo clean (important for brands)
+    resizeMode: 'contain',
+  },
+
+  brandText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.black,
+    textAlign: 'center',
   },
 });

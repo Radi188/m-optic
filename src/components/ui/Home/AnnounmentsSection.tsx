@@ -1,71 +1,58 @@
 import React from 'react';
 import { View, Text, FlatList, Image, StyleSheet } from 'react-native';
 import { Colors, FontSize, Spacing, Shadow } from '../../../theme';
+import { AnnouncementItem } from '../../../types/home';
 
-type Announcement = {
-  id: string;
-  type: string;
-  title: string;
-  date: string;
-  body: string;
-  imageUri: string;
+type AnnouncementSectionProps = {
+  annoucements: AnnouncementItem[];
 };
 
-const ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'a1',
-    type: 'update',
-    title: 'New Spring Stock Arriving',
-    date: 'Apr 20, 2026',
-    body: '40+ new frames from Ray-Ban, Oakley, and Gucci arriving this weekend.',
-    imageUri:
-      'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'a2',
-    type: 'promo',
-    title: 'Weekend Promotion — 20% Off',
-    date: 'Apr 19–20, 2026',
-    body: 'Apply code SPRING20 at checkout. Valid on all prescription frames this weekend.',
-    imageUri:
-      'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'a3',
-    type: 'alert',
-    title: 'Closed on Public Holiday',
-    date: 'Apr 25, 2026',
-    body: 'The store will be closed on the upcoming public holiday. We reopen Apr 26.',
-    imageUri:
-      'https://images.unsplash.com/photo-1524230572899-a752b3835840?auto=format&fit=crop&w=800&q=80',
-  },
-];
+const stripHtml = (html?: string) => {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+};
 
-const AnnouncementSection = () => {
-  const renderItem = ({ item }: { item: Announcement }) => (
-    <View style={styles.shadowWrapper}>
-      <View style={styles.card}>
-        <Image source={{ uri: item.imageUri }} style={styles.image} />
+const AnnouncementSection = ({ annoucements }: AnnouncementSectionProps) => {
+  const renderItem = ({ item }: { item: AnnouncementItem }) => {
+    const previewText = stripHtml(item.content);
 
-        <View style={styles.content}>
-          <Text style={styles.date}>{item.date}</Text>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.body} numberOfLines={2}>
-            {item.body}
-          </Text>
+    return (
+      <View style={styles.shadowWrapper}>
+        <View style={styles.card}>
+          <Image
+            source={{ uri: item.banner_image || '' }}
+            style={styles.image}
+          />
+
+          <View style={styles.content}>
+            <Text style={styles.date}>{item.created_at}</Text>
+            <Text style={styles.title} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.body} numberOfLines={2} ellipsizeMode="tail">
+              {previewText}
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Announcements</Text>
 
       <FlatList
-        data={ANNOUNCEMENTS}
+        data={annoucements}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -99,7 +86,7 @@ const styles = StyleSheet.create({
 
   image: {
     width: '100%',
-    aspectRatio: 1 / 1, // 👈 vertical image (portrait)
+    aspectRatio: 1,
     resizeMode: 'cover',
   },
 
@@ -116,11 +103,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 6,
+    color: Colors.black,
   },
 
   body: {
     fontSize: 12,
     color: Colors.gray600,
+    lineHeight: 18,
   },
 });

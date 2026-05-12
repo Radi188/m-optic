@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
-import {
-  Button,
-  Badge,
-  AppModal,
-  Input,
-  GlassBackground,
-} from '../components/ui';
+import { AppModal, Input, GlassBackground } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import type {
   BottomTabParamList,
@@ -43,6 +37,10 @@ import {
 import GlassCard from '../components/ui/GlassesCard/GlassesCard';
 import { brandsData } from '../components/ui/Home/BrandSection';
 import SearchTrigger from '../components/ui/Search/SearchBar';
+import { Product } from '../types/glasses';
+import { useProductList } from '../hook/useProductList';
+import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
+import FilterModal from '../components/ui/Modal/FilterModal';
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -85,13 +83,92 @@ const GlassScreen: React.FC = () => {
   // ── Redux state ────────────────────────────────────────────────────────────
   const filtered = useAppSelector(selectFilteredGlasses);
 
-  const fullBrands = [{ name: 'All', id: 'all', logo: '' }, ...brandsData];
   const selectedBrand = useAppSelector(selectSelectedBrand);
   const searchQuery = useAppSelector(selectSearchQuery);
+
+  const {
+    products,
+    brands,
+    meta,
+    loading,
+    brandLoading,
+    error,
+    filters,
+    setFilters,
+    refetch,
+  } = useProductList({
+    page: 1,
+    is_active_mobile: true,
+    limit: 10,
+  });
 
   // ── Local UI state ─────────────────────────────────────────────────────────
   const [addModal, setAddModal] = useState(false);
   const [form, setForm] = useState<AddFrameForm>(EMPTY_FORM);
+
+  const [filterModal, setFilterModal] = useState(false);
+  const [tempBrand, setTempBrand] = useState<number | 'all'>(
+    filters.brand_1 ? Number(filters.brand_1) : 'all',
+  );
+  const [tempFrame, setTempFrame] = useState<string>('all');
+  const [tempMinPrice, setTempMinPrice] = useState('');
+  const [tempMaxPrice, setTempMaxPrice] = useState('');
+
+  const frameOptions = [
+    { label: 'All', value: 'all' },
+    { label: 'Round', value: 'round' },
+    { label: 'Rectangle', value: 'rectangle' },
+    { label: 'Square', value: 'square' },
+    { label: 'Cat Eye', value: 'cat-eye' },
+    { label: 'Aviator', value: 'aviator' },
+  ];
+
+  const openFilterModal = () => {
+    setTempBrand(filters.brand_1 ? Number(filters.brand_1) : 'all');
+    setTempFrame(filters.frame_shape ? String(filters.frame_shape) : 'all');
+    setTempMinPrice(filters.min_price ? String(filters.min_price) : '');
+    setTempMaxPrice(filters.max_price ? String(filters.max_price) : '');
+    setFilterModal(true);
+  };
+
+  const applyFilters = () => {
+    setFilters(prev => ({
+      ...prev,
+      page: 1,
+      brand_1: tempBrand === 'all' ? undefined : tempBrand,
+      frame_shape: tempFrame === 'all' ? undefined : tempFrame,
+      min_price: tempMinPrice.trim() ? Number(tempMinPrice) : undefined,
+      max_price: tempMaxPrice.trim() ? Number(tempMaxPrice) : undefined,
+    }));
+
+    setFilterModal(false);
+  };
+
+  const resetFilters = () => {
+    setTempBrand('all');
+    setTempFrame('all');
+    setTempMinPrice('');
+    setTempMaxPrice('');
+
+    setFilters(prev => ({
+      ...prev,
+      page: 1,
+      brand_1: undefined,
+      frame_shape: undefined,
+      min_price: undefined,
+      max_price: undefined,
+    }));
+
+    setFilterModal(false);
+  };
+
+  const handleSelectBrand = (brandId: number | 'all') => {
+    setFilters(prev => ({
+      ...prev,
+      page: 1,
+      brand_1: brandId === 'all' ? undefined : brandId,
+    }));
+  };
 
   const handleAddFrame = () => {
     if (!form.name.trim() || !form.brand.trim() || !form.price.trim()) return;
@@ -129,14 +206,19 @@ const GlassScreen: React.FC = () => {
     return newData;
   };
 
-  const renderCard = ({ item }: { item: GlassItem }) => {
+  const brandTabs = useMemo(
+    () => [{ id: 'all', name: 'All' }, ...brands],
+    [brands],
+  );
+
+  const renderCard = ({ item }: { item: Product }) => {
     if (item.empty) {
       return <View style={[styles.card, { opacity: 0 }]} />;
     }
     return (
       <GlassCard
         item={item}
-        onPress={() => navigation.navigate('GlassDetail', { glass: item })}
+        onPress={() => navigation.navigate('GlassDetail', { id: item.id })}
         onTryOn={() => navigation.navigate('VirtualTryOn', { glass: item })}
       />
     );
@@ -151,7 +233,14 @@ const GlassScreen: React.FC = () => {
             <Text style={styles.eyebrow}>Inventory</Text>
             <Text style={styles.title}>Glass Frames</Text>
           </View>
-          {/* <Button title="Search" size="sm" onPress={() => setAddModal(true)} /> */}
+          <TouchableOpacity
+            style={styles.filterBtn}
+            activeOpacity={0.8}
+            onPress={openFilterModal}
+          >
+            <Ionicons name="options-outline" size={20} color={Colors.primary} />
+            <Text style={styles.filterBtnText}>Filter</Text>
+          </TouchableOpacity>
         </View>
         {/* Search */}
         {/* <View style={styles.searchWrap}>
@@ -180,33 +269,45 @@ const GlassScreen: React.FC = () => {
           contentContainerStyle={styles.tabsContent}
           style={styles.tabs}
         >
-          {fullBrands.map(b => {
-            const active = selectedBrand === b.name;
+          {brandLoading
+            ? [1, 2, 3, 4].map(item => (
+                <View key={item} style={styles.tab}>
+                  <View style={styles.brandSkeleton} />
+                </View>
+              ))
+            : brandTabs.map(b => {
+                const active =
+                  b.id === 'all' ? !filters.brand_1 : filters.brand_1 === b.id;
 
-            return (
-              <TouchableOpacity
-                key={b.id || b.name}
-                onPress={() => dispatch(setSelectedBrand(b.name))}
-                activeOpacity={0.75}
-                style={[styles.tab, active && styles.tabActive]}
-              >
-                {active && (
-                  <View style={styles.tabHighlight} pointerEvents="none" />
-                )}
-
-                {/* 🔥 CONDITION */}
-                {b.name === 'All' ? (
-                  <Text
-                    style={[styles.tabText, active && styles.tabTextActive]}
+                return (
+                  <TouchableOpacity
+                    key={b.id || b.name}
+                    onPress={() =>
+                      handleSelectBrand(b.id === 'all' ? 'all' : Number(b.id))
+                    }
+                    activeOpacity={0.75}
+                    style={[styles.tab, active && styles.tabActive]}
                   >
-                    All
-                  </Text>
-                ) : (
-                  <Image source={{ uri: b.logo }} style={styles.logo} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                    {active && (
+                      <View style={styles.tabHighlight} pointerEvents="none" />
+                    )}
+
+                    {b.name === 'All' || !b.logo ? (
+                      <Text
+                        style={[styles.tabText, active && styles.tabTextActive]}
+                      >
+                        {b.name}
+                      </Text>
+                    ) : (
+                      <Image
+                        source={{ uri: b.logo }}
+                        style={styles.logo}
+                        resizeMode="contain"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
         </ScrollView>
         {/* Count */}
         <Text style={styles.countLine}>
@@ -214,25 +315,42 @@ const GlassScreen: React.FC = () => {
           {selectedBrand !== 'All' ? ` · ${selectedBrand}` : ''}
         </Text>
         {/* Grid */}
-        <FlatList
-          data={formatData(filtered, 2)}
-          keyExtractor={item => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          renderItem={renderCard}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons
-                name="glasses-outline"
-                size={40}
-                color={Colors.gray300}
-              />
-              <Text style={styles.emptyText}>No frames found</Text>
-            </View>
-          }
-        />
+        {loading ? (
+          <GlassScreenSkeleton />
+        ) : error ? (
+          <View style={styles.empty}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={40}
+              color={Colors.error}
+            />
+            <Text style={styles.emptyText}>{error}</Text>
+
+            <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={formatData(products, 2)}
+            keyExtractor={item => String(item.id)}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            renderItem={renderCard}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Ionicons
+                  name="glasses-outline"
+                  size={40}
+                  color={Colors.gray300}
+                />
+                <Text style={styles.emptyText}>No frames found</Text>
+              </View>
+            }
+          />
+        )}
         {/* Add Modal */}
         <AppModal
           visible={addModal}
@@ -287,6 +405,23 @@ const GlassScreen: React.FC = () => {
             onChangeText={v => setForm(f => ({ ...f, stock: v }))}
           />
         </AppModal>
+
+        <FilterModal
+          visible={filterModal}
+          onClose={() => setFilterModal(false)}
+          onApply={applyFilters}
+          onReset={resetFilters}
+          brandTabs={brandTabs}
+          frameOptions={frameOptions}
+          tempBrand={tempBrand}
+          tempFrame={tempFrame}
+          tempMinPrice={tempMinPrice}
+          tempMaxPrice={tempMaxPrice}
+          setTempBrand={setTempBrand}
+          setTempFrame={setTempFrame}
+          setTempMinPrice={setTempMinPrice}
+          setTempMaxPrice={setTempMaxPrice}
+        />
       </SafeAreaView>
     </GlassBackground>
   );
@@ -358,6 +493,12 @@ const styles = StyleSheet.create({
   tabHighlight: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: BorderRadius.sm,
+  },
+  brandSkeleton: {
+    width: 50,
+    height: 14,
+    borderRadius: 999,
+    backgroundColor: Colors.gray200,
   },
 
   countLine: {
@@ -466,6 +607,38 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray400,
     fontWeight: '500',
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    gap: 6,
+  },
+
+  filterBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  retryBtn: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+  },
+
+  retryText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
   },
 });
 

@@ -8,65 +8,48 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import { FrameShapeItem } from '../../../types/home';
 
-const framesData = [
-  {
-    id: '1',
-    name: 'Rectangle',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=355',
-  },
-  {
-    id: '2',
-    name: 'Round',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=255',
-  },
-  {
-    id: '3',
-    name: 'Aviator',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=255',
-  },
-  {
-    id: '4',
-    name: 'Cat Eye',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=255',
-  },
-  {
-    id: '5',
-    name: 'Oversized',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=255',
-  },
-  {
-    id: '6',
-    name: 'Square',
-    image:
-      'https://img.magnific.com/free-photo/sunglasses_1203-8700.jpg?t=st=1777538782~exp=1777542382~hmac=c322c5760f352923e41515f49f817a351b2f2f5eec220d06606efaa9328022ce&w=255',
-  },
-];
+type FramesSectionProps = {
+  title?: string;
+  frames: FrameShapeItem[];
+  onPressFrame?: (frame: FrameShapeItem) => void;
+};
 
-const FramesSection = () => {
-  const renderItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.card}>
-      <Image source={{ uri: item.image }} style={styles.image} />
+const FramesSection: React.FC<FramesSectionProps> = ({
+  title = 'Frame Types',
+  frames,
+  onPressFrame,
+}) => {
+  const renderItem = ({ item }: { item: FrameShapeItem }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.85}
+      onPress={() => onPressFrame?.(item)}
+    >
+      {item.icon_url ? (
+        <Image source={{ uri: item.icon_url }} style={styles.image} />
+      ) : (
+        <View style={styles.imagePlaceholder}>
+          <Text style={styles.placeholderText}>{item.name}</Text>
+        </View>
+      )}
       <Text style={styles.name}>{item.name}</Text>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Frame Types</Text>
+      <Text style={styles.title}>{title}</Text>
 
       <FlatList
-        data={framesData}
+        data={frames}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={item => String(item.id)}
         numColumns={3}
         columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={false}
       />
     </View>
   );
@@ -79,31 +62,54 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
   },
+
   title: {
     fontSize: FontSize.md,
     fontWeight: '700',
     marginBottom: 12,
+    color: Colors.black,
   },
+
   row: {
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+
   card: {
     flex: 1,
     marginHorizontal: Spacing.xs,
     backgroundColor: Colors.white,
     borderRadius: 12,
-    overflow: 'hidden', // controls rounding for image + text
+    overflow: 'hidden',
   },
+
   image: {
     width: '100%',
     height: 80,
-    resizeMode: 'cover', // fills card
+    resizeMode: 'cover',
   },
+
+  imagePlaceholder: {
+    width: '100%',
+    height: 80,
+    backgroundColor: Colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+
+  placeholderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.gray500,
+    textAlign: 'center',
+  },
+
   name: {
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
     paddingVertical: 8,
+    color: Colors.black,
   },
 });

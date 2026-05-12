@@ -9,6 +9,7 @@ import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import type { RootStackParamList } from '../types/navigation';
+import ProductImageViewScreen from '../screens/ImageViewFullScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -36,6 +37,11 @@ const RootStackNavigator: React.FC = () => {
             name="GlassDetail"
             component={GlassDetailScreen}
             options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="ProductImageView"
+            component={ProductImageViewScreen}
+            options={{ animation: 'fade_from_bottom' }}
           />
           <Stack.Screen
             name="Login"
