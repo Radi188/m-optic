@@ -17,12 +17,14 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'face' | 'refraction';
-type FaceScanStage = 'idle' | 'scanning' | 'result';
+type FaceScanStage = 'idle' | 'scanning' | 'selecting' | 'result';
 type RefractionStage = 'intro' | 'acuity' | 'contrast' | 'astigmatism' | 'colorVision' | 'nearVision' | 'result';
 type ContrastResult = 'good' | 'reduced' | 'poor';
 type ColorResult = 'normal' | 'mild' | 'deficient';
 type FaceShape = 'Oval' | 'Round' | 'Square' | 'Heart' | 'Oblong';
 type RiskLevel = 'low' | 'medium' | 'high';
+type HairStyle = 'Short' | 'Medium' | 'Long' | 'Curly' | 'Wavy' | 'Bald';
+type ResultTab = 'face' | 'hair';
 
 // ─── Face Shape Data ──────────────────────────────────────────────────────────
 
@@ -61,6 +63,44 @@ const FACE_SHAPE_INFO: Record<
     description: 'Face is longer than it is wide, with a long straight cheek line.',
     frames: ['Wayfarer', 'Round', 'Oversized', 'Decorative'],
     tip: "Wider frames with depth add width and shorten the face's appearance.",
+  },
+};
+
+// ─── Hair Style Data ──────────────────────────────────────────────────────────
+
+const HAIR_STYLES: { key: HairStyle; icon: string; label: string }[] = [
+  { key: 'Short',  icon: 'person-outline',    label: 'Short'  },
+  { key: 'Medium', icon: 'person-outline',    label: 'Medium' },
+  { key: 'Long',   icon: 'person-outline',    label: 'Long'   },
+  { key: 'Curly',  icon: 'color-wand-outline', label: 'Curly'  },
+  { key: 'Wavy',   icon: 'water-outline',     label: 'Wavy'   },
+  { key: 'Bald',   icon: 'ellipse-outline',   label: 'Bald'   },
+];
+
+const HAIR_FRAME_INFO: Record<HairStyle, { frames: string[]; tip: string }> = {
+  Short: {
+    frames: ['Bold Wayfarer', 'Thick Square', 'Geometric', 'Clubmaster'],
+    tip: 'Bold, structured frames add visual weight and complement short hair.',
+  },
+  Medium: {
+    frames: ['Aviator', 'Rectangle', 'Round', 'Cat-Eye'],
+    tip: 'Most frame styles work with medium-length hair — you have the most flexibility.',
+  },
+  Long: {
+    frames: ['Oversized', 'Cat-Eye', 'Round', 'Rimless'],
+    tip: 'Delicate or oversized frames balance the volume and flow of long hair.',
+  },
+  Curly: {
+    frames: ['Rectangle', 'Browline', 'Geometric', 'Square'],
+    tip: 'Angular frames contrast beautifully with natural curl patterns.',
+  },
+  Wavy: {
+    frames: ['Aviator', 'Round', 'Oval', 'Cat-Eye'],
+    tip: 'Softly curved frames echo the natural wave texture of your hair.',
+  },
+  Bald: {
+    frames: ['Round', 'Oval', 'Aviator', 'Rimless'],
+    tip: 'Rounded or rimless frames soften the strong, clean silhouette.',
   },
 };
 
@@ -297,57 +337,107 @@ ctx.stroke();
 }
 
 // ─── Scanner WebView HTML ─────────────────────────────────────────────────────
+// baseUrl:'https://localhost' makes iOS WKWebView treat this as a secure context
+// so that navigator.mediaDevices.getUserMedia is available.
 
 const SCAN_HTML = `<!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,sans-serif}
-    #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-    #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-    .guide-oval{width:200px;height:260px;border:3px solid rgba(156,129,120,0.85);border-radius:50%;box-shadow:0 0 0 2000px rgba(0,0,0,0.42);transition:border-color .4s}
-    .guide-oval.locked{border-color:#2DBD7E;box-shadow:0 0 0 2000px rgba(0,0,0,0.42),0 0 24px rgba(45,189,126,0.45)}
-    .corners{position:absolute;width:200px;height:260px}
-    .corner{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,0.9);border-style:solid}
-    .corner.tl{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
-    .corner.tr{top:-2px;right:-2px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
-    .corner.bl{bottom:-2px;left:-2px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
-    .corner.br{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
-    .scan-line{position:absolute;left:-2px;right:-2px;height:2px;background:linear-gradient(90deg,transparent,rgba(156,129,120,0.9),transparent);animation:scan 2s linear infinite;border-radius:1px}
-    @keyframes scan{0%{top:0}100%{top:100%}}
-    #hint{margin-top:28px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.92);font-size:13px;font-weight:600;padding:7px 20px;border-radius:20px;letter-spacing:0.2px}
-    #hint.success{background:rgba(45,189,126,0.75)}
-    #progress{margin-top:12px;width:160px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;overflow:hidden}
-    #progress-bar{height:100%;width:0%;background:rgba(156,129,120,0.9);border-radius:2px;transition:width .1s}
-    #loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,.75);font-size:14px;text-align:center;line-height:2}
-    .spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(255,255,255,.8);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-  </style>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,sans-serif}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.oval-wrap{position:relative;width:200px;height:264px}
+.guide-oval{
+  width:200px;height:264px;
+  border:3px solid rgba(156,129,120,0.85);
+  border-radius:50%;
+  box-shadow:0 0 0 2000px rgba(0,0,0,0.50);
+  transition:border-color .3s,box-shadow .3s;
+  position:absolute;inset:0
+}
+.guide-oval.locked{
+  border-color:#2DBD7E;
+  box-shadow:0 0 0 2000px rgba(0,0,0,0.50),0 0 28px rgba(45,189,126,0.55)
+}
+/* Corner accents */
+.corner{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,0.9);border-style:solid}
+.tl{top:8px;left:8px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.tr{top:8px;right:8px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
+.bl{bottom:8px;left:8px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
+.br{bottom:8px;right:8px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+/* Scan line — only visible when locked */
+.scan-line{
+  display:none;
+  position:absolute;left:-3px;right:-3px;height:2px;
+  background:linear-gradient(90deg,transparent 0%,#2DBD7E 40%,#2DBD7E 60%,transparent 100%);
+  border-radius:1px;
+  animation:scan 1.6s linear infinite
+}
+.guide-oval.locked ~ .scan-line{display:block}
+@keyframes scan{0%{top:0}100%{top:264px}}
+#hint{
+  margin-top:26px;
+  background:rgba(0,0,0,0.60);
+  color:rgba(255,255,255,0.92);
+  font-size:13px;font-weight:600;
+  padding:7px 20px;border-radius:20px;
+  letter-spacing:0.2px;
+  transition:background .3s
+}
+#hint.success{background:rgba(45,189,126,0.80)}
+#hint.warn{background:rgba(244,168,48,0.80)}
+#progress{margin-top:12px;width:160px;height:4px;background:rgba(255,255,255,0.18);border-radius:2px;overflow:hidden}
+#bar{height:100%;width:0%;background:#2DBD7E;border-radius:2px;transition:width .12s}
+#loading{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  color:rgba(255,255,255,.75);font-size:14px;text-align:center;line-height:2
+}
+.spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(255,255,255,.8);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
 <div id="overlay">
-  <div style="position:relative">
+  <div class="oval-wrap">
     <div class="guide-oval" id="oval"></div>
-    <div class="corners"><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div></div>
-    <div class="scan-line" id="scanLine"></div>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div class="scan-line"></div>
   </div>
   <div id="hint">Position your face in the oval</div>
-  <div id="progress"><div id="progress-bar"></div></div>
+  <div id="progress"><div id="bar"></div></div>
 </div>
-<div id="loading"><div class="spinner"></div>Loading scanner…</div>
+<div id="loading"><div class="spinner"></div>Starting camera…</div>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
 <script>
 (function(){
 'use strict';
-var video=document.getElementById('video'),loading=document.getElementById('loading'),oval=document.getElementById('oval'),hint=document.getElementById('hint'),progBar=document.getElementById('progress-bar');
-var stableFrames=0,NEEDED=45,done=false;
-function dist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy)}
+function post(obj){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(obj));}
+
+// ── Check for camera support before doing anything ──────────────────────────
+if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='function'){
+  post({type:'cameraError',reason:'getUserMedia not supported'});
+  document.getElementById('loading').innerHTML='<p style="color:rgba(255,255,255,.7);padding:20px;text-align:center">Camera not available on this device.</p>';
+  return;
+}
+
+var oval=document.getElementById('oval'),hint=document.getElementById('hint'),bar=document.getElementById('bar');
+var stableFrames=0,NEEDED=40,done=false;
+
+// ── Landmark helpers ────────────────────────────────────────────────────────
+function dist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+
+// ── Face shape from landmarks ───────────────────────────────────────────────
 function computeShape(lm){
-  var faceH=dist(lm[10],lm[152]),faceW=dist(lm[234],lm[454]),jawW=dist(lm[172],lm[397]),fhW=dist(lm[54],lm[284]);
+  var faceH=dist(lm[10],lm[152]),faceW=dist(lm[234],lm[454]);
+  var jawW=dist(lm[172],lm[397]),fhW=dist(lm[54],lm[284]);
   if(faceH<0.01)return null;
   var whr=faceW/faceH,jawRatio=jawW/faceW,fhRatio=fhW/faceW;
   if(whr>0.88&&jawRatio>0.82)return 'Square';
@@ -356,29 +446,184 @@ function computeShape(lm){
   if(fhRatio>jawRatio+0.10)return 'Heart';
   return 'Oval';
 }
-function post(shape){if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'faceShape',shape:shape}))}
-var faceMesh=new FaceMesh({locateFile:function(f){return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/'+f}});
-faceMesh.setOptions({maxNumFaces:1,refineLandmarks:false,minDetectionConfidence:0.6,minTrackingConfidence:0.6});
+
+// ── Check if face is properly inside the oval guide ─────────────────────────
+// Landmarks are in normalized coords [0-1].
+// The oval is centered at ~50% x, ~40% y of the camera frame.
+// A well-placed face: nose near center, face fills ~20-70% of frame height.
+function isFaceInOval(lm){
+  var nose=lm[4]; // nose tip
+  var faceH=dist(lm[10],lm[152]);
+  var centeredX=Math.abs(nose.x-0.5)<0.14;
+  var centeredY=nose.y>0.22&&nose.y<0.72;
+  var goodSize=faceH>0.18&&faceH<0.72;
+  return centeredX&&centeredY&&goodSize;
+}
+
+// ── MediaPipe face mesh ──────────────────────────────────────────────────────
+var faceMesh=new FaceMesh({locateFile:function(f){return'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/'+f;}});
+faceMesh.setOptions({maxNumFaces:1,refineLandmarks:false,minDetectionConfidence:0.55,minTrackingConfidence:0.55});
+
 faceMesh.onResults(function(results){
   if(done)return;
-  if(!results.multiFaceLandmarks||!results.multiFaceLandmarks[0]){
-    stableFrames=0;oval.className='guide-oval';hint.className='';
-    hint.textContent='Position your face in the oval';progBar.style.width='0%';return;
+  var lms=results.multiFaceLandmarks;
+
+  // ── No face detected ──
+  if(!lms||!lms[0]){
+    stableFrames=Math.max(0,stableFrames-3);
+    oval.className='guide-oval';
+    hint.className='';
+    hint.textContent='Position your face in the oval';
+    bar.style.width=Math.round(stableFrames/NEEDED*100)+'%';
+    return;
   }
-  var lm=results.multiFaceLandmarks[0],shape=computeShape(lm);
-  if(!shape){stableFrames=0;return;}
+
+  var lm=lms[0];
+
+  // ── Face found but not properly in oval ──
+  if(!isFaceInOval(lm)){
+    stableFrames=Math.max(0,stableFrames-2);
+    oval.className='guide-oval';
+    hint.className='warn';
+    var nose=lm[4];
+    var faceH=dist(lm[10],lm[152]);
+    if(faceH<0.18)       hint.textContent='Move closer';
+    else if(faceH>0.72)  hint.textContent='Move farther away';
+    else if(Math.abs(nose.x-0.5)>0.14) hint.textContent='Center your face horizontally';
+    else                 hint.textContent='Align your face with the oval';
+    bar.style.width=Math.round(stableFrames/NEEDED*100)+'%';
+    return;
+  }
+
+  // ── Face is in the oval — advance progress ──
   stableFrames++;
   var pct=Math.min(100,Math.round(stableFrames/NEEDED*100));
-  progBar.style.width=pct+'%';oval.className='guide-oval locked';
-  hint.className='success';hint.textContent='Hold still… '+pct+'%';
-  if(stableFrames>=NEEDED){done=true;hint.textContent='Scan complete!';post(shape);}
+  bar.style.width=pct+'%';
+  oval.className='guide-oval locked';
+  hint.className='success';
+  hint.textContent='Hold still… '+pct+'%';
+
+  if(stableFrames>=NEEDED){
+    done=true;
+    hint.textContent='Scan complete!';
+    var shape=computeShape(lm)||'Oval';
+    post({type:'faceShape',shape:shape});
+  }
 });
-var cam=new Camera(video,{onFrame:async function(){await faceMesh.send({image:video})},width:640,height:480,facingMode:'user'});
-cam.start().then(function(){loading.style.display='none'}).catch(function(){loading.innerHTML='<p style="color:rgba(255,255,255,.7);padding:20px">Camera access denied.<br>Please allow camera permission.</p>'});
+
+// ── Start camera ─────────────────────────────────────────────────────────────
+var video=document.getElementById('video');
+var cam=new Camera(video,{
+  onFrame:async function(){await faceMesh.send({image:video});},
+  width:640,height:480,facingMode:'user'
+});
+cam.start()
+  .then(function(){document.getElementById('loading').style.display='none';})
+  .catch(function(err){
+    post({type:'cameraError',reason:String(err)});
+    document.getElementById('loading').innerHTML='<p style="color:rgba(255,255,255,.7);padding:20px;text-align:center">Camera access denied.<br>Please allow camera permission and try again.</p>';
+  });
 })();
 </script>
 </body>
 </html>`;
+
+// ─── Face Scan — Real Camera (WebView + MediaPipe) ────────────────────────────
+
+const FaceScanCamera: React.FC<{
+  onShapeDetected: (shape: FaceShape) => void;
+  onCameraError: () => void;
+  onCancel: () => void;
+}> = ({ onShapeDetected, onCameraError, onCancel }) => {
+  const onMessage = useCallback(
+    (e: WebViewMessageEvent) => {
+      try {
+        const d = JSON.parse(e.nativeEvent.data);
+        if (d.type === 'faceShape' && d.shape) {
+          onShapeDetected(d.shape as FaceShape);
+        } else if (d.type === 'cameraError') {
+          onCameraError();
+        }
+      } catch {}
+    },
+    [onShapeDetected, onCameraError],
+  );
+
+  return (
+    <View style={StyleSheet.absoluteFillObject}>
+      <WebView
+        source={{ html: SCAN_HTML, baseUrl: 'https://localhost' }}
+        style={StyleSheet.absoluteFill}
+        javaScriptEnabled
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback
+        originWhitelist={['*']}
+        mixedContentMode="always"
+        onMessage={onMessage}
+      />
+      <SafeAreaView style={styles.cancelArea} pointerEvents="box-none">
+        <TouchableOpacity
+          style={styles.cancelBtn}
+          onPress={onCancel}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="close" size={20} color={Colors.gray600} />
+        </TouchableOpacity>
+      </SafeAreaView>
+    </View>
+  );
+};
+
+// ─── Face Shape Selector ──────────────────────────────────────────────────────
+
+const FaceShapeSelector: React.FC<{
+  onSelect: (shape: FaceShape) => void;
+  onCancel: () => void;
+  title?: string;
+  subtitle?: string;
+}> = ({ onSelect, onCancel, title = 'Select Your Face Shape', subtitle = 'Camera is not available on this device. Pick the shape that best matches your face to get personalised recommendations.' }) => (
+  <ScrollView
+    contentContainerStyle={styles.contentPad}
+    showsVerticalScrollIndicator={false}
+  >
+    <View style={styles.heroCard}>
+      <View style={styles.heroIconRing}>
+        <Ionicons name="scan-outline" size={48} color={Colors.primary} />
+      </View>
+      <Text style={styles.heroTitle}>{title}</Text>
+      <Text style={styles.heroSub}>{subtitle}</Text>
+    </View>
+
+    {(Object.entries(FACE_SHAPE_INFO) as [FaceShape, typeof FACE_SHAPE_INFO[FaceShape]][]).map(
+      ([shape, info]) => (
+        <TouchableOpacity
+          key={shape}
+          style={scanStyles.shapeRow}
+          onPress={() => onSelect(shape)}
+          activeOpacity={0.8}
+        >
+          <View style={scanStyles.shapeIcon}>
+            <Ionicons name={info.icon as any} size={26} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={scanStyles.shapeName}>{shape}</Text>
+            <Text style={scanStyles.shapeDesc} numberOfLines={2}>{info.description}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
+        </TouchableOpacity>
+      ),
+    )}
+
+    <TouchableOpacity
+      style={[styles.outlineBtn, { marginTop: Spacing.md }]}
+      onPress={onCancel}
+      activeOpacity={0.8}
+    >
+      <Ionicons name="arrow-back-outline" size={17} color={Colors.primary} />
+      <Text style={styles.outlineBtnText}>Go Back</Text>
+    </TouchableOpacity>
+  </ScrollView>
+);
 
 // ─── Tab Bar ──────────────────────────────────────────────────────────────────
 
@@ -458,11 +703,19 @@ const FaceScanResult: React.FC<{ shape: FaceShape; onRetry: () => void }> = ({
   onRetry,
 }) => {
   const info = FACE_SHAPE_INFO[shape];
+  const [resultTab, setResultTab] = useState<ResultTab>('face');
+  const [hairStyle, setHairStyle] = useState<HairStyle | null>(null);
+
+  const hairInfo = hairStyle ? HAIR_FRAME_INFO[hairStyle] : null;
+  const displayFrames = resultTab === 'face' ? info.frames : hairInfo?.frames ?? [];
+  const displayTip = resultTab === 'face' ? info.tip : hairInfo?.tip ?? '';
+
   return (
     <ScrollView
-      contentContainerStyle={styles.contentPad}
+      contentContainerStyle={[styles.contentPad, { paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
+      {/* Face shape badge */}
       <View style={styles.heroCard}>
         <View style={styles.heroIconRing}>
           <Ionicons name={info.icon as any} size={44} color={Colors.primary} />
@@ -472,22 +725,107 @@ const FaceScanResult: React.FC<{ shape: FaceShape; onRetry: () => void }> = ({
         <Text style={styles.heroSub}>{info.description}</Text>
       </View>
 
-      <View style={styles.tipCard}>
-        <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
-        <Text style={styles.tipText}>{info.tip}</Text>
+      {/* Hair style selector */}
+      <Text style={[styles.sectionLabel, { marginBottom: Spacing.sm }]}>
+        Select Your Hair Style
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.md }}
+      >
+        {HAIR_STYLES.map(hs => {
+          const selected = hairStyle === hs.key;
+          return (
+            <TouchableOpacity
+              key={hs.key}
+              style={[rsStyles.hairChip, selected && rsStyles.hairChipActive]}
+              onPress={() => {
+                setHairStyle(hs.key);
+                setResultTab('hair');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={hs.icon as any}
+                size={15}
+                color={selected ? Colors.white : Colors.gray500}
+              />
+              <Text style={[rsStyles.hairChipText, selected && rsStyles.hairChipTextActive]}>
+                {hs.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Recommendation tabs */}
+      <View style={rsStyles.tabRow}>
+        <TouchableOpacity
+          style={[rsStyles.recTab, resultTab === 'face' && rsStyles.recTabActive]}
+          onPress={() => setResultTab('face')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="scan-outline"
+            size={14}
+            color={resultTab === 'face' ? Colors.primary : Colors.gray400}
+          />
+          <Text style={[rsStyles.recTabText, resultTab === 'face' && rsStyles.recTabTextActive]}>
+            Face Shape
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            rsStyles.recTab,
+            resultTab === 'hair' && rsStyles.recTabActive,
+            !hairStyle && rsStyles.recTabDisabled,
+          ]}
+          onPress={() => hairStyle && setResultTab('hair')}
+          activeOpacity={hairStyle ? 0.8 : 1}
+        >
+          <Ionicons
+            name="color-wand-outline"
+            size={14}
+            color={resultTab === 'hair' ? Colors.primary : Colors.gray400}
+          />
+          <Text style={[rsStyles.recTabText, resultTab === 'hair' && rsStyles.recTabTextActive]}>
+            Hair Style
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionLabel}>Recommended Frames</Text>
-      <View style={styles.framesGrid}>
-        {info.frames.map(name => (
-          <View key={name} style={styles.frameCard}>
-            <View style={styles.frameIconBox}>
-              <Ionicons name="glasses-outline" size={26} color={Colors.primary} />
-            </View>
-            <Text style={styles.frameName}>{name}</Text>
+      {/* Tip */}
+      {displayTip ? (
+        <View style={styles.tipCard}>
+          <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+          <Text style={styles.tipText}>{displayTip}</Text>
+        </View>
+      ) : (
+        <View style={rsStyles.hairPrompt}>
+          <Ionicons name="arrow-up-outline" size={16} color={Colors.gray400} />
+          <Text style={rsStyles.hairPromptText}>
+            Pick a hair style above to see matched frame recommendations
+          </Text>
+        </View>
+      )}
+
+      {/* Frames grid */}
+      {displayFrames.length > 0 && (
+        <>
+          <Text style={styles.sectionLabel}>Recommended Frames</Text>
+          <View style={styles.framesGrid}>
+            {displayFrames.map(name => (
+              <View key={name} style={styles.frameCard}>
+                <View style={styles.frameIconBox}>
+                  <Ionicons name="glasses-outline" size={26} color={Colors.primary} />
+                </View>
+                <Text style={styles.frameName}>{name}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      )}
 
       <TouchableOpacity style={styles.outlineBtn} onPress={onRetry} activeOpacity={0.8}>
         <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
@@ -1336,16 +1674,6 @@ const ScanScreen: React.FC = () => {
   const [faceScanStage, setFaceScanStage] = useState<FaceScanStage>('idle');
   const [faceShape, setFaceShape] = useState<FaceShape | null>(null);
 
-  const onWebMessage = useCallback((e: WebViewMessageEvent) => {
-    try {
-      const d = JSON.parse(e.nativeEvent.data);
-      if (d.type === 'faceShape' && d.shape) {
-        setFaceShape(d.shape as FaceShape);
-        setFaceScanStage('result');
-      }
-    } catch {}
-  }, []);
-
   const isScanning = tab === 'face' && faceScanStage === 'scanning';
 
   return (
@@ -1360,28 +1688,29 @@ const ScanScreen: React.FC = () => {
             <FaceScanIdle onStart={() => setFaceScanStage('scanning')} />
           )}
 
+          {/* Real camera scan — fills the whole screen */}
           {faceScanStage === 'scanning' && (
             <View style={StyleSheet.absoluteFillObject}>
-              <WebView
-                source={{ html: SCAN_HTML }}
-                style={StyleSheet.absoluteFill}
-                javaScriptEnabled
-                mediaPlaybackRequiresUserAction={false}
-                allowsInlineMediaPlayback
-                originWhitelist={['*']}
-                mixedContentMode="always"
-                onMessage={onWebMessage}
+              <FaceScanCamera
+                onShapeDetected={shape => {
+                  setFaceShape(shape);
+                  setFaceScanStage('result');
+                }}
+                onCameraError={() => setFaceScanStage('selecting')}
+                onCancel={() => setFaceScanStage('idle')}
               />
-              <SafeAreaView style={styles.cancelArea} pointerEvents="box-none">
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setFaceScanStage('idle')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="close" size={20} color={Colors.gray600} />
-                </TouchableOpacity>
-              </SafeAreaView>
             </View>
+          )}
+
+          {/* Manual fallback when camera is unavailable */}
+          {faceScanStage === 'selecting' && (
+            <FaceShapeSelector
+              onSelect={shape => {
+                setFaceShape(shape);
+                setFaceScanStage('result');
+              }}
+              onCancel={() => setFaceScanStage('idle')}
+            />
           )}
 
           {faceScanStage === 'result' && faceShape && (
@@ -1397,6 +1726,45 @@ const ScanScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+// ─── Shape Selector Styles ────────────────────────────────────────────────────
+
+const scanStyles = StyleSheet.create({
+  shapeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: Colors.glassSurfaceHigh,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.glassBorderStrong,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Shadow.sm,
+  },
+  shapeIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  shapeName: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.black,
+    marginBottom: 3,
+  },
+  shapeDesc: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    lineHeight: 16,
+  },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -1900,6 +2268,86 @@ const rfStyles = StyleSheet.create({
   footerNoteText: {
     flex: 1,
     fontSize: 11,
+    color: Colors.gray400,
+    lineHeight: 16,
+  },
+});
+
+// ─── Result Screen Styles ─────────────────────────────────────────────────────
+
+const rsStyles = StyleSheet.create({
+  // Hair style chips
+  hairChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassSurface,
+  },
+  hairChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+  },
+  hairChipText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray500,
+  },
+  hairChipTextActive: {
+    color: Colors.white,
+  },
+
+  // Recommendation tab row
+  tabRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  recTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorder,
+    backgroundColor: Colors.glassSurface,
+  },
+  recTabActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  recTabDisabled: {
+    opacity: 0.45,
+  },
+  recTabText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray400,
+  },
+  recTabTextActive: {
+    color: Colors.primary,
+  },
+
+  // Hair style prompt (when no hair selected on hair tab)
+  hairPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  hairPromptText: {
+    flex: 1,
+    fontSize: FontSize.xs,
     color: Colors.gray400,
     lineHeight: 16,
   },
