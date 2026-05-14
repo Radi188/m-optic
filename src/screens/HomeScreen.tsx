@@ -33,6 +33,7 @@ import {
 import FramesSection from '../components/ui/Home/FramesSection';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
+import { useHome } from '../hook/useHome';
 
 // ─── Promo Modal ─────────────────────────────────────────────────────────────
 const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -772,17 +773,31 @@ const HomeScreen: React.FC = () => {
   const [locLoading, setLocLoading] = useState(true);
   const [showPromo, setShowPromo] = useState(true);
 
+  const { data, loading, refreshing, error, onRefresh } = useHome();
+
   useEffect(() => {
     searchMOpticLocations()
       .then(setLocations)
       .finally(() => setLocLoading(false));
   }, []);
 
+  useEffect(() => {
+    console.log('Data', data);
+  }, [data]);
+
   const openMaps = (placeId: string) =>
     Linking.openURL(`https://www.google.com/maps/place/?q=place_id:${placeId}`);
 
   const callStore = (phone: string) =>
     Linking.openURL(`tel:${phone.replace(/\s/g, '')}`);
+
+  if (loading) {
+    return (
+      <View>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -814,7 +829,7 @@ const HomeScreen: React.FC = () => {
           contentContainerStyle={{ gap: Spacing.sm, paddingRight: Spacing.lg }}
           style={{ marginBottom: Spacing.lg }}
         >
-          {BEST_SELLERS.map((item, i) => (
+          {data?.new_arrivals.map((item, i) => (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.85}
@@ -828,25 +843,20 @@ const HomeScreen: React.FC = () => {
                 {/* Image */}
                 <View style={{ height: 120, width: '100%' }}>
                   <Image
-                    source={{ uri: item.imageUri }}
+                    source={{ uri: item.image }}
                     style={StyleSheet.absoluteFillObject}
                     resizeMode="cover"
                   />
                   <View style={StyleSheet.absoluteFillObject} />
-                  {item.rank && (
-                    <View style={styles.rankBadge}>
-                      <Text style={styles.rankText}>{item.rank}</Text>
-                    </View>
-                  )}
                 </View>
                 {/* Info */}
                 <View style={{ padding: Spacing.sm + 2, gap: 3 }}>
-                  <Text style={styles.bsBrand}>{item.brand}</Text>
+                  <Text style={styles.bsBrand}>{item?.brand?.name}</Text>
                   <Text style={styles.bsName} numberOfLines={1}>
                     {item.name}
                   </Text>
                   <View style={styles.bsFooter}>
-                    <Text style={styles.bsPrice}>{item.price}</Text>
+                    <Text style={styles.bsPrice}>${item.price}</Text>
                     <TouchableOpacity
                       style={styles.tryOnBtn}
                       activeOpacity={0.8}
@@ -873,13 +883,13 @@ const HomeScreen: React.FC = () => {
 
         {/* Brand Section */}
 
-        <BrandSection />
+        <BrandSection brands={data?.brands || []} />
 
         {/*Frame Section  */}
-        <FramesSection />
+        <FramesSection frames={data?.frame_shapes || []} />
 
         {/* Announment Section */}
-        <AnnouncementSection />
+        <AnnouncementSection annoucements={data?.announcements || []} />
       </ScrollView>
     </View>
   );

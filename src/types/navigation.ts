@@ -27,7 +27,12 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Main: undefined;
-  GlassDetail: { glass: GlassItem };
+  GlassDetail: { id: string };
+  ProductImageView: {
+    images: string[];
+    initialIndex?: number;
+    productName?: string;
+  };
 };
 
 export type BottomTabParamList = {

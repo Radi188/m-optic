@@ -19,12 +19,14 @@ type GlassessProductImageSliderProps = {
   images: string[];
   onPressArTryOn?: () => void;
   onPress3DModel?: () => void;
+  onPressImage?: (index: number) => void;
 };
 
 const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   images,
   onPressArTryOn,
   onPress3DModel,
+  onPressImage,
 }) => {
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -48,15 +50,18 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
     setActiveIndex(index);
   };
 
-  const renderItem = ({ item }: { item: string }) => {
+  const renderItem = ({ item, index }: { item: string; index: number }) => {
     return (
-      <View style={styles.slide}>
+      <TouchableOpacity
+        style={styles.slide}
+        onPress={() => onPressImage?.(index)}
+      >
         <Image
           source={{ uri: item }}
           style={styles.image}
           resizeMode="contain"
         />
-      </View>
+      </TouchableOpacity>
     );
   };
 
