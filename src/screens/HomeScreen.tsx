@@ -21,9 +21,15 @@ import { Badge, GlassView } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../store/slices/authSlice';
-import { useNavigation } from '@react-navigation/native';
+import {
+  CompositeNavigationProp,
+  useNavigation,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../types/navigation';
+import type {
+  BottomTabParamList,
+  RootStackParamList,
+} from '../types/navigation';
 import {
   searchMOpticLocations,
   getEmbedUrl,
@@ -34,6 +40,9 @@ import FramesSection from '../components/ui/Home/FramesSection';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
 import { useHome } from '../hook/useHome';
+import HeroSlider from '../components/ui/Home/HeroSlider';
+import HomeSkeleton from '../components/ui/Loading/HomeLoadingScreen';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 // ─── Promo Modal ─────────────────────────────────────────────────────────────
 const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -366,289 +375,8 @@ const SLIDES: Slide[] = [
 ];
 
 // ─── HeroSlider ──────────────────────────────────────────────────────────────
-const HeroSlider: React.FC = () => {
-  const insets = useSafeAreaInsets();
-  const user = useSelector(selectUser);
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const flatListRef = useRef<FlatList<Slide>>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const totalHeight = SLIDER_HEIGHT + insets.top;
-
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setActiveIndex(prev => {
-        const next = (prev + 1) % SLIDES.length;
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, 3800);
-  };
-
-  useEffect(() => {
-    startTimer();
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index != null)
-        setActiveIndex(viewableItems[0].index);
-    },
-  ).current;
-
-  const viewabilityConfig = useRef({
-    viewAreaCoveragePercentThreshold: 50,
-  }).current;
-
-  return (
-    <View style={{ height: totalHeight }}>
-      <FlatList
-        ref={flatListRef}
-        data={SLIDES}
-        keyExtractor={item => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={startTimer}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        getItemLayout={(_d, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
-        })}
-        renderItem={({ item }) => (
-          <View style={{ width: SCREEN_WIDTH, height: totalHeight }}>
-            {/* Clean full-bleed image — no overlay */}
-            <Image
-              source={{ uri: item.imageUri }}
-              style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
-            />
-          </View>
-        )}
-      />
-
-      {/* ── Fixed header overlay (never moves with slides) ── */}
-      <View
-        style={[sliderStyles.header, { paddingTop: insets.top + 10 }]}
-        pointerEvents="box-none"
-      >
-        {/* Left: logo + brand name */}
-        <View style={sliderStyles.headerLeft}>
-          <View style={sliderStyles.logoWrap}>
-            <Image
-              source={require('../assets/logo.jpg')}
-              style={sliderStyles.logo}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={sliderStyles.brandName}>M Optic</Text>
-        </View>
-
-        {/* Right: avatar initials or sign-in pill */}
-        {user ? (
-          <View style={sliderStyles.avatarWrap}>
-            <Text style={sliderStyles.avatarText}>
-              {user.name
-                .split(' ')
-                .map((w: string) => w[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2)}
-            </Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={sliderStyles.signInBtn}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Ionicons name="person-outline" size={14} color={Colors.white} />
-            <Text style={sliderStyles.signInText}>Sign In</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-};
-
-const sliderStyles = StyleSheet.create({
-  // Glass content card
-  cardWrap: {
-    position: 'absolute',
-    left: Spacing.lg,
-    right: Spacing.lg,
-  },
-  card: { overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.92)' },
-  cardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.md + 2,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.md,
-  },
-  slideTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: -0.4,
-    lineHeight: 24,
-    marginBottom: 3,
-  },
-  slideSub: {
-    fontSize: FontSize.xs,
-    color: Colors.gray600,
-    fontWeight: '400',
-    lineHeight: 17,
-  },
-  ctaBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  // Dots
-  dots: {
-    position: 'absolute',
-    bottom: Spacing.lg + 72,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-  },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-  },
-  dotActive: { width: 18, backgroundColor: Colors.white },
-
-  // Header overlay
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  logoWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  logo: { width: 36, height: 36 },
-  brandName: {
-    fontSize: FontSize.md,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: 0.5,
-  },
-  avatarWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  signInBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  signInText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: 0.2,
-  },
-});
 
 // ─── Best Sellers data ───────────────────────────────────────────────────────
-type GlassItem = {
-  id: string;
-  name: string;
-  brand: string;
-  price: string;
-  sold: number;
-  imageUri: string;
-  rank?: string;
-};
-
-const BEST_SELLERS: GlassItem[] = [
-  {
-    id: 'b1',
-    name: 'Wayfarer Classic',
-    brand: 'Ray-Ban',
-    price: '$159',
-    sold: 48,
-    imageUri:
-      'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=400&q=80',
-    rank: '#1',
-  },
-  {
-    id: 'b2',
-    name: 'Holbrook',
-    brand: 'Oakley',
-    price: '$129',
-    sold: 35,
-    imageUri:
-      'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=400&q=80',
-  },
-  {
-    id: 'b3',
-    name: 'Aviator Grand',
-    brand: 'Ray-Ban',
-    price: '$195',
-    sold: 29,
-    imageUri:
-      'https://images.unsplash.com/photo-1516741547-bfbfb07f2dfd?auto=format&w=400&q=80',
-  },
-  {
-    id: 'b4',
-    name: 'Round Metal',
-    brand: 'Ray-Ban',
-    price: '$149',
-    sold: 21,
-    imageUri:
-      'https://images.unsplash.com/photo-1591076482161-42ce6da69f67?auto=format&w=400&q=80',
-  },
-];
 
 // ─── Promotions data ─────────────────────────────────────────────────────────
 type Promo = {
@@ -661,39 +389,6 @@ type Promo = {
   imageUri: string;
 };
 
-const PROMOTIONS: Promo[] = [
-  {
-    id: 'p1',
-    title: 'Spring Sale',
-    description: 'All prescription frames',
-    discount: '30%',
-    validUntil: 'Apr 30, 2026',
-    accent: Colors.primary,
-    imageUri:
-      'https://images.unsplash.com/photo-1516741547-bfbfb07f2dfd?auto=format&w=600&q=80',
-  },
-  {
-    id: 'p2',
-    title: 'Bundle Deal',
-    description: 'Frame + lenses combo',
-    discount: '20%',
-    validUntil: 'May 15, 2026',
-    accent: Colors.info,
-    imageUri:
-      'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=600&q=80',
-  },
-  {
-    id: 'p3',
-    title: 'Student Offer',
-    description: 'Valid student ID required',
-    discount: '15%',
-    validUntil: 'Jun 30, 2026',
-    accent: Colors.success,
-    imageUri:
-      'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=600&q=80',
-  },
-];
-
 // ─── Announcements data ──────────────────────────────────────────────────────
 type Announcement = {
   id: string;
@@ -703,36 +398,6 @@ type Announcement = {
   type: 'info' | 'promo' | 'alert' | 'update';
   imageUri: string;
 };
-
-const ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'a1',
-    type: 'update',
-    title: 'New Spring Stock Arriving',
-    date: 'Apr 20, 2026',
-    body: '40+ new frames from Ray-Ban, Oakley, and Gucci arriving this weekend.',
-    imageUri:
-      'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'a2',
-    type: 'promo',
-    title: 'Weekend Promotion — 20% Off',
-    date: 'Apr 19–20, 2026',
-    body: 'Apply code SPRING20 at checkout. Valid on all prescription frames this weekend.',
-    imageUri:
-      'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'a3',
-    type: 'alert',
-    title: 'Closed on Public Holiday',
-    date: 'Apr 25, 2026',
-    body: 'The store will be closed on the upcoming public holiday. We reopen Apr 26.',
-    imageUri:
-      'https://images.unsplash.com/photo-1524230572899-a752b3835840?auto=format&fit=crop&w=800&q=80',
-  },
-];
 
 const ANN_CONFIG: Record<
   Announcement['type'],
@@ -766,12 +431,20 @@ const ANN_CONFIG: Record<
 
 // ─── Store locations fetched from Google Places API ───────────────────────────
 
+type GlassScreenNav = CompositeNavigationProp<
+  BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 // ─── HomeScreen ──────────────────────────────────────────────────────────────
 const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
   const [locLoading, setLocLoading] = useState(true);
   const [showPromo, setShowPromo] = useState(true);
+  const navigation = useNavigation<GlassScreenNav>();
+
+  // ─── HomeScreen ──────────────────────────────────────────────────────────────
 
   const { data, loading, refreshing, error, onRefresh } = useHome();
 
@@ -792,11 +465,7 @@ const HomeScreen: React.FC = () => {
     Linking.openURL(`tel:${phone.replace(/\s/g, '')}`);
 
   if (loading) {
-    return (
-      <View>
-        <ActivityIndicator />
-      </View>
-    );
+    return <HomeSkeleton />;
   }
 
   return (
@@ -811,7 +480,7 @@ const HomeScreen: React.FC = () => {
         }}
       >
         {/* ─── Hero Slider ─────────────────────────────────────── */}
-        <HeroSlider />
+        <HeroSlider slides={data?.banners} />
 
         {/* ─── Best Sellers ────────────────────────────────────── */}
         <View
@@ -834,6 +503,9 @@ const HomeScreen: React.FC = () => {
               key={item.id}
               activeOpacity={0.85}
               style={[{ width: 160 }, i === 0 && { marginLeft: Spacing.lg }]}
+              onPress={() =>
+                navigation.navigate('GlassDetail', { id: item.id })
+              }
             >
               <GlassView
                 intensity="light"

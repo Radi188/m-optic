@@ -27,6 +27,11 @@ const RootStackNavigator: React.FC = () => {
             component={GlassDetailScreen}
             options={{ animation: 'slide_from_right' }}
           />
+          <Stack.Screen
+            name="ProductImageView"
+            component={ProductImageViewScreen}
+            options={{ animation: 'fade_from_bottom' }}
+          />
         </>
       ) : (
         // ── Unauthenticated stack — Splash → Main, Login reachable from Profile

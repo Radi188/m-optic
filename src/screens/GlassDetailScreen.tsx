@@ -27,6 +27,7 @@ import GlassesImageDescription from '../components/ui/GlassesDetail/GlassesImage
 import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
 import { useProductDetail } from '../hook/useProductDetail';
+import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -365,23 +366,7 @@ const GlassDetailScreen: React.FC = () => {
     }
   };
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="transparent"
-          translucent
-        />
-
-        <View style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingTitle}>Loading product...</Text>
-          <Text style={styles.loadingSubtitle}>
-            Please wait while we fetch the glasses details
-          </Text>
-        </View>
-      </View>
-    );
+    return <GlassesDetailSkeleton />;
   }
 
   if (error) {
