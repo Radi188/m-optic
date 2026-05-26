@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+} from 'react';
 import {
   View,
   Text,
@@ -10,6 +16,14 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
+import LinearGradient from 'react-native-linear-gradient';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import RNBottomSheet, {
@@ -22,16 +36,14 @@ import { GlassView } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { searchMOpticLocations, groupHours } from '../services/placesService';
 import type { PlaceLocation } from '../services/placesService';
-import { TAB_BAR_HEIGHT } from '../navigation/BottomTabNavigator';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// ─── Map HTML (Leaflet + Esri satellite, centered on Phnom Penh) ──────────────
+// ─── Map HTML (Leaflet + OpenStreetMap) ───────────────────────────────────────
 
 const buildMapHTML = (locs: PlaceLocation[]): string => {
   if (!locs.length) return '<html><body style="background:#1a1a1a"/></html>';
 
   const locsJson = JSON.stringify(
-    locs.map(l => ({ id: l.placeId, lat: l.lat, lng: l.lng }))
+    locs.map(l => ({ id: l.placeId, lat: l.lat, lng: l.lng })),
   );
   const c = locs[0];
 
@@ -135,90 +147,228 @@ document.addEventListener('message',onMsg);
 </html>`;
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Google Places weekdayText is Mon=index 0, matching (getDay()+6)%7
+const todayIndex = () => (new Date().getDay() + 6) % 7;
+
 // ─── Location Info Sheet ──────────────────────────────────────────────────────
 
 const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
+  const today = todayIndex();
+  const hours = groupHours(location.weekdayText);
+
+  // Staggered entrance animations
+  const headerOpacity = useSharedValue(0);
+  const headerOffset = useSharedValue(10);
+  const detailsOpacity = useSharedValue(0);
+  const detailsOffset = useSharedValue(12);
+  const ctaOpacity = useSharedValue(0);
+  const ctaOffset = useSharedValue(12);
+
+  useEffect(() => {
+    const ease = Easing.out(Easing.cubic);
+    headerOpacity.value = withTiming(1, { duration: 320, easing: ease });
+    headerOffset.value = withTiming(0, { duration: 320, easing: ease });
+    detailsOpacity.value = withDelay(
+      80,
+      withTiming(1, { duration: 300, easing: ease }),
+    );
+    detailsOffset.value = withDelay(
+      80,
+      withTiming(0, { duration: 300, easing: ease }),
+    );
+    ctaOpacity.value = withDelay(
+      160,
+      withTiming(1, { duration: 280, easing: ease }),
+    );
+    ctaOffset.value = withDelay(
+      160,
+      withTiming(0, { duration: 280, easing: ease }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.placeId]);
+
+  const headerStyle = useAnimatedStyle(() => ({
+    opacity: headerOpacity.value,
+    transform: [{ translateY: headerOffset.value }],
+  }));
+  const detailsStyle = useAnimatedStyle(() => ({
+    opacity: detailsOpacity.value,
+    transform: [{ translateY: detailsOffset.value }],
+  }));
+  const ctaStyle = useAnimatedStyle(() => ({
+    opacity: ctaOpacity.value,
+    transform: [{ translateY: ctaOffset.value }],
+  }));
+
   const openDirections = () => {
     const q = encodeURIComponent(location.address);
-    const url = Platform.OS === 'ios'
-      ? `maps://maps.apple.com/?q=${q}`
-      : `https://www.google.com/maps/search/?api=1&query=${q}`;
+    const url =
+      Platform.OS === 'ios'
+        ? `maps://maps.apple.com/?q=${q}`
+        : `https://www.google.com/maps/search/?api=1&query=${q}`;
     Linking.openURL(url);
   };
 
-  const callStore = () => Linking.openURL(`tel:${location.phone.replace(/[\s-]/g, '')}`);
-
-  const hours = groupHours(location.weekdayText);
+  const callStore = () =>
+    Linking.openURL(`tel:${location.phone.replace(/[\s-]/g, '')}`);
 
   return (
     <View style={s.sheetInner}>
-      {/* Header */}
-      <View style={s.sheetHead}>
-        <GlassView intensity="medium" borderRadius={BorderRadius.md} style={s.sheetLogo} shadow={false}>
-          <Text style={s.sheetLogoLetter}>M</Text>
-        </GlassView>
-        <View style={{ flex: 1 }}>
-          <Text style={s.locationName} numberOfLines={2}>{location.name}</Text>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <Animated.View style={[s.headerRow, headerStyle]}>
+        {/* Logo badge */}
+        <View style={s.logoBadge}>
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Text style={s.logoBadgeLetter}>M</Text>
+        </View>
+
+        {/* Name + meta */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={s.locationName}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            {location.name}
+          </Text>
+
           <View style={s.metaRow}>
             {location.rating > 0 && (
-              <>
-                <Text style={s.star}>★</Text>
+              <View style={s.ratingPill}>
+                <Text style={s.ratingStar}>★</Text>
                 <Text style={s.ratingNum}>{location.rating.toFixed(1)}</Text>
-                <Text style={s.reviewCount}>({location.userRatingCount})</Text>
-              </>
+                <Text style={s.reviewCount}> ({location.userRatingCount})</Text>
+              </View>
             )}
-            <View style={[s.dot, { backgroundColor: location.isOpen ? Colors.success : Colors.error }]} />
-            <Text style={[s.openStatus, { color: location.isOpen ? Colors.success : Colors.error }]}>
-              {location.isOpen ? 'Open now' : 'Closed'}
-            </Text>
-          </View>
-        </View>
-      </View>
 
-      <View style={s.sep} />
-
-      {/* Address & phone */}
-      {[
-        { icon: 'location-outline', text: location.address },
-        ...(location.phone ? [{ icon: 'call-outline', text: location.phone }] : []),
-      ].map(row => (
-        <View key={row.icon} style={s.detailRow}>
-          <View style={s.detailIcon}>
-            <Ionicons name={row.icon as any} size={15} color={Colors.primary} />
-          </View>
-          <Text style={s.detailText}>{row.text}</Text>
-        </View>
-      ))}
-
-      {/* Hours */}
-      {hours.length > 0 && (
-        <>
-          <View style={s.sep} />
-          <Text style={s.sectionLabel}>HOURS</Text>
-          {hours.map((h, i) => (
-            <View key={i} style={s.hoursRow}>
-              <Text style={s.hoursDay}>{h.days}</Text>
-              <Text style={s.hoursTime}>{h.time}</Text>
+            <View
+              style={[
+                s.statusPill,
+                location.isOpen ? s.statusOpen : s.statusClosed,
+              ]}
+            >
+              <View
+                style={[
+                  s.statusDot,
+                  {
+                    backgroundColor: location.isOpen
+                      ? Colors.success
+                      : Colors.error,
+                  },
+                ]}
+              />
+              <Text
+                style={[
+                  s.statusText,
+                  { color: location.isOpen ? Colors.success : Colors.error },
+                ]}
+              >
+                {location.isOpen ? 'Open now' : 'Closed'}
+              </Text>
             </View>
-          ))}
-        </>
-      )}
+          </View>
+        </View>
+      </Animated.View>
 
-      <View style={s.sep} />
+      {/* ── Details ────────────────────────────────────────────────────── */}
+      <Animated.View style={detailsStyle}>
+        <View style={s.sep} />
 
-      {/* CTA */}
-      <View style={s.ctaRow}>
-        <TouchableOpacity style={s.ctaOutline} onPress={openDirections} activeOpacity={0.75}>
-          <Ionicons name="navigate-outline" size={17} color={Colors.primary} />
+        {/* Address & phone info rows */}
+        {[
+          { icon: 'location-outline', text: location.address },
+          ...(location.phone
+            ? [{ icon: 'call-outline', text: location.phone }]
+            : []),
+        ].map(row => (
+          <View key={row.icon} style={s.detailRow}>
+            <View style={s.detailIconWrap}>
+              <Ionicons
+                name={row.icon as any}
+                size={15}
+                color={Colors.primary}
+              />
+            </View>
+            <Text style={s.detailText}>{row.text}</Text>
+          </View>
+        ))}
+
+        {/* Hours */}
+        {hours.length > 0 && (
+          <>
+            <View style={s.sep} />
+            <View style={s.sectionHeader}>
+              <Ionicons name="time-outline" size={13} color={Colors.gray400} />
+              <Text style={s.sectionLabel}>HOURS</Text>
+            </View>
+
+            <View style={s.hoursCard}>
+              {location.weekdayText.map((raw, i) => {
+                const sep = raw.indexOf(': ');
+                const day = raw.slice(0, sep);
+                const time = raw.slice(sep + 2);
+                const isToday = i === today;
+                return (
+                  <View
+                    key={i}
+                    style={[s.hoursRow, isToday && s.hoursRowToday]}
+                  >
+                    <Text style={[s.hoursDay, isToday && s.hoursDayToday]}>
+                      {day}
+                    </Text>
+                    <Text style={[s.hoursTime, isToday && s.hoursTimeToday]}>
+                      {time}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        <View style={s.sep} />
+      </Animated.View>
+
+      {/* ── CTA Buttons ────────────────────────────────────────────────── */}
+      <Animated.View style={[s.ctaRow, ctaStyle]}>
+        <TouchableOpacity
+          style={s.ctaOutline}
+          onPress={openDirections}
+          activeOpacity={0.72}
+        >
+          <View style={s.ctaIconCircle}>
+            <Ionicons name="navigate" size={15} color={Colors.primary} />
+          </View>
           <Text style={s.ctaOutlineText}>Directions</Text>
         </TouchableOpacity>
+
         {location.phone ? (
-          <TouchableOpacity style={s.ctaFill} onPress={callStore} activeOpacity={0.75}>
-            <Ionicons name="call-outline" size={17} color="#fff" />
+          <TouchableOpacity
+            style={s.ctaFill}
+            onPress={callStore}
+            activeOpacity={0.72}
+          >
+            <LinearGradient
+              colors={[Colors.primary, Colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={s.ctaIconCircleWhite}>
+              <Ionicons name="call" size={15} color="#fff" />
+            </View>
             <Text style={s.ctaFillText}>Call Store</Text>
           </TouchableOpacity>
         ) : null}
-      </View>
+      </Animated.View>
     </View>
   );
 };
@@ -227,12 +377,13 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
 
 const StoreScreen: React.FC = () => {
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [activeId, setActiveId]   = useState('');
-  const webViewRef  = useRef<WebView>(null);
-  const sheetRef    = useRef<RNBottomSheet>(null);
-  const insets      = useSafeAreaInsets();
-  const bottomInset = TAB_BAR_HEIGHT + Math.max(insets.bottom, 8);
+  const [loading, setLoading] = useState(true);
+  const [activeId, setActiveId] = useState('');
+  const webViewRef = useRef<WebView>(null);
+  const sheetRef = useRef<RNBottomSheet>(null);
+  const tabsScrollRef = useRef<ScrollView>(null);
+  const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
+  const tabsContainerW = useRef(0);
 
   useEffect(() => {
     searchMOpticLocations()
@@ -243,46 +394,62 @@ const StoreScreen: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Auto-open the sheet once locations are ready
   useEffect(() => {
     if (!locations.length) return;
     const t = setTimeout(() => sheetRef.current?.snapToIndex(0), 350);
     return () => clearTimeout(t);
   }, [locations.length]);
 
+  // Fluid spring — slight natural bounce, no hard clamping
   const animationConfigs = useBottomSheetSpringConfigs({
-    duration: 420,
-    dampingRatio: 0.92,
-    overshootClamping: true,
+    duration: 460,
+    dampingRatio: 0.76,
+    overshootClamping: false,
   });
 
-  const mapHTML        = useMemo(() => buildMapHTML(locations), [locations]);
-  const snapPoints     = useMemo(() => ['44%', '75%'], []);
+  const mapHTML = useMemo(() => buildMapHTML(locations), [locations]);
+  // First snap: peek with header + address visible. Second: full content.
+  const snapPoints = useMemo(() => ['42%', '88%'], []);
   const activeLocation = locations.find(l => l.placeId === activeId);
 
   const selectLocation = useCallback((id: string) => {
     setActiveId(id);
-    webViewRef.current?.injectJavaScript(`setActive(${JSON.stringify(id)});true;`);
+    webViewRef.current?.injectJavaScript(
+      `setActive(${JSON.stringify(id)});true;`,
+    );
     sheetRef.current?.snapToIndex(0);
+
+    const layout = tabLayouts.current[id];
+    if (layout && tabsContainerW.current > 0) {
+      const scrollX = layout.x - (tabsContainerW.current - layout.width) / 2;
+      tabsScrollRef.current?.scrollTo({
+        x: Math.max(0, scrollX),
+        animated: true,
+      });
+    }
   }, []);
 
-  const onWebMessage = useCallback((e: WebViewMessageEvent) => {
-    try {
-      const d = JSON.parse(e.nativeEvent.data);
-      if (d.type === 'markerClick') selectLocation(d.id);
-    } catch {}
-  }, [selectLocation]);
+  const onWebMessage = useCallback(
+    (e: WebViewMessageEvent) => {
+      try {
+        const d = JSON.parse(e.nativeEvent.data);
+        if (d.type === 'markerClick') selectLocation(d.id);
+      } catch {}
+    },
+    [selectLocation],
+  );
 
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
         {...props}
         disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.32}
+        appearsOnIndex={1}
+        opacity={0.22}
         pressBehavior="collapse"
       />
-    ), [],
+    ),
+    [],
   );
 
   if (loading) {
@@ -309,31 +476,46 @@ const StoreScreen: React.FC = () => {
 
       {/* Floating store tabs */}
       <SafeAreaView style={s.tabsArea} pointerEvents="box-none">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabsRow}
-        >
-          {locations.map(loc => {
-            const active = loc.placeId === activeId;
-            return (
-              <TouchableOpacity
-                key={loc.placeId}
-                onPress={() => selectLocation(loc.placeId)}
-                activeOpacity={0.8}
-                style={[s.tab, active && s.tabActive]}
-              >
-                {active && <View style={s.tabPip} />}
-                <Text style={[s.tabLabel, active && s.tabLabelActive]} numberOfLines={1}>
-                  {loc.branch || loc.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <View style={s.tabsContainer}>
+          <ScrollView
+            ref={tabsScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.tabsRow}
+            onLayout={e => {
+              tabsContainerW.current = e.nativeEvent.layout.width;
+            }}
+          >
+            {locations.map(loc => {
+              const active = loc.placeId === activeId;
+              return (
+                <TouchableOpacity
+                  key={loc.placeId}
+                  onPress={() => selectLocation(loc.placeId)}
+                  activeOpacity={0.75}
+                  style={[s.tab, active && s.tabActive]}
+                  onLayout={e => {
+                    tabLayouts.current[loc.placeId] = {
+                      x: e.nativeEvent.layout.x,
+                      width: e.nativeEvent.layout.width,
+                    };
+                  }}
+                >
+                  {active && <View style={s.tabDot} />}
+                  <Text
+                    style={[s.tabLabel, active && s.tabLabelActive]}
+                    numberOfLines={1}
+                  >
+                    {loc.branch || loc.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
       </SafeAreaView>
 
-      {/* Location info bottom sheet */}
+      {/* Location info bottom sheet — full width, sits above tab bar */}
       {activeLocation && (
         <RNBottomSheet
           ref={sheetRef}
@@ -341,15 +523,16 @@ const StoreScreen: React.FC = () => {
           snapPoints={snapPoints}
           animationConfigs={animationConfigs}
           enablePanDownToClose
-          overDragResistanceFactor={12}
-          bottomInset={bottomInset}
-          detached
+          overDragResistanceFactor={14}
+          topInset={80}
           backdropComponent={renderBackdrop}
           handleIndicatorStyle={s.sheetIndicator}
           backgroundStyle={s.sheetBg}
-          style={s.sheetDetached}
         >
-          <BottomSheetScrollView>
+          <BottomSheetScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={s.sheetScroll}
+          >
             <LocationSheet location={activeLocation} />
           </BottomSheetScrollView>
         </RNBottomSheet>
@@ -361,121 +544,186 @@ const StoreScreen: React.FC = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:   { flex: 1 },
-  map:    { flex: 1 },
+  root: { flex: 1 },
+  map: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
 
-  // Tabs overlay
+  // ── Tabs overlay ──────────────────────────────────────────────────────────
   tabsArea: {
     position: 'absolute',
-    top: 0, left: 0, right: 0,
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10,
+  },
+  // Single dark-glass pill that contains all tabs
+  tabsContainer: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(26, 16, 10, 0.62)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    padding: 3,
+    ...Shadow.md,
   },
   tabsRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    gap: Spacing.xs,
+    gap: 2,
   },
+  // Each tab — no background by default, gets white pill when active
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1.5,
-    borderColor: Colors.primaryGlow,
     gap: 6,
-    ...Shadow.sm,
   },
   tabActive: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    ...Shadow.sm,
+  },
+  tabDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: Colors.primary,
-    borderColor: Colors.primaryDark,
   },
-  tabPip: {
-    width: 6, height: 6,
-    borderRadius: 3,
-    backgroundColor: '#fff',
+  tabLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.72)',
+    maxWidth: 130,
   },
-  tabLabel:       { fontSize: FontSize.sm, fontWeight: '700', color: Colors.gray600, maxWidth: 120 },
-  tabLabelActive: { color: '#fff' },
+  tabLabelActive: { color: Colors.primary, fontWeight: '800' },
 
-  // Bottom sheet
-  sheetDetached: {
-    marginHorizontal: 12,
-  },
+  // ── Bottom sheet chrome ───────────────────────────────────────────────────
   sheetBg: {
-    backgroundColor: Colors.glassSurfaceHigh,
-    borderRadius: BorderRadius.xxl,
+    // Warm parchment tint — matches app background, looks glassy not modal-white
+    backgroundColor: 'rgba(245, 238, 232, 0.97)',
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    borderColor: Colors.glassBorderStrong,
+    borderColor: 'rgba(255,255,255,0.90)',
     ...Shadow.lg,
   },
   sheetIndicator: {
     backgroundColor: Colors.gray300,
-    width: 36, height: 4,
+    width: 32,
+    height: 4,
     borderRadius: BorderRadius.full,
   },
-  sheetInner: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: 48,
+  sheetScroll: {
+    paddingBottom: 8,
   },
-  sheetHead: {
+
+  // ── Sheet inner layout ────────────────────────────────────────────────────
+  sheetInner: {
+    paddingTop: 4,
+    paddingBottom: 36,
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
-  sheetLogo: {
-    width: 50, height: 50,
+
+  logoBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.glassBorderStrong,
-    flexShrink: 0,
     ...Shadow.glow,
   },
-  sheetLogoLetter: {
-    color: Colors.primary,
+  logoBadgeLetter: {
+    color: '#fff',
     fontSize: FontSize.xl,
     fontWeight: '900',
+    letterSpacing: 0.5,
   },
+
   locationName: {
     fontSize: FontSize.lg,
     fontWeight: '800',
     color: Colors.black,
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    letterSpacing: -0.4,
+    marginBottom: 6,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+
+  ratingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(247,164,64,0.12)',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  ratingStar: { color: '#F7A440', fontSize: FontSize.xs, fontWeight: '800' },
+  ratingNum: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray700,
+    marginLeft: 3,
+  },
+  reviewCount: { fontSize: FontSize.xs, color: Colors.gray400 },
+
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     gap: 4,
   },
-  star:        { color: '#F7A440', fontSize: FontSize.sm, fontWeight: '700' },
-  ratingNum:   { fontSize: FontSize.sm, fontWeight: '700', color: Colors.black },
-  reviewCount: { fontSize: FontSize.xs, color: Colors.gray400 },
-  dot: {
-    width: 6, height: 6,
+  statusOpen: { backgroundColor: Colors.successLight },
+  statusClosed: { backgroundColor: Colors.errorLight },
+  statusDot: {
+    width: 5,
+    height: 5,
     borderRadius: 3,
-    marginLeft: 4,
   },
-  openStatus: { fontSize: FontSize.xs, fontWeight: '600' },
+  statusText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+  },
 
-  sep: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.md },
+  // ── Separator ─────────────────────────────────────────────────────────────
+  sep: {
+    height: 1,
+    backgroundColor: 'rgba(156,129,120,0.14)',
+    marginVertical: Spacing.md,
+    marginHorizontal: Spacing.lg,
+  },
 
+  // ── Detail rows ───────────────────────────────────────────────────────────
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
   },
-  detailIcon: {
-    width: 28, height: 28,
+  detailIconWrap: {
+    width: 30,
+    height: 30,
     borderRadius: BorderRadius.sm,
     backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -486,53 +734,97 @@ const s = StyleSheet.create({
     color: Colors.gray600,
     flex: 1,
     lineHeight: 20,
-    paddingTop: 4,
+    paddingTop: 5,
   },
 
+  // ── Hours ─────────────────────────────────────────────────────────────────
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
   sectionLabel: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.gray400,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.sm,
+    letterSpacing: 1.0,
+  },
+  hoursCard: {
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.divider,
   },
   hoursRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
   },
-  hoursDay:  { fontSize: FontSize.sm, fontWeight: '600', color: Colors.gray600 },
+  hoursRowToday: {
+    backgroundColor: Colors.primaryLight,
+  },
+  hoursDay: { fontSize: FontSize.sm, fontWeight: '500', color: Colors.gray500 },
+  hoursDayToday: { fontWeight: '700', color: Colors.primary },
   hoursTime: { fontSize: FontSize.sm, color: Colors.gray400 },
+  hoursTimeToday: { fontWeight: '600', color: Colors.primary },
 
-  ctaRow: { flexDirection: 'row', gap: Spacing.sm },
+  // ── CTA buttons ───────────────────────────────────────────────────────────
+  ctaRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+
   ctaOutline: {
     flex: 1,
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 13,
+    gap: 8,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
     borderColor: Colors.primaryGlow,
     backgroundColor: Colors.primaryLight,
+    ...Shadow.sm,
+  },
+  ctaIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(156,129,120,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaOutlineText: {
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.primary,
   },
+
   ctaFill: {
     flex: 1,
+    height: 50,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 13,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.primary,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryDark,
+    gap: 8,
+    ...Shadow.md,
+  },
+  ctaIconCircleWhite: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaFillText: {
     fontSize: FontSize.sm,

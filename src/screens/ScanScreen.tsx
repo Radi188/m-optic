@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,12 @@ import {
   ScrollView,
   Linking,
   Modal,
+  Animated,
+  Dimensions,
+  Platform,
 } from 'react-native';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -17,7 +22,7 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'face' | 'refraction';
-type FaceScanStage = 'idle' | 'scanning' | 'selecting' | 'result';
+type FaceScanStage = 'idle' | 'scanning' | 'selecting';
 type RefractionStage = 'intro' | 'acuity' | 'contrast' | 'astigmatism' | 'colorVision' | 'nearVision' | 'result';
 type ContrastResult = 'good' | 'reduced' | 'poor';
 type ColorResult = 'normal' | 'mild' | 'deficient';
@@ -696,124 +701,186 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
   </ScrollView>
 );
 
-// ─── Face Scan — Result ───────────────────────────────────────────────────────
+// ─── Glasses Recommendation Bottom Sheet ──────────────────────────────────────
 
-const FaceScanResult: React.FC<{ shape: FaceShape; onRetry: () => void }> = ({
-  shape,
-  onRetry,
-}) => {
+const GlassesBottomSheet: React.FC<{
+  visible: boolean;
+  shape: FaceShape;
+  onClose: () => void;
+}> = ({ visible, shape, onClose }) => {
   const info = FACE_SHAPE_INFO[shape];
   const [resultTab, setResultTab] = useState<ResultTab>('face');
   const [hairStyle, setHairStyle] = useState<HairStyle | null>(null);
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setResultTab('face');
+      setHairStyle(null);
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 22,
+          stiffness: 200,
+          mass: 0.9,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
 
   const hairInfo = hairStyle ? HAIR_FRAME_INFO[hairStyle] : null;
   const displayFrames = resultTab === 'face' ? info.frames : hairInfo?.frames ?? [];
   const displayTip = resultTab === 'face' ? info.tip : hairInfo?.tip ?? '';
 
-  return (
-    <ScrollView
-      contentContainerStyle={[styles.contentPad, { paddingBottom: 40 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Face shape badge */}
-      <View style={styles.heroCard}>
-        <View style={styles.heroIconRing}>
-          <Ionicons name={info.icon as any} size={44} color={Colors.primary} />
-        </View>
-        <Text style={styles.overlineLabel}>Your face shape</Text>
-        <Text style={styles.shapeName}>{shape}</Text>
-        <Text style={styles.heroSub}>{info.description}</Text>
-      </View>
+  if (!visible) return null;
 
-      {/* Hair style selector */}
-      <Text style={[styles.sectionLabel, { marginBottom: Spacing.sm }]}>
-        Select Your Hair Style
-      </Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.md }}
+  return (
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+      {/* Backdrop */}
+      <Animated.View
+        style={[gsStyles.backdrop, { opacity: backdropAnim }]}
+        pointerEvents="box-none"
       >
-        {HAIR_STYLES.map(hs => {
-          const selected = hairStyle === hs.key;
-          return (
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+      </Animated.View>
+
+      {/* Sheet */}
+      <Animated.View style={[gsStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+        {/* Handle */}
+        <View style={gsStyles.handle} />
+
+        {/* Header */}
+        <View style={gsStyles.header}>
+          <View style={gsStyles.headerLeft}>
+            <View style={gsStyles.shapeIconSmall}>
+              <Ionicons name={info.icon as any} size={18} color={Colors.primary} />
+            </View>
+            <View>
+              <Text style={gsStyles.headerOverline}>Your face shape</Text>
+              <Text style={gsStyles.headerShape}>{shape}</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={onClose} style={gsStyles.closeBtn} activeOpacity={0.7}>
+            <Ionicons name="close" size={18} color={Colors.gray600} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={gsStyles.scroll}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* Face description */}
+          <View style={gsStyles.descCard}>
+            <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
+            <Text style={gsStyles.descText}>{info.description}</Text>
+          </View>
+
+          {/* Hair style selector */}
+          <Text style={gsStyles.sectionLabel}>Refine by Hair Style</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.md }}
+          >
+            {HAIR_STYLES.map(hs => {
+              const selected = hairStyle === hs.key;
+              return (
+                <TouchableOpacity
+                  key={hs.key}
+                  style={[rsStyles.hairChip, selected && rsStyles.hairChipActive]}
+                  onPress={() => {
+                    setHairStyle(hs.key);
+                    setResultTab('hair');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={hs.icon as any}
+                    size={15}
+                    color={selected ? Colors.white : Colors.gray500}
+                  />
+                  <Text style={[rsStyles.hairChipText, selected && rsStyles.hairChipTextActive]}>
+                    {hs.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Recommendation tabs */}
+          <View style={rsStyles.tabRow}>
             <TouchableOpacity
-              key={hs.key}
-              style={[rsStyles.hairChip, selected && rsStyles.hairChipActive]}
-              onPress={() => {
-                setHairStyle(hs.key);
-                setResultTab('hair');
-              }}
+              style={[rsStyles.recTab, resultTab === 'face' && rsStyles.recTabActive]}
+              onPress={() => setResultTab('face')}
               activeOpacity={0.8}
             >
               <Ionicons
-                name={hs.icon as any}
-                size={15}
-                color={selected ? Colors.white : Colors.gray500}
+                name="scan-outline"
+                size={14}
+                color={resultTab === 'face' ? Colors.primary : Colors.gray400}
               />
-              <Text style={[rsStyles.hairChipText, selected && rsStyles.hairChipTextActive]}>
-                {hs.label}
+              <Text style={[rsStyles.recTabText, resultTab === 'face' && rsStyles.recTabTextActive]}>
+                Face Shape
               </Text>
             </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+            <TouchableOpacity
+              style={[
+                rsStyles.recTab,
+                resultTab === 'hair' && rsStyles.recTabActive,
+                !hairStyle && rsStyles.recTabDisabled,
+              ]}
+              onPress={() => hairStyle && setResultTab('hair')}
+              activeOpacity={hairStyle ? 0.8 : 1}
+            >
+              <Ionicons
+                name="color-wand-outline"
+                size={14}
+                color={resultTab === 'hair' ? Colors.primary : Colors.gray400}
+              />
+              <Text style={[rsStyles.recTabText, resultTab === 'hair' && rsStyles.recTabTextActive]}>
+                Hair Style
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-      {/* Recommendation tabs */}
-      <View style={rsStyles.tabRow}>
-        <TouchableOpacity
-          style={[rsStyles.recTab, resultTab === 'face' && rsStyles.recTabActive]}
-          onPress={() => setResultTab('face')}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="scan-outline"
-            size={14}
-            color={resultTab === 'face' ? Colors.primary : Colors.gray400}
-          />
-          <Text style={[rsStyles.recTabText, resultTab === 'face' && rsStyles.recTabTextActive]}>
-            Face Shape
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            rsStyles.recTab,
-            resultTab === 'hair' && rsStyles.recTabActive,
-            !hairStyle && rsStyles.recTabDisabled,
-          ]}
-          onPress={() => hairStyle && setResultTab('hair')}
-          activeOpacity={hairStyle ? 0.8 : 1}
-        >
-          <Ionicons
-            name="color-wand-outline"
-            size={14}
-            color={resultTab === 'hair' ? Colors.primary : Colors.gray400}
-          />
-          <Text style={[rsStyles.recTabText, resultTab === 'hair' && rsStyles.recTabTextActive]}>
-            Hair Style
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {/* Tip */}
+          {displayTip ? (
+            <View style={styles.tipCard}>
+              <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+              <Text style={styles.tipText}>{displayTip}</Text>
+            </View>
+          ) : (
+            <View style={rsStyles.hairPrompt}>
+              <Ionicons name="arrow-up-outline" size={16} color={Colors.gray400} />
+              <Text style={rsStyles.hairPromptText}>
+                Pick a hair style above to see matched frame recommendations
+              </Text>
+            </View>
+          )}
 
-      {/* Tip */}
-      {displayTip ? (
-        <View style={styles.tipCard}>
-          <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
-          <Text style={styles.tipText}>{displayTip}</Text>
-        </View>
-      ) : (
-        <View style={rsStyles.hairPrompt}>
-          <Ionicons name="arrow-up-outline" size={16} color={Colors.gray400} />
-          <Text style={rsStyles.hairPromptText}>
-            Pick a hair style above to see matched frame recommendations
-          </Text>
-        </View>
-      )}
-
-      {/* Frames grid */}
-      {displayFrames.length > 0 && (
-        <>
-          <Text style={styles.sectionLabel}>Recommended Frames</Text>
+          {/* Recommended frames */}
+          <Text style={gsStyles.sectionLabel}>Recommended Frames</Text>
           <View style={styles.framesGrid}>
             {displayFrames.map(name => (
               <View key={name} style={styles.frameCard}>
@@ -824,14 +891,23 @@ const FaceScanResult: React.FC<{ shape: FaceShape; onRetry: () => void }> = ({
               </View>
             ))}
           </View>
-        </>
-      )}
 
-      <TouchableOpacity style={styles.outlineBtn} onPress={onRetry} activeOpacity={0.8}>
-        <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
-        <Text style={styles.outlineBtnText}>Scan Again</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          {/* CTAs */}
+          <TouchableOpacity style={styles.primaryBtn} onPress={onClose} activeOpacity={0.82}>
+            <Ionicons name="refresh-outline" size={19} color={Colors.white} />
+            <Text style={styles.primaryBtnText}>Scan Again</Text>
+          </TouchableOpacity>
+
+          <View style={gsStyles.footerNote}>
+            <Ionicons name="information-circle-outline" size={13} color={Colors.gray400} />
+            <Text style={gsStyles.footerNoteText}>
+              Frame recommendations are based on your face shape analysis and are indicative only.
+              Visit an M Optic store to try on frames in person.
+            </Text>
+          </View>
+        </ScrollView>
+      </Animated.View>
+    </Modal>
   );
 };
 
@@ -1673,8 +1749,25 @@ const ScanScreen: React.FC = () => {
   const [tab, setTab] = useState<Tab>('face');
   const [faceScanStage, setFaceScanStage] = useState<FaceScanStage>('idle');
   const [faceShape, setFaceShape] = useState<FaceShape | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   const isScanning = tab === 'face' && faceScanStage === 'scanning';
+
+  const handleShapeDetected = (shape: FaceShape) => {
+    setFaceShape(shape);
+    // Brief pause so the user sees "Scan complete!" in the camera view,
+    // then transition: close camera, open bottom sheet.
+    setTimeout(() => {
+      setFaceScanStage('idle');
+      setSheetVisible(true);
+    }, 600);
+  };
+
+  const handleSheetClose = () => {
+    setSheetVisible(false);
+    setFaceShape(null);
+    setFaceScanStage('idle');
+  };
 
   return (
     <SafeAreaView style={styles.root}>
@@ -1684,6 +1777,7 @@ const ScanScreen: React.FC = () => {
 
       {tab === 'face' ? (
         <>
+          {/* Idle — always shown unless camera is active or manual selector is open */}
           {faceScanStage === 'idle' && (
             <FaceScanIdle onStart={() => setFaceScanStage('scanning')} />
           )}
@@ -1692,10 +1786,7 @@ const ScanScreen: React.FC = () => {
           {faceScanStage === 'scanning' && (
             <View style={StyleSheet.absoluteFillObject}>
               <FaceScanCamera
-                onShapeDetected={shape => {
-                  setFaceShape(shape);
-                  setFaceScanStage('result');
-                }}
+                onShapeDetected={handleShapeDetected}
                 onCameraError={() => setFaceScanStage('selecting')}
                 onCancel={() => setFaceScanStage('idle')}
               />
@@ -1707,16 +1798,19 @@ const ScanScreen: React.FC = () => {
             <FaceShapeSelector
               onSelect={shape => {
                 setFaceShape(shape);
-                setFaceScanStage('result');
+                setFaceScanStage('idle');
+                setSheetVisible(true);
               }}
               onCancel={() => setFaceScanStage('idle')}
             />
           )}
 
-          {faceScanStage === 'result' && faceShape && (
-            <FaceScanResult
+          {/* Glasses recommendation bottom sheet */}
+          {faceShape && (
+            <GlassesBottomSheet
+              visible={sheetVisible}
               shape={faceShape}
-              onRetry={() => { setFaceShape(null); setFaceScanStage('idle'); }}
+              onClose={handleSheetClose}
             />
           )}
         </>
@@ -1726,6 +1820,128 @@ const ScanScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
+// ─── Glasses Bottom Sheet Styles ──────────────────────────────────────────────
+
+const gsStyles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: SCREEN_HEIGHT * 0.88,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.gray300,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.glassBorder,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  shapeIconSmall: {
+    width: 42,
+    height: 42,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerOverline: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.gray400,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  headerShape: {
+    fontSize: FontSize.xl,
+    fontWeight: '900',
+    color: Colors.primary,
+    letterSpacing: -0.5,
+    marginTop: 1,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.glassSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scroll: {
+    padding: Spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 40 : Spacing.xxl,
+  },
+  descCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  descText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray400,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.sm,
+  },
+  footerNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    marginTop: Spacing.lg,
+  },
+  footerNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: Colors.gray400,
+    lineHeight: 16,
+  },
+});
 
 // ─── Shape Selector Styles ────────────────────────────────────────────────────
 

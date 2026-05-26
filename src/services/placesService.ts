@@ -35,7 +35,16 @@ export function buildPhotoUri(photoName: string): string {
   return `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400&maxWidthPx=800&skipHttpRedirect=false&key=${API_KEY}`;
 }
 
-function extractBranch(name: string): string {
+// Strip any non-ASCII / Khmer characters, then collapse whitespace
+function stripToEnglish(text: string): string {
+  return text
+    .replace(/[^\x20-\x7E]/g, ' ')  // keep printable ASCII only
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractBranch(rawName: string): string {
+  const name = stripToEnglish(rawName);
   const stripped = name
     .replace(/m[\s-]?optic/i, '')
     .trim()
@@ -54,7 +63,7 @@ export async function searchMOpticLocations(): Promise<PlaceLocation[]> {
     },
     body: JSON.stringify({
       textQuery: 'M Optic',
-      // Restrict results to Cambodia bounding box
+      languageCode: 'en',
       locationRestriction: {
         rectangle: {
           low:  { latitude: 10.4, longitude: 102.3 },
@@ -75,7 +84,7 @@ export async function searchMOpticLocations(): Promise<PlaceLocation[]> {
 
   return places.map(p => ({
     placeId: p.id,
-    name: p.displayName?.text ?? '',
+    name: stripToEnglish(p.displayName?.text ?? ''),
     branch: extractBranch(p.displayName?.text ?? ''),
     address: p.formattedAddress ?? '',
     phone: p.internationalPhoneNumber ?? '',

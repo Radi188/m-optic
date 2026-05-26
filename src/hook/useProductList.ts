@@ -20,7 +20,7 @@ type UseProductListReturn = {
 };
 
 export const useProductList = (
-  initialFilters: ProductListFilters = {}
+  initialFilters: ProductListFilters = {},
 ): UseProductListReturn => {
   const [products, setProducts] = useState<ProductListResponse['data']>([]);
   const [brands, setBrands] = useState<BrandResponse[]>([]);
@@ -46,7 +46,11 @@ export const useProductList = (
       setMeta(response.meta);
       setLinks(response.links);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to fetch products');
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Failed to fetch products',
+      );
     } finally {
       setLoading(false);
     }
@@ -60,7 +64,11 @@ export const useProductList = (
       const response = await brandController.getBrands();
       setBrands(response);
     } catch (err: any) {
-      setBrandError(err?.response?.data?.message || err?.message || 'Failed to fetch brands');
+      setBrandError(
+        err?.response?.data?.message ||
+          err?.message ||
+          'Failed to fetch brands',
+      );
     } finally {
       setBrandLoading(false);
     }
