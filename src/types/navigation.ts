@@ -33,6 +33,10 @@ export type RootStackParamList = {
     initialIndex?: number;
     productName?: string;
   };
+  NotificationSetting: undefined;
+  Support: undefined;
+  NotificationList: undefined;
+  Privacy: undefined
 };
 
 export type BottomTabParamList = {

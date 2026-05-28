@@ -7,6 +7,7 @@ type ProfileHeaderProps = {
   name?: string;
   subtitle?: string;
   avatarUrl?: string;
+  notificationCount?: number;
   onEditPress?: () => void;
   onCameraPress?: () => void;
   onNotificationPress?: () => void;
@@ -16,10 +17,13 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   name = 'Antar Adil',
   subtitle = 'Premium Member',
   avatarUrl,
+  notificationCount = 0,
   onEditPress,
   onCameraPress,
   onNotificationPress,
 }) => {
+  const hasUnreadNotification = notificationCount > 0;
+
   return (
     <View>
       <View style={styles.topSection}>
@@ -35,6 +39,14 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             size={22}
             color={Colors.black}
           />
+
+          {hasUnreadNotification ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
       </View>
 
@@ -107,6 +119,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#F0E7E3',
+    position: 'relative',
+  },
+
+  notificationBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#D92D20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: Colors.white,
   },
 
   card: {

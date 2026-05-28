@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,8 @@ import ProfileHeader from '../components/ui/Profile/ProfileHeader';
 import ProfileSettingSection from '../components/ui/Profile/ProfileSettingSection';
 import ProfilePointSection from '../components/ui/Profile/ProfilePointSection';
 import NotLoginProfile from '../components/ui/Profile/NotLoginProfile';
+import LanguagePickerModal from '../components/ui/Modal/LanguagePickerModal';
+import LogoutModal from '../components/ui/Modal/LogoutModal';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -103,6 +105,70 @@ const ProfileScreen: React.FC = () => {
   const [editEmail, setEditEmail] = useState(user?.email ?? '');
   const [editPhone, setEditPhone] = useState(user?.phone ?? '');
 
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+
+  const languageLabel = selectedLanguage === 'km' ? 'ភាសាខ្មែរ' : 'English';
+
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const handleConfirmLogout = () => {
+    setLogoutModalVisible(false);
+
+    // Clear token / user data here
+    // await AsyncStorage.removeItem('auth_token');
+    // navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+
+    console.log('Logout confirmed');
+  };
+
+  const settingItems = useMemo(
+    () => [
+      {
+        id: 'language',
+        title: 'Language',
+        subtitle: languageLabel,
+        icon: 'language-outline',
+        onPress: () => setLanguageModalVisible(true),
+      },
+      {
+        id: 'notifications',
+        title: 'Notifications',
+        subtitle: 'Manage alerts',
+        icon: 'notifications-outline',
+        onPress: () => navigation.navigate('NotificationSetting'),
+      },
+      {
+        id: 'support',
+        title: 'Support',
+        subtitle: 'Help center',
+        icon: 'headset-outline',
+        onPress: () => {
+          navigation.navigate('Support');
+        },
+      },
+      {
+        id: 'privacy',
+        title: 'Privacy Policy',
+        subtitle: 'Data and security',
+        icon: 'shield-checkmark-outline',
+        onPress: () => {
+          navigation.navigate('Privacy');
+        },
+      },
+      {
+        id: 'logout',
+        title: 'Logout',
+        subtitle: 'Sign out from account',
+        icon: 'log-out-outline',
+        onPress: () => {
+          setLogoutModalVisible(true);
+        },
+      },
+    ],
+    [languageLabel],
+  );
+
   const openEditModal = () => {
     setEditName(user?.name ?? '');
     setEditEmail(user?.email ?? '');
@@ -134,59 +200,6 @@ const ProfileScreen: React.FC = () => {
   }
 
   // ── Authenticated view ────────────────────────────────────────────────────
-  const SETTINGS = [
-    {
-      icon: 'notifications-outline',
-      label: 'Notifications',
-      sub: unreadCount > 0 ? `${unreadCount} unread` : 'All caught up',
-      badge: unreadCount > 0 ? unreadCount : undefined,
-      color: '#4DA8DA',
-      onPress: () => setNotifModal(true),
-    },
-    {
-      icon: 'lock-closed-outline',
-      label: 'Change Password',
-      sub: 'Update your credentials',
-      badge: undefined,
-      color: '#9B59B6',
-      onPress: () => setPwModal(true),
-    },
-    {
-      icon: 'globe-outline',
-      label: 'Language',
-      sub: 'English',
-      badge: undefined,
-      color: '#2DBD7E',
-      onPress: () => {},
-    },
-  ];
-
-  const QUICK_ACTIONS = [
-    {
-      icon: 'eye-outline',
-      label: 'Refraction',
-      color: Colors.primary,
-      bg: Colors.primaryLight,
-    },
-    {
-      icon: 'receipt-outline',
-      label: 'Orders',
-      color: '#F4A830',
-      bg: 'rgba(244,168,48,0.14)',
-    },
-    {
-      icon: 'pricetag-outline',
-      label: 'Offers',
-      color: '#2DBD7E',
-      bg: 'rgba(45,189,126,0.14)',
-    },
-    {
-      icon: 'scan-outline',
-      label: 'Face Scan',
-      color: '#9B59B6',
-      bg: 'rgba(155,89,182,0.14)',
-    },
-  ];
 
   const tierProgress = Math.min((user.loyaltyPoints % 1000) / 10, 100);
 
@@ -217,9 +230,15 @@ const ProfileScreen: React.FC = () => {
           <ProfileHeader
             name={user.name}
             subtitle={user.customerType}
-            memberTier="Gold Tier"
             avatarUrl="https://images.unsplash.com/photo-1654110455429-cf322b40a906?q=80&w=580&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-            onEditPress={() => console.log('Edit profile')}
+            notificationCount={2}
+            onNotificationPress={() => navigation.navigate('NotificationList')}
+            onEditPress={() => {
+              console.log('Edit profile');
+            }}
+            onCameraPress={() => {
+              console.log('Change profile image');
+            }}
           />
 
           {/* <View style={guestStyles.grid}>
@@ -244,7 +263,7 @@ const ProfileScreen: React.FC = () => {
             progress={70}
           />
 
-          <ProfileSettingSection />
+          <ProfileSettingSection items={settingItems} />
 
           {/* <View style={guestStyles.ctaWrap}>
               <TouchableOpacity
@@ -273,6 +292,19 @@ const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View> */}
         </ScrollView>
+
+        <LanguagePickerModal
+          visible={languageModalVisible}
+          selectedLanguage={selectedLanguage}
+          onClose={() => setLanguageModalVisible(false)}
+          onSelectLanguage={setSelectedLanguage}
+        />
+
+        <LogoutModal
+          visible={logoutModalVisible}
+          onClose={() => setLogoutModalVisible(false)}
+          onConfirmLogout={handleConfirmLogout}
+        />
       </View>
     </GlassBackground>
   );
