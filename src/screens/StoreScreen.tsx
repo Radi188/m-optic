@@ -9,12 +9,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Linking,
   Platform,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -24,128 +24,20 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import LinearGradient from 'react-native-linear-gradient';
-import { WebView } from 'react-native-webview';
-import type { WebViewMessageEvent } from 'react-native-webview';
+import MapView, { Marker } from 'react-native-maps';
 import RNBottomSheet, {
   BottomSheetScrollView,
   BottomSheetBackdrop,
   useBottomSheetSpringConfigs,
 } from '@gorhom/bottom-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { GlassView } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { searchMOpticLocations, groupHours } from '../services/placesService';
 import type { PlaceLocation } from '../services/placesService';
 
-// ─── Map HTML (Leaflet + OpenStreetMap) ───────────────────────────────────────
-
-const buildMapHTML = (locs: PlaceLocation[]): string => {
-  if (!locs.length) return '<html><body style="background:#1a1a1a"/></html>';
-
-  const locsJson = JSON.stringify(
-    locs.map(l => ({ id: l.placeId, lat: l.lat, lng: l.lng })),
-  );
-  const c = locs[0];
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body{width:100%;height:100%;overflow:hidden;background:#e8e8e8}
-    #map{width:100%;height:100%;touch-action:none}
-    .leaflet-tile-pane{filter:none}
-
-    .leaflet-control-attribution{font-size:8px!important;opacity:.4!important;background:rgba(255,255,255,.7)!important;color:#666!important}
-    .leaflet-control-attribution a{color:#888!important}
-
-    .leaflet-top.leaflet-left{top:50%!important;transform:translateY(-50%);left:14px!important}
-    .leaflet-control-zoom{border:none!important;box-shadow:0 4px 18px rgba(0,0,0,.4)!important;border-radius:16px!important;overflow:hidden;margin:0!important}
-    .leaflet-control-zoom a{width:38px!important;height:38px!important;line-height:38px!important;color:#9C8178!important;background:rgba(255,255,255,.95)!important;border:none!important;font-size:18px!important;font-weight:600!important;transition:background .15s}
-    .leaflet-control-zoom a:hover{background:#fff!important}
-    .leaflet-bar a:first-child{border-bottom:1px solid rgba(156,129,120,.12)!important}
-
-    .pin-wrap{display:inline-block;line-height:0}
-    .pin-active{filter:drop-shadow(0 8px 22px rgba(156,129,120,.72))}
-    .pin-inactive{filter:drop-shadow(0 3px 10px rgba(100,65,50,.28))}
-  </style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-var LOCS=${locsJson};
-var activeId=${JSON.stringify(c.placeId)};
-var markers={};
-
-var map=L.map('map',{zoomControl:false,attributionControl:true,touchZoom:true,dragging:true,tap:false})
-          .setView([${c.lat},${c.lng}],13);
-L.control.zoom({position:'topleft'}).addTo(map);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-  maxZoom:19,subdomains:'abc'
-}).addTo(map);
-
-function makeIcon(id){
-  var a=id===activeId;
-  var html=a
-    ? '<div class="pin-wrap pin-active">'
-      + '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="70" viewBox="0 0 56 70">'
-      + '<circle cx="28" cy="26" r="24" fill="#9C8178" stroke="white" stroke-width="3.5"/>'
-      + '<circle cx="28" cy="26" r="18.5" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>'
-      + '<text x="28" y="33" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="900" font-size="21" letter-spacing="1" fill="white">M</text>'
-      + '<line x1="18" y1="38" x2="38" y2="38" stroke="rgba(255,255,255,.45)" stroke-width="1"/>'
-      + '<path d="M17 46 L28 66 L39 46 Q28 53 17 46Z" fill="#9C8178" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>'
-      + '<ellipse cx="28" cy="68" rx="5.5" ry="2.5" fill="rgba(0,0,0,.10)"/>'
-      + '</svg></div>'
-    : '<div class="pin-wrap pin-inactive">'
-      + '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="54" viewBox="0 0 42 54">'
-      + '<circle cx="21" cy="19" r="17.5" fill="rgba(156,129,120,.7)" stroke="rgba(255,255,255,.92)" stroke-width="2.5"/>'
-      + '<circle cx="21" cy="19" r="12.5" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1"/>'
-      + '<text x="21" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="900" font-size="15" letter-spacing=".5" fill="rgba(255,255,255,.95)">M</text>'
-      + '<line x1="13" y1="30" x2="29" y2="30" stroke="rgba(255,255,255,.35)" stroke-width="1"/>'
-      + '<path d="M12 34 L21 50 L30 34 Q21 40 12 34Z" fill="rgba(156,129,120,.7)" stroke="rgba(255,255,255,.92)" stroke-width="2" stroke-linejoin="round"/>'
-      + '<ellipse cx="21" cy="52" rx="4" ry="2" fill="rgba(0,0,0,.08)"/>'
-      + '</svg></div>';
-  return L.divIcon({
-    className:'',
-    html:html,
-    iconSize:a?[56,70]:[42,54],
-    iconAnchor:a?[28,67]:[21,51]
-  });
-}
-
-LOCS.forEach(function(loc){
-  var m=L.marker([loc.lat,loc.lng],{icon:makeIcon(loc.id)}).addTo(map);
-  m.on('click',function(){
-    if(window.ReactNativeWebView)
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'markerClick',id:loc.id}));
-  });
-  markers[loc.id]={m:m,lat:loc.lat,lng:loc.lng};
-});
-
-var allLatLngs=LOCS.map(function(l){return[l.lat,l.lng];});
-map.fitBounds(allLatLngs,{padding:[80,60],maxZoom:15});
-
-function setActive(id){
-  activeId=id;
-  Object.keys(markers).forEach(function(k){markers[k].m.setIcon(makeIcon(k));});
-  var t=markers[id];
-  if(t) map.flyTo([t.lat,t.lng],15,{duration:0.7,easeLinearity:0.35});
-}
-
-function onMsg(e){
-  try{var d=JSON.parse(e.data);if(d.type==='setActive')setActive(d.id);}catch(x){}
-}
-window.addEventListener('message',onMsg);
-document.addEventListener('message',onMsg);
-</script>
-</body>
-</html>`;
-};
+const MARKER_LOGO = require('../assets/logo_icon_transparent.png');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -221,12 +113,16 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
         {/* Logo badge */}
         <View style={s.logoBadge}>
           <LinearGradient
-            colors={[Colors.primary, Colors.primaryDark]}
+            colors={['#E8DAD2', '#CDB4A8']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Text style={s.logoBadgeLetter}>M</Text>
+          <Image
+            source={MARKER_LOGO}
+            style={s.logoBadgeImg}
+            resizeMode="contain"
+          />
         </View>
 
         {/* Name + meta */}
@@ -373,13 +269,61 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
   );
 };
 
+// ─── Custom Map Marker ────────────────────────────────────────────────────────
+
+const StoreMarker: React.FC<{
+  location: PlaceLocation;
+  active: boolean;
+  onPress: () => void;
+}> = ({ location, active, onPress }) => {
+  // Keep the native marker tracking view changes until the logo image has
+  // actually painted (it loads async), otherwise the marker snapshots an empty
+  // circle. Re-enable whenever the active state flips the appearance.
+  const [loaded, setLoaded] = useState(false);
+  const [settled, setSettled] = useState(false);
+
+  useEffect(() => {
+    // Re-snapshot when active styling changes.
+    setSettled(false);
+    if (!loaded) return;
+    const t = setTimeout(() => setSettled(true), 600);
+    return () => clearTimeout(t);
+  }, [active, loaded]);
+
+  const handleLogoLoad = () => setLoaded(true);
+
+  const tracks = !loaded || !settled;
+
+  return (
+    <Marker
+      coordinate={{ latitude: location.lat, longitude: location.lng }}
+      onPress={onPress}
+      anchor={{ x: 0.5, y: 1 }}
+      tracksViewChanges={tracks}
+    >
+      <View style={mk.wrap}>
+        <View style={[mk.head, active ? mk.headActive : mk.headInactive]}>
+          <Image
+            source={MARKER_LOGO}
+            style={mk.logo}
+            resizeMode="contain"
+            onLoad={handleLogoLoad}
+          />
+        </View>
+        <View style={[mk.tail, active ? mk.tailActive : mk.tailInactive]} />
+      </View>
+    </Marker>
+  );
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const StoreScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState('');
-  const webViewRef = useRef<WebView>(null);
+  const mapRef = useRef<MapView>(null);
   const sheetRef = useRef<RNBottomSheet>(null);
   const tabsScrollRef = useRef<ScrollView>(null);
   const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
@@ -407,36 +351,59 @@ const StoreScreen: React.FC = () => {
     overshootClamping: false,
   });
 
-  const mapHTML = useMemo(() => buildMapHTML(locations), [locations]);
   // First snap: peek with header + address visible. Second: full content.
   const snapPoints = useMemo(() => ['42%', '88%'], []);
   const activeLocation = locations.find(l => l.placeId === activeId);
 
-  const selectLocation = useCallback((id: string) => {
-    setActiveId(id);
-    webViewRef.current?.injectJavaScript(
-      `setActive(${JSON.stringify(id)});true;`,
+  const initialRegion = useMemo(() => {
+    if (!locations.length) return undefined;
+    const c = locations[0];
+    return {
+      latitude: c.lat,
+      longitude: c.lng,
+      latitudeDelta: 0.4,
+      longitudeDelta: 0.4,
+    };
+  }, [locations]);
+
+  const fitToAll = useCallback(() => {
+    if (locations.length < 2) return;
+    mapRef.current?.fitToCoordinates(
+      locations.map(l => ({ latitude: l.lat, longitude: l.lng })),
+      {
+        edgePadding: { top: 120, right: 60, bottom: 360, left: 60 },
+        animated: false,
+      },
     );
-    sheetRef.current?.snapToIndex(0);
+  }, [locations]);
 
-    const layout = tabLayouts.current[id];
-    if (layout && tabsContainerW.current > 0) {
-      const scrollX = layout.x - (tabsContainerW.current - layout.width) / 2;
-      tabsScrollRef.current?.scrollTo({
-        x: Math.max(0, scrollX),
-        animated: true,
-      });
-    }
-  }, []);
+  const selectLocation = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      const loc = locations.find(l => l.placeId === id);
+      if (loc) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: loc.lat,
+            longitude: loc.lng,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          },
+          600,
+        );
+      }
+      sheetRef.current?.snapToIndex(0);
 
-  const onWebMessage = useCallback(
-    (e: WebViewMessageEvent) => {
-      try {
-        const d = JSON.parse(e.nativeEvent.data);
-        if (d.type === 'markerClick') selectLocation(d.id);
-      } catch {}
+      const layout = tabLayouts.current[id];
+      if (layout && tabsContainerW.current > 0) {
+        const scrollX = layout.x - (tabsContainerW.current - layout.width) / 2;
+        tabsScrollRef.current?.scrollTo({
+          x: Math.max(0, scrollX),
+          animated: true,
+        });
+      }
     },
-    [selectLocation],
+    [locations],
   );
 
   const renderBackdrop = useCallback(
@@ -463,19 +430,29 @@ const StoreScreen: React.FC = () => {
   return (
     <View style={s.root}>
       {/* Full-screen map */}
-      <WebView
-        ref={webViewRef}
-        source={{ html: mapHTML }}
+      <MapView
+        ref={mapRef}
         style={s.map}
-        onMessage={onWebMessage}
-        javaScriptEnabled
-        scrollEnabled={false}
-        originWhitelist={['*']}
-        mixedContentMode="always"
-      />
+        initialRegion={initialRegion}
+        onMapReady={fitToAll}
+        showsMyLocationButton={false}
+        toolbarEnabled={false}
+      >
+        {locations.map(loc => (
+          <StoreMarker
+            key={loc.placeId}
+            location={loc}
+            active={loc.placeId === activeId}
+            onPress={() => selectLocation(loc.placeId)}
+          />
+        ))}
+      </MapView>
 
       {/* Floating store tabs */}
-      <SafeAreaView style={s.tabsArea} pointerEvents="box-none">
+      <View
+        style={[s.tabsArea, { paddingTop: insets.top }]}
+        pointerEvents="box-none"
+      >
         <View style={s.tabsContainer}>
           <ScrollView
             ref={tabsScrollRef}
@@ -513,7 +490,7 @@ const StoreScreen: React.FC = () => {
             })}
           </ScrollView>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Location info bottom sheet — full width, sits above tab bar */}
       {activeLocation && (
@@ -641,13 +618,12 @@ const s = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 8,
     ...Shadow.glow,
   },
-  logoBadgeLetter: {
-    color: '#fff',
-    fontSize: FontSize.xl,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  logoBadgeImg: {
+    width: '100%',
+    height: '100%',
   },
 
   locationName: {
@@ -791,7 +767,7 @@ const s = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.primaryGlow,
     backgroundColor: Colors.primaryLight,
-    ...Shadow.sm,
+    ...(Platform.OS === 'android' ? { elevation: 0 } : Shadow.sm),
   },
   ctaIconCircle: {
     width: 26,
@@ -830,6 +806,61 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: '#fff',
+  },
+});
+
+// ─── Marker styles ────────────────────────────────────────────────────────────
+
+const mk = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+  },
+  // Circular "balloon" head holding the logo
+  head: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderColor: '#fff',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.md,
+  },
+  headInactive: {
+    width: 36,
+    height: 36,
+    borderWidth: 2.5,
+    padding: 6,
+  },
+  headActive: {
+    width: 50,
+    height: 50,
+    borderWidth: 3,
+    padding: 9,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+  },
+  // Downward triangle tail forming the pin point
+  tail: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#fff',
+    marginTop: -2,
+  },
+  tailInactive: {
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 9,
+  },
+  tailActive: {
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 12,
   },
 });
 

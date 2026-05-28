@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
 
   imageWrap: {
-    height: 180,
+    height: 200,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
 
   content: {

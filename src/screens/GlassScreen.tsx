@@ -230,7 +230,6 @@ const GlassScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>Inventory</Text>
             <Text style={styles.title}>Glass Frames</Text>
           </View>
           <TouchableOpacity
@@ -436,7 +435,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.xl,
     paddingBottom: Spacing.sm,
   },
 
@@ -509,7 +508,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
-  list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl + 80 },
+  list: { paddingHorizontal: Spacing.sm, paddingBottom: Spacing.xxl + 80 },
   row: { gap: CARD_GAP, marginBottom: CARD_GAP },
 
   card: { width: CARD_WIDTH, borderRadius: BorderRadius.xl, ...Shadow.md },
@@ -613,7 +612,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.white,
     borderWidth: 1,

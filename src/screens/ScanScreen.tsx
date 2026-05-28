@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
@@ -11,19 +17,33 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Image,
+  ActivityIndicator,
+  PermissionsAndroid,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { useProductList } from '../hook/useProductList';
+import type { Product } from '../types/glasses';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'face' | 'refraction';
-type FaceScanStage = 'idle' | 'scanning' | 'selecting';
-type RefractionStage = 'intro' | 'acuity' | 'contrast' | 'astigmatism' | 'colorVision' | 'nearVision' | 'result';
+type FaceScanStage = 'idle' | 'countdown' | 'scanning' | 'selecting';
+type RefractionStage =
+  | 'intro'
+  | 'acuity'
+  | 'contrast'
+  | 'astigmatism'
+  | 'colorVision'
+  | 'nearVision'
+  | 'result';
 type ContrastResult = 'good' | 'reduced' | 'poor';
 type ColorResult = 'normal' | 'mild' | 'deficient';
 type FaceShape = 'Oval' | 'Round' | 'Square' | 'Heart' | 'Oblong';
@@ -46,7 +66,8 @@ const FACE_SHAPE_INFO: Record<
   },
   Round: {
     icon: 'radio-button-off-outline',
-    description: 'Similar width and height, with soft curved lines and fuller cheeks.',
+    description:
+      'Similar width and height, with soft curved lines and fuller cheeks.',
     frames: ['Rectangle', 'Square', 'Browline', 'Geometric'],
     tip: 'Angular frames add definition and make the face appear slimmer.',
   },
@@ -65,64 +86,60 @@ const FACE_SHAPE_INFO: Record<
   },
   Oblong: {
     icon: 'ellipse-outline',
-    description: 'Face is longer than it is wide, with a long straight cheek line.',
+    description:
+      'Face is longer than it is wide, with a long straight cheek line.',
     frames: ['Wayfarer', 'Round', 'Oversized', 'Decorative'],
     tip: "Wider frames with depth add width and shorten the face's appearance.",
   },
 };
 
-// ─── Hair Style Data ──────────────────────────────────────────────────────────
-
-const HAIR_STYLES: { key: HairStyle; icon: string; label: string }[] = [
-  { key: 'Short',  icon: 'person-outline',    label: 'Short'  },
-  { key: 'Medium', icon: 'person-outline',    label: 'Medium' },
-  { key: 'Long',   icon: 'person-outline',    label: 'Long'   },
-  { key: 'Curly',  icon: 'color-wand-outline', label: 'Curly'  },
-  { key: 'Wavy',   icon: 'water-outline',     label: 'Wavy'   },
-  { key: 'Bald',   icon: 'ellipse-outline',   label: 'Bald'   },
-];
-
-const HAIR_FRAME_INFO: Record<HairStyle, { frames: string[]; tip: string }> = {
-  Short: {
-    frames: ['Bold Wayfarer', 'Thick Square', 'Geometric', 'Clubmaster'],
-    tip: 'Bold, structured frames add visual weight and complement short hair.',
-  },
-  Medium: {
-    frames: ['Aviator', 'Rectangle', 'Round', 'Cat-Eye'],
-    tip: 'Most frame styles work with medium-length hair — you have the most flexibility.',
-  },
-  Long: {
-    frames: ['Oversized', 'Cat-Eye', 'Round', 'Rimless'],
-    tip: 'Delicate or oversized frames balance the volume and flow of long hair.',
-  },
-  Curly: {
-    frames: ['Rectangle', 'Browline', 'Geometric', 'Square'],
-    tip: 'Angular frames contrast beautifully with natural curl patterns.',
-  },
-  Wavy: {
-    frames: ['Aviator', 'Round', 'Oval', 'Cat-Eye'],
-    tip: 'Softly curved frames echo the natural wave texture of your hair.',
-  },
-  Bald: {
-    frames: ['Round', 'Oval', 'Aviator', 'Rimless'],
-    tip: 'Rounded or rimless frames soften the strong, clean silhouette.',
-  },
-};
-
 // ─── Refraction Test Data ─────────────────────────────────────────────────────
 
-const ACUITY_ROWS = [
-  { size: 36, letters: 'F  P  Z',       label: '20/200' },
-  { size: 28, letters: 'T  O  Z  L',   label: '20/100' },
-  { size: 22, letters: 'L  P  E  D',   label: '20/70'  },
-  { size: 17, letters: 'P  E  C  F  D', label: '20/50' },
-  { size: 13, letters: 'E  D  F  C  Z  P', label: '20/40' },
-];
+// ── Randomisation helpers — fresh test content on every run ──────────────────
+const randInt = (n: number) => Math.floor(Math.random() * n);
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+// Pick `n` distinct items at random.
+const pick = <T,>(arr: T[], n: number): T[] => shuffle(arr).slice(0, n);
 
-const NEAR_VISION_TEXT =
-  'The quick brown fox jumps over the lazy dog. ' +
-  'Please read this paragraph at a comfortable reading distance (~30 cm) ' +
-  'without moving the phone closer to your eyes.';
+// Sloan optotypes — the standard letter set used on real acuity charts.
+const SLOAN = ['C', 'D', 'H', 'K', 'N', 'O', 'R', 'S', 'V', 'Z'];
+const randLetters = (count: number) => pick(SLOAN, count).join('  ');
+
+type AcuityRow = { size: number; letters: string; label: string };
+
+// Sizes/labels are fixed (they define the acuity line); only letters vary.
+const ACUITY_SPEC = [
+  { size: 36, count: 3, label: '20/200' },
+  { size: 28, count: 4, label: '20/100' },
+  { size: 22, count: 4, label: '20/70' },
+  { size: 17, count: 5, label: '20/50' },
+  { size: 13, count: 6, label: '20/40' },
+];
+const genAcuityRows = (): AcuityRow[] =>
+  ACUITY_SPEC.map(s => ({
+    size: s.size,
+    label: s.label,
+    letters: randLetters(s.count),
+  }));
+
+const NEAR_TEXTS = [
+  'The quick brown fox jumps over the lazy dog while the bright autumn sun ' +
+    'sets slowly behind the distant rolling hills near the quiet village.',
+  'A journey of a thousand miles begins with a single step, and every small ' +
+    'effort you make today gently shapes the person you become tomorrow.',
+  'Reading clearly at a close distance is an everyday skill we rarely notice ' +
+    'until a favourite book or a short message becomes harder to focus on.',
+  'The five boxing wizards jump quickly over the lazy brown dog as the calm ' +
+    'evening breeze carries the faint scent of fresh rain across the meadow.',
+];
+const genNearText = () => NEAR_TEXTS[randInt(NEAR_TEXTS.length)];
 
 function computeRisk(
   acuityPassCount: number,
@@ -148,7 +165,14 @@ function computeRisk(
 
 const RISK_CONFIG: Record<
   RiskLevel,
-  { color: string; bg: string; label: string; icon: string; summary: string; advice: string }
+  {
+    color: string;
+    bg: string;
+    label: string;
+    icon: string;
+    summary: string;
+    advice: string;
+  }
 > = {
   low: {
     color: '#2DBD7E',
@@ -182,19 +206,46 @@ const RISK_CONFIG: Record<
 // ─── Booking Data ─────────────────────────────────────────────────────────────
 
 const BRANCHES = [
-  { id: 'b1', name: 'M Optic Centre', address: 'Boulevard Zerktouni, Casablanca' },
+  {
+    id: 'b1',
+    name: 'M Optic Centre',
+    address: 'Boulevard Zerktouni, Casablanca',
+  },
   { id: 'b2', name: 'M Optic Maarif', address: 'Maarif District, Casablanca' },
   { id: 'b3', name: 'M Optic Ain Sebaa', address: 'Ain Sebaa, Casablanca' },
 ];
 
 const TIME_SLOTS = [
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+  '17:00',
 ];
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 function getAvailableDays(count = 10): Date[] {
   const days: Date[] = [];
@@ -213,38 +264,52 @@ const AVAILABLE_DAYS = getAvailableDays(10);
 
 // ─── Contrast Sensitivity Data ────────────────────────────────────────────────
 
-const CONTRAST_LEVELS = [
-  { opacity: 1.0,  letters: 'D  H  S  R  K', size: 22 },
-  { opacity: 0.55, letters: 'N  C  V  Z  O', size: 22 },
-  { opacity: 0.28, letters: 'F  P  A  T  E', size: 22 },
-  { opacity: 0.12, letters: 'L  B  M  W  U', size: 22 },
-];
+type ContrastLevel = { opacity: number; letters: string; size: number };
+
+const CONTRAST_OPACITIES = [1.0, 0.55, 0.28, 0.12];
+const genContrastLevels = (): ContrastLevel[] =>
+  CONTRAST_OPACITIES.map(opacity => ({
+    opacity,
+    size: 22,
+    letters: randLetters(5),
+  }));
 
 // ─── Ishihara-style Plate Data & HTML Generator ───────────────────────────────
 
-const CV_PLATES = [
-  {
-    number: '12',
-    hint: 'A two-digit number is hidden among the dots.',
-    question: 'What number do you see?',
-    options: ['12', '17', '21', "I can't see a number"],
-    correct: '12',
-  },
-  {
-    number: '8',
-    hint: 'Look for a single digit concealed in the pattern.',
-    question: 'What number is hidden in this plate?',
-    options: ['8', '3', '6', "I can't see a number"],
-    correct: '8',
-  },
-  {
-    number: '29',
-    hint: 'A two-digit number is concealed here.',
-    question: 'What two-digit number do you see?',
-    options: ['29', '70', '21', "I can't see a number"],
-    correct: '29',
-  },
+const CANT_SEE = "I can't see a number";
+type CvPlate = {
+  number: string;
+  hint: string;
+  question: string;
+  options: string[];
+  correct: string;
+};
+
+// Pool of numbers an Ishihara-style plate can hide. Each run picks fresh ones
+// with random distractor options so the test isn't memorisable.
+const CV_NUMBERS = [
+  '2', '3', '5', '6', '7', '8', '12', '15', '16',
+  '26', '29', '42', '45', '57', '73', '74',
 ];
+const genCvPlates = (n = 3): CvPlate[] => {
+  const targets = pick(CV_NUMBERS, n);
+  return targets.map(num => {
+    const distractors = pick(
+      CV_NUMBERS.filter(x => x !== num),
+      2,
+    );
+    return {
+      number: num,
+      hint:
+        num.length > 1
+          ? 'A two-digit number is hidden among the dots.'
+          : 'A single digit is concealed in the pattern.',
+      question: 'What number do you see?',
+      options: [...shuffle([num, ...distractors]), CANT_SEE],
+      correct: num,
+    };
+  });
+};
 
 function makeIshiharaHtml(number: string): string {
   return `<!DOCTYPE html>
@@ -351,72 +416,88 @@ const SCAN_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.oval-wrap{position:relative;width:200px;height:264px}
+
+/* Top brand chip */
+.topbar{position:absolute;top:max(22px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;z-index:6}
+.topchip{display:flex;align-items:center;gap:7px;padding:8px 16px;border-radius:30px;background:rgba(20,16,14,0.45);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.14)}
+.topchip .pulse{width:7px;height:7px;border-radius:50%;background:#6FE3AE;box-shadow:0 0 8px #2DBD7E;animation:blink 1.4s ease-in-out infinite}
+.topchip span{color:rgba(255,255,255,0.92);font-size:12px;font-weight:600;letter-spacing:0.4px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+.oval-wrap{position:relative;width:280px;height:280px}
+
+/* Dim everything outside the circle */
 .guide-oval{
-  width:200px;height:264px;
-  border:3px solid rgba(156,129,120,0.85);
-  border-radius:50%;
-  box-shadow:0 0 0 2000px rgba(0,0,0,0.50);
-  transition:border-color .3s,box-shadow .3s;
-  position:absolute;inset:0
+  width:280px;height:280px;border-radius:50%;position:absolute;inset:0;z-index:2;
+  border:2px solid rgba(255,255,255,0.30);
+  box-shadow:0 0 0 2000px rgba(10,8,7,0.60);
+  transition:border-color .35s ease, box-shadow .35s ease;
 }
 .guide-oval.locked{
-  border-color:#2DBD7E;
-  box-shadow:0 0 0 2000px rgba(0,0,0,0.50),0 0 28px rgba(45,189,126,0.55)
+  border-color:rgba(45,189,126,0.55);
+  box-shadow:0 0 0 2000px rgba(10,8,7,0.60), inset 0 0 36px rgba(45,189,126,0.22), 0 0 30px rgba(45,189,126,0.45);
 }
-/* Corner accents */
-.corner{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,0.9);border-style:solid}
-.tl{top:8px;left:8px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
-.tr{top:8px;right:8px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
-.bl{bottom:8px;left:8px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
-.br{bottom:8px;right:8px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
-/* Scan line — only visible when locked */
-.scan-line{
-  display:none;
-  position:absolute;left:-3px;right:-3px;height:2px;
-  background:linear-gradient(90deg,transparent 0%,#2DBD7E 40%,#2DBD7E 60%,transparent 100%);
-  border-radius:1px;
-  animation:scan 1.6s linear infinite
-}
-.guide-oval.locked ~ .scan-line{display:block}
-@keyframes scan{0%{top:0}100%{top:264px}}
+/* Expanding pulse ring on lock */
+.guide-oval::after{content:'';position:absolute;inset:-2px;border-radius:50%;border:2px solid rgba(45,189,126,0.7);opacity:0;pointer-events:none}
+.guide-oval.locked::after{animation:pulsering 1.7s ease-out infinite}
+@keyframes pulsering{0%{transform:scale(1);opacity:.7}70%{transform:scale(1.12);opacity:0}100%{opacity:0}}
+
+/* iOS-style circular progress ring — fills around the circle as it scans */
+.ring-progress{position:absolute;top:-11px;left:-11px;z-index:3;transform:rotate(-90deg);pointer-events:none}
+.ring-track{fill:none;stroke:rgba(255,255,255,0.16);stroke-width:5}
+.ring-bar{fill:none;stroke:${Colors.primary};stroke-width:5;stroke-linecap:round;filter:drop-shadow(0 0 6px ${Colors.primaryGlow});transition:stroke-dashoffset .2s ease}
+
 #hint{
-  margin-top:26px;
-  background:rgba(0,0,0,0.60);
-  color:rgba(255,255,255,0.92);
-  font-size:13px;font-weight:600;
-  padding:7px 20px;border-radius:20px;
-  letter-spacing:0.2px;
-  transition:background .3s
+  position:relative;z-index:6;
+  margin-top:34px;display:inline-flex;align-items:center;
+  background:rgba(20,16,14,0.78);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  color:#fff;font-size:14px;font-weight:600;
+  padding:10px 22px;border-radius:30px;border:1px solid rgba(255,255,255,0.16);
+  letter-spacing:0.2px;transition:background .3s,border-color .3s
 }
-#hint.success{background:rgba(45,189,126,0.80)}
-#hint.warn{background:rgba(244,168,48,0.80)}
-#progress{margin-top:12px;width:160px;height:4px;background:rgba(255,255,255,0.18);border-radius:2px;overflow:hidden}
-#bar{height:100%;width:0%;background:#2DBD7E;border-radius:2px;transition:width .12s}
+#hint.success{background:rgba(45,189,126,0.85);border-color:rgba(255,255,255,0.25)}
+#hint.warn{background:rgba(244,168,48,0.90);border-color:rgba(255,255,255,0.25)}
+
+/* Stage indicator */
+.stages{position:relative;z-index:6;margin-top:18px;display:flex;gap:9px}
+.stage-dot{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);transition:all .3s ease}
+.stage-dot .ic{width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;transition:all .3s ease}
+.stage-dot span{color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;letter-spacing:0.3px}
+.stage-dot.active{background:rgba(45,189,126,0.18);border-color:rgba(45,189,126,0.6)}
+.stage-dot.active .ic{border-color:#2DBD7E;box-shadow:0 0 8px rgba(45,189,126,0.55)}
+.stage-dot.active span{color:#9affc9}
+.stage-dot.done{background:rgba(45,189,126,0.92);border-color:rgba(45,189,126,0.92)}
+.stage-dot.done .ic{background:#fff;border-color:#fff;color:#2DBD7E}
+.stage-dot.done span{color:#fff}
+
 #loading{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  color:rgba(255,255,255,.75);font-size:14px;text-align:center;line-height:2
+  color:rgba(255,255,255,.78);font-size:14px;text-align:center;line-height:2
 }
-.spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(255,255,255,.8);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px}
+.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:${Colors.primaryMid};border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
 <div id="overlay">
+  <div class="topbar"><div class="topchip"><span class="pulse"></span><span>AI Face Analysis</span></div></div>
   <div class="oval-wrap">
     <div class="guide-oval" id="oval"></div>
-    <div class="corner tl"></div>
-    <div class="corner tr"></div>
-    <div class="corner bl"></div>
-    <div class="corner br"></div>
-    <div class="scan-line"></div>
+    <svg class="ring-progress" width="302" height="302" viewBox="0 0 302 302">
+      <circle class="ring-track" cx="151" cy="151" r="144"></circle>
+      <circle class="ring-bar" id="ring" cx="151" cy="151" r="144"></circle>
+    </svg>
   </div>
-  <div id="hint">Position your face in the oval</div>
-  <div id="progress"><div id="bar"></div></div>
+  <div id="hint">Position your face in the circle</div>
+  <div class="stages">
+    <div class="stage-dot" data-i="0"><span class="ic"></span><span>Front</span></div>
+    <div class="stage-dot" data-i="1"><span class="ic"></span><span>Left</span></div>
+    <div class="stage-dot" data-i="2"><span class="ic"></span><span>Right</span></div>
+  </div>
 </div>
 <div id="loading"><div class="spinner"></div>Starting camera…</div>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
@@ -433,17 +514,50 @@ if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='functi
   return;
 }
 
-var oval=document.getElementById('oval'),hint=document.getElementById('hint'),bar=document.getElementById('bar');
-var stableFrames=0,NEEDED=40,done=false;
+var oval=document.getElementById('oval'),hint=document.getElementById('hint'),ring=document.getElementById('ring');
+var RING_C=2*Math.PI*144;
+ring.style.strokeDasharray=RING_C;
+ring.style.strokeDashoffset=RING_C;
+function setRing(pct){ring.style.strokeDashoffset=RING_C*(1-pct/100);}
+var stageEls=[].slice.call(document.querySelectorAll('.stage-dot'));
+function setStages(){
+  for(var i=0;i<stageEls.length;i++){
+    var el=stageEls[i],ic=el.querySelector('.ic');
+    el.classList.remove('active','done');
+    if(i<stageIdx){el.classList.add('done');if(ic)ic.textContent='✓';}
+    else{if(ic)ic.textContent='';if(i===stageIdx)el.classList.add('active');}
+  }
+}
+
+// ── Multi-angle capture flow: look straight, then turn left, then right ──────
+var STAGES=['front','left','right'];
+var stageIdx=0,stableFrames=0,done=false,capturedShape=null;
+// Frames to hold per stage. Front/straight is intentionally longer so the
+// shape capture isn't rushed; the side turns stay quick.
+var NEEDED_BY={front:44,left:22,right:22};
+function NEEDED(){return NEEDED_BY[STAGES[stageIdx]]||22;}
+// Detection stays paused until RN "arms" it (after the 3-2-1 countdown), so the
+// camera can warm up behind the countdown overlay without capturing anything.
+var armed=false;
+window.armScan=function(){armed=true;};
+var frontShapes=[];        // shape samples collected during the front stage
+var MIRROR=true;           // front-camera preview is mirrored
+var FRONT_MAX=0.10;        // max yaw to count as "looking straight"
+var TURN=0.16;             // yaw magnitude to count as a head turn
 
 // ── Landmark helpers ────────────────────────────────────────────────────────
 function dist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
 
 // ── Face shape from landmarks ───────────────────────────────────────────────
+// Landmark coords are normalized 0..1 separately by frame width and height, so
+// a width/height ratio is distorted unless we convert back to real pixels using
+// the actual video dimensions. Otherwise every face collapses to one shape.
 function computeShape(lm){
-  var faceH=dist(lm[10],lm[152]),faceW=dist(lm[234],lm[454]);
-  var jawW=dist(lm[172],lm[397]),fhW=dist(lm[54],lm[284]);
-  if(faceH<0.01)return null;
+  var W=(video&&video.videoWidth)||640, H=(video&&video.videoHeight)||480;
+  function pd(a,b){var dx=(a.x-b.x)*W,dy=(a.y-b.y)*H;return Math.sqrt(dx*dx+dy*dy);}
+  var faceH=pd(lm[10],lm[152]),faceW=pd(lm[234],lm[454]);
+  var jawW=pd(lm[172],lm[397]),fhW=pd(lm[54],lm[284]);
+  if(faceH<1)return null;
   var whr=faceW/faceH,jawRatio=jawW/faceW,fhRatio=fhW/faceW;
   if(whr>0.88&&jawRatio>0.82)return 'Square';
   if(whr>0.83)return 'Round';
@@ -452,17 +566,38 @@ function computeShape(lm){
   return 'Oval';
 }
 
-// ── Check if face is properly inside the oval guide ─────────────────────────
-// Landmarks are in normalized coords [0-1].
-// The oval is centered at ~50% x, ~40% y of the camera frame.
-// A well-placed face: nose near center, face fills ~20-70% of frame height.
-function isFaceInOval(lm){
-  var nose=lm[4]; // nose tip
-  var faceH=dist(lm[10],lm[152]);
-  var centeredX=Math.abs(nose.x-0.5)<0.14;
-  var centeredY=nose.y>0.22&&nose.y<0.72;
-  var goodSize=faceH>0.18&&faceH<0.72;
-  return centeredX&&centeredY&&goodSize;
+// Most frequent shape across sampled frames — smooths single-frame noise.
+function modeOf(arr){
+  if(!arr.length)return null;
+  var counts={},best=arr[0],bestN=0;
+  for(var i=0;i<arr.length;i++){
+    counts[arr[i]]=(counts[arr[i]]||0)+1;
+    if(counts[arr[i]]>bestN){bestN=counts[arr[i]];best=arr[i];}
+  }
+  return best;
+}
+
+function faceSize(lm){return dist(lm[10],lm[152]);}
+
+function centeredEnough(lm){
+  var nose=lm[4];
+  return Math.abs(nose.x-0.5)<0.18 && nose.y>0.18 && nose.y<0.78;
+}
+
+// Signed head yaw: ~0 looking straight, negative = turned left, positive = right
+function yawOf(lm){
+  var nose=lm[1],L=lm[234],R=lm[454];
+  var center=(L.x+R.x)/2;
+  var w=Math.abs(R.x-L.x)||0.0001;
+  var raw=(nose.x-center)/w;
+  return MIRROR?-raw:raw;
+}
+
+function setProgress(){
+  var per=100/STAGES.length;
+  var pct=Math.round(per*stageIdx + per*Math.min(1,stableFrames/NEEDED()));
+  setRing(pct);
+  setStages();
 }
 
 // ── MediaPipe face mesh ──────────────────────────────────────────────────────
@@ -470,7 +605,7 @@ var faceMesh=new FaceMesh({locateFile:function(f){return'https://cdn.jsdelivr.ne
 faceMesh.setOptions({maxNumFaces:1,refineLandmarks:false,minDetectionConfidence:0.55,minTrackingConfidence:0.55});
 
 faceMesh.onResults(function(results){
-  if(done)return;
+  if(done||!armed)return;
   var lms=results.multiFaceLandmarks;
 
   // ── No face detected ──
@@ -478,41 +613,74 @@ faceMesh.onResults(function(results){
     stableFrames=Math.max(0,stableFrames-3);
     oval.className='guide-oval';
     hint.className='';
-    hint.textContent='Position your face in the oval';
-    bar.style.width=Math.round(stableFrames/NEEDED*100)+'%';
+    hint.textContent='Position your face in the circle';
+    setProgress();
     return;
   }
 
   var lm=lms[0];
+  var sz=faceSize(lm);
 
-  // ── Face found but not properly in oval ──
-  if(!isFaceInOval(lm)){
+  // ── Distance checks (apply to every stage) ──
+  if(sz<0.16){
     stableFrames=Math.max(0,stableFrames-2);
-    oval.className='guide-oval';
-    hint.className='warn';
-    var nose=lm[4];
-    var faceH=dist(lm[10],lm[152]);
-    if(faceH<0.18)       hint.textContent='Move closer';
-    else if(faceH>0.72)  hint.textContent='Move farther away';
-    else if(Math.abs(nose.x-0.5)>0.14) hint.textContent='Center your face horizontally';
-    else                 hint.textContent='Align your face with the oval';
-    bar.style.width=Math.round(stableFrames/NEEDED*100)+'%';
-    return;
+    oval.className='guide-oval';hint.className='warn';
+    hint.textContent='Move closer';setProgress();return;
+  }
+  if(sz>0.80){
+    stableFrames=Math.max(0,stableFrames-2);
+    oval.className='guide-oval';hint.className='warn';
+    hint.textContent='Move farther away';setProgress();return;
   }
 
-  // ── Face is in the oval — advance progress ──
-  stableFrames++;
-  var pct=Math.min(100,Math.round(stableFrames/NEEDED*100));
-  bar.style.width=pct+'%';
-  oval.className='guide-oval locked';
-  hint.className='success';
-  hint.textContent='Hold still… '+pct+'%';
+  var yaw=yawOf(lm);
+  var stage=STAGES[stageIdx];
+  var ok=false,msg='';
 
-  if(stableFrames>=NEEDED){
-    done=true;
-    hint.textContent='Scan complete!';
-    var shape=computeShape(lm)||'Oval';
-    post({type:'faceShape',shape:shape});
+  if(stage==='front'){
+    if(!centeredEnough(lm)) msg='Center your face in the circle';
+    else if(Math.abs(yaw)>FRONT_MAX) msg='Look straight at the camera';
+    else {ok=true;msg='Hold still…';}
+  } else if(stage==='left'){
+    ok=yaw<-TURN;
+    msg=ok?'Hold…':'Slowly turn your head LEFT';
+  } else {
+    ok=yaw>TURN;
+    msg=ok?'Hold…':'Slowly turn your head RIGHT';
+  }
+
+  if(ok){
+    stableFrames++;
+    if(stage==='front'){var s=computeShape(lm);if(s)frontShapes.push(s);}
+    oval.className='guide-oval locked';
+    hint.className='success';
+    var pct=Math.min(100,Math.round(stableFrames/NEEDED()*100));
+    hint.textContent=msg+' '+pct+'%';
+  } else {
+    stableFrames=Math.max(0,stableFrames-1);
+    oval.className='guide-oval';
+    hint.className='warn';
+    hint.textContent=msg;
+  }
+  setProgress();
+
+  // ── Stage complete ──
+  if(stableFrames>=NEEDED()){
+    if(stage==='front') capturedShape=modeOf(frontShapes)||computeShape(lm)||'Oval';
+    stageIdx++;
+    stableFrames=0;
+    if(stageIdx>=STAGES.length){
+      done=true;
+      oval.className='guide-oval locked';
+      hint.className='success';
+      hint.textContent='Scan complete!';
+      setRing(100);
+      setStages();
+      post({type:'faceShape',shape:capturedShape||'Oval'});
+    } else {
+      hint.className='success';
+      hint.textContent=stageIdx===1?'Great! Now turn your head LEFT':'Now turn your head RIGHT';
+    }
   }
 });
 
@@ -522,6 +690,7 @@ var cam=new Camera(video,{
   onFrame:async function(){await faceMesh.send({image:video});},
   width:640,height:480,facingMode:'user'
 });
+setStages();
 cam.start()
   .then(function(){document.getElementById('loading').style.display='none';})
   .catch(function(err){
@@ -535,11 +704,146 @@ cam.start()
 
 // ─── Face Scan — Real Camera (WebView + MediaPipe) ────────────────────────────
 
+// ─── Pre-Scan Countdown ───────────────────────────────────────────────────────
+// Counts 3 → 2 → 1, then shows "Ready to scan face" before opening the camera.
+
+const COUNTDOWN_STEPS = ['3', '2', '1', 'Ready to scan face'];
+
+const ScanCountdown: React.FC<{ onComplete: () => void }> = ({
+  onComplete,
+}) => {
+  const [index, setIndex] = useState(0);
+  const scale = useRef(new Animated.Value(0.5)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scrim = useRef(new Animated.Value(1)).current;
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    let i = 0;
+    const animateIn = () => {
+      scale.setValue(0.5);
+      opacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 6,
+          tension: 80,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    animateIn();
+    const timer = setInterval(() => {
+      i += 1;
+      if (i < COUNTDOWN_STEPS.length) {
+        setIndex(i);
+        animateIn();
+      } else {
+        clearInterval(timer);
+        // Fade the overlay away to smoothly reveal the already-running camera.
+        Animated.timing(scrim, {
+          toValue: 0,
+          duration: 320,
+          useNativeDriver: true,
+        }).start(() => onCompleteRef.current());
+      }
+    }, 950);
+
+    return () => clearInterval(timer);
+  }, [scale, opacity, scrim]);
+
+  const value = COUNTDOWN_STEPS[index];
+  const isNumber = value.length <= 2;
+
+  return (
+    <Animated.View style={[cdStyles.root, { opacity: scrim }]}>
+      <Text style={cdStyles.heading}>Get ready</Text>
+      <Animated.View
+        style={[
+          cdStyles.ring,
+          { opacity, transform: [{ scale }] },
+          !isNumber && cdStyles.ringText,
+        ]}
+      >
+        <Text style={isNumber ? cdStyles.number : cdStyles.readyText}>
+          {value}
+        </Text>
+      </Animated.View>
+      <Text style={cdStyles.sub}>
+        Hold your phone at eye level and look straight ahead.
+      </Text>
+    </Animated.View>
+  );
+};
+
+const cdStyles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,8,7,0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  heading: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.xl,
+  },
+  ring: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 3,
+    borderColor: 'rgba(45,189,126,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(45,189,126,0.10)',
+  },
+  ringText: {
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    paddingHorizontal: Spacing.lg,
+  },
+  number: {
+    color: Colors.white,
+    fontSize: 90,
+    fontWeight: '800',
+    letterSpacing: -1,
+  },
+  readyText: {
+    color: Colors.white,
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  sub: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: FontSize.sm,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+    lineHeight: 20,
+  },
+});
+
 const FaceScanCamera: React.FC<{
+  armed: boolean;
   onShapeDetected: (shape: FaceShape) => void;
   onCameraError: () => void;
   onCancel: () => void;
-}> = ({ onShapeDetected, onCameraError, onCancel }) => {
+}> = ({ armed, onShapeDetected, onCameraError, onCancel }) => {
+  const webViewRef = useRef<WebView>(null);
+
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
       try {
@@ -554,14 +858,23 @@ const FaceScanCamera: React.FC<{
     [onShapeDetected, onCameraError],
   );
 
+  // Start detection only once the countdown is done (camera already warm).
+  useEffect(() => {
+    if (armed) {
+      webViewRef.current?.injectJavaScript('window.armScan&&window.armScan();true;');
+    }
+  }, [armed]);
+
   return (
     <View style={StyleSheet.absoluteFillObject}>
       <WebView
+        ref={webViewRef}
         source={{ html: SCAN_HTML, baseUrl: 'https://localhost' }}
         style={StyleSheet.absoluteFill}
         javaScriptEnabled
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback
+        mediaCapturePermissionGrantType="grant"
         originWhitelist={['*']}
         mixedContentMode="always"
         onMessage={onMessage}
@@ -586,7 +899,12 @@ const FaceShapeSelector: React.FC<{
   onCancel: () => void;
   title?: string;
   subtitle?: string;
-}> = ({ onSelect, onCancel, title = 'Select Your Face Shape', subtitle = 'Camera is not available on this device. Pick the shape that best matches your face to get personalised recommendations.' }) => (
+}> = ({
+  onSelect,
+  onCancel,
+  title = 'Select Your Face Shape',
+  subtitle = 'Camera is not available on this device. Pick the shape that best matches your face to get personalised recommendations.',
+}) => (
   <ScrollView
     contentContainerStyle={styles.contentPad}
     showsVerticalScrollIndicator={false}
@@ -599,25 +917,30 @@ const FaceShapeSelector: React.FC<{
       <Text style={styles.heroSub}>{subtitle}</Text>
     </View>
 
-    {(Object.entries(FACE_SHAPE_INFO) as [FaceShape, typeof FACE_SHAPE_INFO[FaceShape]][]).map(
-      ([shape, info]) => (
-        <TouchableOpacity
-          key={shape}
-          style={scanStyles.shapeRow}
-          onPress={() => onSelect(shape)}
-          activeOpacity={0.8}
-        >
-          <View style={scanStyles.shapeIcon}>
-            <Ionicons name={info.icon as any} size={26} color={Colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={scanStyles.shapeName}>{shape}</Text>
-            <Text style={scanStyles.shapeDesc} numberOfLines={2}>{info.description}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
-        </TouchableOpacity>
-      ),
-    )}
+    {(
+      Object.entries(FACE_SHAPE_INFO) as [
+        FaceShape,
+        (typeof FACE_SHAPE_INFO)[FaceShape],
+      ][]
+    ).map(([shape, info]) => (
+      <TouchableOpacity
+        key={shape}
+        style={scanStyles.shapeRow}
+        onPress={() => onSelect(shape)}
+        activeOpacity={0.8}
+      >
+        <View style={scanStyles.shapeIcon}>
+          <Ionicons name={info.icon as any} size={26} color={Colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={scanStyles.shapeName}>{shape}</Text>
+          <Text style={scanStyles.shapeDesc} numberOfLines={2}>
+            {info.description}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
+      </TouchableOpacity>
+    ))}
 
     <TouchableOpacity
       style={[styles.outlineBtn, { marginTop: Spacing.md }]}
@@ -637,10 +960,12 @@ const TabBar: React.FC<{ active: Tab; onChange: (t: Tab) => void }> = ({
   onChange,
 }) => (
   <View style={styles.tabBar}>
-    {([
-      { key: 'face', icon: 'scan-outline', label: 'Face Scan' },
-      { key: 'refraction', icon: 'eye-outline', label: 'Eye Test' },
-    ] as { key: Tab; icon: string; label: string }[]).map(tab => {
+    {(
+      [
+        { key: 'face', icon: 'scan-outline', label: 'Face Scan' },
+        { key: 'refraction', icon: 'eye-outline', label: 'Eye Test' },
+      ] as { key: Tab; icon: string; label: string }[]
+    ).map(tab => {
       const isActive = active === tab.key;
       return (
         <TouchableOpacity
@@ -683,8 +1008,14 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
 
     {[
       { n: '1', text: 'Find good lighting and hold your phone at eye level.' },
-      { n: '2', text: 'Position your face inside the oval guide on screen.' },
-      { n: '3', text: 'Hold still for a moment — the scan takes about 2 seconds.' },
+      {
+        n: '2',
+        text: 'Position your face inside the circle and look straight ahead.',
+      },
+      {
+        n: '3',
+        text: 'Follow the prompts to slowly turn your head left, then right.',
+      },
     ].map(step => (
       <View key={step.n} style={styles.stepRow}>
         <View style={styles.stepBadge}>
@@ -694,12 +1025,119 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </View>
     ))}
 
-    <TouchableOpacity style={styles.primaryBtn} onPress={onStart} activeOpacity={0.82}>
+    <TouchableOpacity
+      style={styles.primaryBtn}
+      onPress={onStart}
+      activeOpacity={0.82}
+    >
       <Ionicons name="scan-outline" size={20} color={Colors.white} />
       <Text style={styles.primaryBtnText}>Start Scan</Text>
     </TouchableOpacity>
   </ScrollView>
 );
+
+// ─── Product Recommendations (by face shape) ──────────────────────────────────
+
+// Why a given frame shape flatters each face shape — used to explain each pick.
+const SHAPE_EFFECT: Record<FaceShape, string> = {
+  Oval: 'keeps your naturally balanced proportions in harmony.',
+  Round: 'adds definition and makes your face look slimmer.',
+  Square: 'softens your strong jawline and angular features.',
+  Heart: 'balances your wider forehead and narrower chin.',
+  Oblong: 'adds width and makes your face appear shorter.',
+};
+
+const ProductRecommendations: React.FC<{
+  shape: FaceShape;
+  recommendedFrames: string[];
+  mode: ResultTab;
+  hairStyle: HairStyle | null;
+  onPickProduct: (id: number) => void;
+}> = ({ shape, recommendedFrames, mode, hairStyle, onPickProduct }) => {
+  const { products, loading } = useProductList({
+    page: 1,
+    is_active_mobile: true,
+    limit: 50,
+  });
+
+  const wanted = recommendedFrames.map(f => f.toLowerCase());
+  const matched = products.filter(
+    p =>
+      p.frame_shape?.name && wanted.includes(p.frame_shape.name.toLowerCase()),
+  );
+  // Fall back to the general catalogue if nothing matches the face shape.
+  const recommended = (matched.length ? matched : products).slice(0, 6);
+
+  const reasonFor = (p: Product): string => {
+    const fs = p.frame_shape?.name?.toLowerCase();
+    if (mode === 'hair' && hairStyle) {
+      return fs
+        ? `Its ${fs} shape complements ${hairStyle.toLowerCase()} hair.`
+        : `A great match for ${hairStyle.toLowerCase()} hair.`;
+    }
+    return fs
+      ? `Its ${fs} shape ${SHAPE_EFFECT[shape]}`
+      : `A great match for your ${shape.toLowerCase()} face.`;
+  };
+
+  if (loading) {
+    return (
+      <View style={prStyles.loading}>
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (!recommended.length) {
+    return (
+      <View style={prStyles.empty}>
+        <Ionicons name="glasses-outline" size={28} color={Colors.gray300} />
+        <Text style={prStyles.emptyText}>
+          No matching frames available right now.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={prStyles.list}>
+      {recommended.map(p => (
+        <TouchableOpacity
+          key={p.id}
+          style={prStyles.card}
+          activeOpacity={0.8}
+          onPress={() => onPickProduct(p.id)}
+        >
+          <Image
+            source={{ uri: p.image }}
+            style={prStyles.image}
+            resizeMode="contain"
+          />
+          <View style={prStyles.info}>
+            <Text style={prStyles.name} numberOfLines={1}>
+              {p.name}
+            </Text>
+            {p.brand?.name ? (
+              <Text style={prStyles.brand}>{p.brand.name}</Text>
+            ) : null}
+            <View style={prStyles.reasonRow}>
+              <Ionicons
+                name="sparkles-outline"
+                size={12}
+                color={Colors.primary}
+              />
+              <Text style={prStyles.reason} numberOfLines={2}>
+                {reasonFor(p)}
+              </Text>
+            </View>
+            <Text style={prStyles.price}>${p.price}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
 
 // ─── Glasses Recommendation Bottom Sheet ──────────────────────────────────────
 
@@ -708,16 +1146,13 @@ const GlassesBottomSheet: React.FC<{
   shape: FaceShape;
   onClose: () => void;
 }> = ({ visible, shape, onClose }) => {
+  const navigation = useNavigation<any>();
   const info = FACE_SHAPE_INFO[shape];
-  const [resultTab, setResultTab] = useState<ResultTab>('face');
-  const [hairStyle, setHairStyle] = useState<HairStyle | null>(null);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      setResultTab('face');
-      setHairStyle(null);
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -748,24 +1183,31 @@ const GlassesBottomSheet: React.FC<{
     }
   }, [visible]);
 
-  const hairInfo = hairStyle ? HAIR_FRAME_INFO[hairStyle] : null;
-  const displayFrames = resultTab === 'face' ? info.frames : hairInfo?.frames ?? [];
-  const displayTip = resultTab === 'face' ? info.tip : hairInfo?.tip ?? '';
-
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+    >
       {/* Backdrop */}
       <Animated.View
         style={[gsStyles.backdrop, { opacity: backdropAnim }]}
         pointerEvents="box-none"
       >
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
+        />
       </Animated.View>
 
       {/* Sheet */}
-      <Animated.View style={[gsStyles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View
+        style={[gsStyles.sheet, { transform: [{ translateY: slideAnim }] }]}
+      >
         {/* Handle */}
         <View style={gsStyles.handle} />
 
@@ -773,14 +1215,22 @@ const GlassesBottomSheet: React.FC<{
         <View style={gsStyles.header}>
           <View style={gsStyles.headerLeft}>
             <View style={gsStyles.shapeIconSmall}>
-              <Ionicons name={info.icon as any} size={18} color={Colors.primary} />
+              <Ionicons
+                name={info.icon as any}
+                size={18}
+                color={Colors.primary}
+              />
             </View>
             <View>
               <Text style={gsStyles.headerOverline}>Your face shape</Text>
               <Text style={gsStyles.headerShape}>{shape}</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={gsStyles.closeBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={gsStyles.closeBtn}
+            activeOpacity={0.7}
+          >
             <Ionicons name="close" size={18} color={Colors.gray600} />
           </TouchableOpacity>
         </View>
@@ -790,119 +1240,59 @@ const GlassesBottomSheet: React.FC<{
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* Face description */}
-          <View style={gsStyles.descCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
-            <Text style={gsStyles.descText}>{info.description}</Text>
-          </View>
-
-          {/* Hair style selector */}
-          <Text style={gsStyles.sectionLabel}>Refine by Hair Style</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: Spacing.sm, paddingBottom: Spacing.md }}
-          >
-            {HAIR_STYLES.map(hs => {
-              const selected = hairStyle === hs.key;
-              return (
-                <TouchableOpacity
-                  key={hs.key}
-                  style={[rsStyles.hairChip, selected && rsStyles.hairChipActive]}
-                  onPress={() => {
-                    setHairStyle(hs.key);
-                    setResultTab('hair');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={hs.icon as any}
-                    size={15}
-                    color={selected ? Colors.white : Colors.gray500}
-                  />
-                  <Text style={[rsStyles.hairChipText, selected && rsStyles.hairChipTextActive]}>
-                    {hs.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Recommendation tabs */}
-          <View style={rsStyles.tabRow}>
-            <TouchableOpacity
-              style={[rsStyles.recTab, resultTab === 'face' && rsStyles.recTabActive]}
-              onPress={() => setResultTab('face')}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="scan-outline"
-                size={14}
-                color={resultTab === 'face' ? Colors.primary : Colors.gray400}
-              />
-              <Text style={[rsStyles.recTabText, resultTab === 'face' && rsStyles.recTabTextActive]}>
-                Face Shape
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                rsStyles.recTab,
-                resultTab === 'hair' && rsStyles.recTabActive,
-                !hairStyle && rsStyles.recTabDisabled,
-              ]}
-              onPress={() => hairStyle && setResultTab('hair')}
-              activeOpacity={hairStyle ? 0.8 : 1}
-            >
-              <Ionicons
-                name="color-wand-outline"
-                size={14}
-                color={resultTab === 'hair' ? Colors.primary : Colors.gray400}
-              />
-              <Text style={[rsStyles.recTabText, resultTab === 'hair' && rsStyles.recTabTextActive]}>
-                Hair Style
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Tip */}
-          {displayTip ? (
-            <View style={styles.tipCard}>
-              <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
-              <Text style={styles.tipText}>{displayTip}</Text>
+          {/* Face insight — description + frame tip combined */}
+          <View style={gsStyles.insightCard}>
+            <Text style={gsStyles.insightDesc}>{info.description}</Text>
+            <View style={gsStyles.insightDivider} />
+            <View style={gsStyles.insightTipRow}>
+              <Ionicons name="bulb" size={15} color={Colors.primary} />
+              <Text style={gsStyles.insightTip}>{info.tip}</Text>
             </View>
-          ) : (
-            <View style={rsStyles.hairPrompt}>
-              <Ionicons name="arrow-up-outline" size={16} color={Colors.gray400} />
-              <Text style={rsStyles.hairPromptText}>
-                Pick a hair style above to see matched frame recommendations
+          </View>
+
+          {/* Recommended products — the focal point */}
+          <View style={gsStyles.recHeader}>
+            <View style={gsStyles.recBadge}>
+              <Ionicons name="sparkles" size={14} color={Colors.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={gsStyles.recTitle}>Picked For You</Text>
+              <Text style={gsStyles.recSub}>
+                Frames that flatter your {shape.toLowerCase()} face
               </Text>
             </View>
-          )}
-
-          {/* Recommended frames */}
-          <Text style={gsStyles.sectionLabel}>Recommended Frames</Text>
-          <View style={styles.framesGrid}>
-            {displayFrames.map(name => (
-              <View key={name} style={styles.frameCard}>
-                <View style={styles.frameIconBox}>
-                  <Ionicons name="glasses-outline" size={26} color={Colors.primary} />
-                </View>
-                <Text style={styles.frameName}>{name}</Text>
-              </View>
-            ))}
           </View>
+          <ProductRecommendations
+            shape={shape}
+            recommendedFrames={info.frames}
+            mode="face"
+            hairStyle={null}
+            onPickProduct={id => {
+              onClose();
+              navigation.navigate('GlassDetail', { id });
+            }}
+          />
 
           {/* CTAs */}
-          <TouchableOpacity style={styles.primaryBtn} onPress={onClose} activeOpacity={0.82}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={onClose}
+            activeOpacity={0.82}
+          >
             <Ionicons name="refresh-outline" size={19} color={Colors.white} />
             <Text style={styles.primaryBtnText}>Scan Again</Text>
           </TouchableOpacity>
 
           <View style={gsStyles.footerNote}>
-            <Ionicons name="information-circle-outline" size={13} color={Colors.gray400} />
+            <Ionicons
+              name="information-circle-outline"
+              size={13}
+              color={Colors.gray400}
+            />
             <Text style={gsStyles.footerNoteText}>
-              Frame recommendations are based on your face shape analysis and are indicative only.
-              Visit an M Optic store to try on frames in person.
+              Frame recommendations are based on your face shape analysis and
+              are indicative only. Visit an M Optic store to try on frames in
+              person.
             </Text>
           </View>
         </ScrollView>
@@ -928,7 +1318,10 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         errors, contrast issues, and colour vision deficiencies.
       </Text>
       <TouchableOpacity
-        style={[styles.primaryBtn, { marginTop: Spacing.md, alignSelf: 'stretch' }]}
+        style={[
+          styles.primaryBtn,
+          { marginTop: Spacing.md, alignSelf: 'stretch' },
+        ]}
         onPress={onStart}
         activeOpacity={0.82}
       >
@@ -977,27 +1370,31 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
     ))}
 
     <View style={styles.disclaimerCard}>
-      <Ionicons name="information-circle-outline" size={16} color={Colors.gray400} />
+      <Ionicons
+        name="information-circle-outline"
+        size={16}
+        color={Colors.gray400}
+      />
       <Text style={styles.disclaimerText}>
         This is a preliminary screening only and does not replace a professional
         eye examination by a qualified optometrist.
       </Text>
     </View>
-
   </ScrollView>
 );
 
 // ─── Refraction — Step 1: Visual Acuity ──────────────────────────────────────
 
-const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
-  onComplete,
-}) => {
+const AcuityStep: React.FC<{
+  rows: AcuityRow[];
+  onComplete: (passCount: number) => void;
+}> = ({ rows, onComplete }) => {
   const [rowIndex, setRowIndex] = useState(0);
   const [passCount, setPassCount] = useState(0);
 
   const handleAnswer = (canRead: boolean) => {
     const newCount = canRead ? passCount + 1 : passCount;
-    if (rowIndex + 1 >= ACUITY_ROWS.length) {
+    if (rowIndex + 1 >= rows.length) {
       onComplete(newCount);
     } else {
       setPassCount(newCount);
@@ -1005,8 +1402,8 @@ const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
     }
   };
 
-  const row = ACUITY_ROWS[rowIndex];
-  const progress = ((rowIndex) / ACUITY_ROWS.length) * 100;
+  const row = rows[rowIndex];
+  const progress = (rowIndex / rows.length) * 100;
 
   return (
     <ScrollView
@@ -1017,7 +1414,7 @@ const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
       <View style={styles.stepHeader}>
         <Text style={styles.stepCounter}>Step 1 of 5 — Distance Vision</Text>
         <Text style={styles.stepCounterRight}>
-          Row {rowIndex + 1}/{ACUITY_ROWS.length}
+          Row {rowIndex + 1}/{rows.length}
         </Text>
       </View>
       <View style={styles.progressTrack}>
@@ -1044,7 +1441,11 @@ const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
         onPress={() => handleAnswer(true)}
         activeOpacity={0.82}
       >
-        <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+        <Ionicons
+          name="checkmark-circle-outline"
+          size={20}
+          color={Colors.white}
+        />
         <Text style={styles.primaryBtnText}>Yes, clearly</Text>
       </TouchableOpacity>
 
@@ -1053,7 +1454,11 @@ const AcuityStep: React.FC<{ onComplete: (passCount: number) => void }> = ({
         onPress={() => handleAnswer(false)}
         activeOpacity={0.8}
       >
-        <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
+        <Ionicons
+          name="close-circle-outline"
+          size={18}
+          color={Colors.gray600}
+        />
         <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
           Blurry / Hard to read
         </Text>
@@ -1107,7 +1512,11 @@ const AstigmatismStep: React.FC<{
       onPress={() => onComplete('equal')}
       activeOpacity={0.82}
     >
-      <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+      <Ionicons
+        name="checkmark-circle-outline"
+        size={20}
+        color={Colors.white}
+      />
       <Text style={styles.primaryBtnText}>Yes, all lines look equal</Text>
     </TouchableOpacity>
 
@@ -1127,8 +1536,9 @@ const AstigmatismStep: React.FC<{
 // ─── Refraction — Step 3: Near Vision ────────────────────────────────────────
 
 const NearVisionStep: React.FC<{
+  text: string;
   onComplete: (result: 'clear' | 'blurry') => void;
-}> = ({ onComplete }) => (
+}> = ({ text, onComplete }) => (
   <ScrollView
     contentContainerStyle={styles.contentPad}
     showsVerticalScrollIndicator={false}
@@ -1146,7 +1556,7 @@ const NearVisionStep: React.FC<{
         the phone closer.
       </Text>
       <View style={rfStyles.nearTextBox}>
-        <Text style={rfStyles.nearText}>{NEAR_VISION_TEXT}</Text>
+        <Text style={rfStyles.nearText}>{text}</Text>
       </View>
       <Text style={styles.acuityQuestion}>
         Can you read the paragraph above clearly without straining?
@@ -1158,7 +1568,11 @@ const NearVisionStep: React.FC<{
       onPress={() => onComplete('clear')}
       activeOpacity={0.82}
     >
-      <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+      <Ionicons
+        name="checkmark-circle-outline"
+        size={20}
+        color={Colors.white}
+      />
       <Text style={styles.primaryBtnText}>Yes, clearly</Text>
     </TouchableOpacity>
 
@@ -1178,8 +1592,9 @@ const NearVisionStep: React.FC<{
 // ─── Refraction — Step 2: Contrast Sensitivity ───────────────────────────────
 
 const ContrastStep: React.FC<{
+  levels: ContrastLevel[];
   onComplete: (result: ContrastResult) => void;
-}> = ({ onComplete }) => {
+}> = ({ levels, onComplete }) => {
   const [levelIndex, setLevelIndex] = useState(0);
 
   const handleAnswer = (canRead: boolean) => {
@@ -1189,21 +1604,28 @@ const ContrastStep: React.FC<{
       else onComplete('good');
       return;
     }
-    if (levelIndex + 1 >= CONTRAST_LEVELS.length) {
+    if (levelIndex + 1 >= levels.length) {
       onComplete('good');
     } else {
       setLevelIndex(prev => prev + 1);
     }
   };
 
-  const level = CONTRAST_LEVELS[levelIndex];
-  const progress = (levelIndex / CONTRAST_LEVELS.length) * 100;
+  const level = levels[levelIndex];
+  const progress = (levelIndex / levels.length) * 100;
 
   return (
-    <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 2 of 5 — Contrast Sensitivity</Text>
-        <Text style={styles.stepCounterRight}>Level {levelIndex + 1}/{CONTRAST_LEVELS.length}</Text>
+        <Text style={styles.stepCounter}>
+          Step 2 of 5 — Contrast Sensitivity
+        </Text>
+        <Text style={styles.stepCounterRight}>
+          Level {levelIndex + 1}/{levels.length}
+        </Text>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
@@ -1215,10 +1637,17 @@ const ContrastStep: React.FC<{
           squinting or adjusting the screen brightness.
         </Text>
         <View style={styles.acuityLetterBox}>
-          <Text style={[styles.acuityLetters, { fontSize: level.size, opacity: level.opacity }]}>
+          <Text
+            style={[
+              styles.acuityLetters,
+              { fontSize: level.size, opacity: level.opacity },
+            ]}
+          >
             {level.letters}
           </Text>
-          <Text style={styles.acuityLabel}>Contrast level {levelIndex + 1}</Text>
+          <Text style={styles.acuityLabel}>
+            Contrast level {levelIndex + 1}
+          </Text>
         </View>
         <Text style={styles.acuityQuestion}>
           Can you clearly read all the letters above?
@@ -1230,7 +1659,11 @@ const ContrastStep: React.FC<{
         onPress={() => handleAnswer(true)}
         activeOpacity={0.82}
       >
-        <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+        <Ionicons
+          name="checkmark-circle-outline"
+          size={20}
+          color={Colors.white}
+        />
         <Text style={styles.primaryBtnText}>Yes, I can read them</Text>
       </TouchableOpacity>
 
@@ -1239,7 +1672,11 @@ const ContrastStep: React.FC<{
         onPress={() => handleAnswer(false)}
         activeOpacity={0.8}
       >
-        <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
+        <Ionicons
+          name="close-circle-outline"
+          size={18}
+          color={Colors.gray600}
+        />
         <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
           Too faint / Hard to see
         </Text>
@@ -1251,19 +1688,20 @@ const ContrastStep: React.FC<{
 // ─── Refraction — Step 4: Colour Vision ──────────────────────────────────────
 
 const ColorVisionStep: React.FC<{
+  plates: CvPlate[];
   onComplete: (result: ColorResult) => void;
-}> = ({ onComplete }) => {
+}> = ({ plates, onComplete }) => {
   const [plateIndex, setPlateIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
 
-  const plate = CV_PLATES[plateIndex];
+  const plate = plates[plateIndex];
 
   const handleAnswer = (answer: string) => {
     const isCorrect = answer === plate.correct;
     const newCorrect = isCorrect ? correctCount + 1 : correctCount;
 
-    if (plateIndex + 1 >= CV_PLATES.length) {
-      if (newCorrect === CV_PLATES.length) onComplete('normal');
+    if (plateIndex + 1 >= plates.length) {
+      if (newCorrect === plates.length) onComplete('normal');
       else if (newCorrect >= 1) onComplete('mild');
       else onComplete('deficient');
     } else {
@@ -1272,14 +1710,17 @@ const ColorVisionStep: React.FC<{
     }
   };
 
-  const progress = (plateIndex / CV_PLATES.length) * 100;
+  const progress = (plateIndex / plates.length) * 100;
 
   return (
-    <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.stepHeader}>
         <Text style={styles.stepCounter}>Step 4 of 5 — Colour Vision</Text>
         <Text style={styles.stepCounterRight}>
-          Plate {plateIndex + 1}/{CV_PLATES.length}
+          Plate {plateIndex + 1}/{plates.length}
         </Text>
       </View>
       <View style={styles.progressTrack}>
@@ -1310,15 +1751,20 @@ const ColorVisionStep: React.FC<{
             style={[
               styles.outlineBtn,
               { marginTop: Spacing.sm },
-              isNone && { borderColor: Colors.gray300, backgroundColor: 'transparent' },
+              isNone && {
+                borderColor: Colors.gray300,
+                backgroundColor: 'transparent',
+              },
             ]}
             onPress={() => handleAnswer(opt)}
             activeOpacity={0.8}
           >
-            <Text style={[
-              styles.outlineBtnText,
-              isNone && { color: Colors.gray500 },
-            ]}>
+            <Text
+              style={[
+                styles.outlineBtnText,
+                isNone && { color: Colors.gray500 },
+              ]}
+            >
               {opt}
             </Text>
           </TouchableOpacity>
@@ -1326,9 +1772,14 @@ const ColorVisionStep: React.FC<{
       })}
 
       <View style={rfStyles.footerNote}>
-        <Ionicons name="information-circle-outline" size={13} color={Colors.gray400} />
+        <Ionicons
+          name="information-circle-outline"
+          size={13}
+          color={Colors.gray400}
+        />
         <Text style={rfStyles.footerNoteText}>
-          This is a self-reported screening. Results may vary with screen brightness and ambient lighting.
+          This is a self-reported screening. Results may vary with screen
+          brightness and ambient lighting.
         </Text>
       </View>
     </ScrollView>
@@ -1358,7 +1809,12 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+    >
       {/* Backdrop */}
       <TouchableOpacity
         style={bkStyles.backdrop}
@@ -1375,7 +1831,11 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
           <Text style={bkStyles.headerTitle}>
             {confirmed ? 'Booking Summary' : 'Book Appointment'}
           </Text>
-          <TouchableOpacity onPress={handleClose} style={bkStyles.closeBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={handleClose}
+            style={bkStyles.closeBtn}
+            activeOpacity={0.7}
+          >
             <Ionicons name="close" size={18} color={Colors.gray600} />
           </TouchableOpacity>
         </View>
@@ -1391,7 +1851,8 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
             </View>
             <Text style={bkStyles.successTitle}>Appointment Requested</Text>
             <Text style={bkStyles.successSub}>
-              Call the store to confirm your slot. Our team will be happy to assist you.
+              Call the store to confirm your slot. Our team will be happy to
+              assist you.
             </Text>
 
             <View style={bkStyles.summaryCard}>
@@ -1400,12 +1861,18 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                 { icon: 'map-outline', text: branch.address },
                 {
                   icon: 'calendar-outline',
-                  text: `${DAY_SHORT[date.getDay()]}, ${date.getDate()} ${MONTH_SHORT[date.getMonth()]}`,
+                  text: `${DAY_SHORT[date.getDay()]}, ${date.getDate()} ${
+                    MONTH_SHORT[date.getMonth()]
+                  }`,
                 },
                 { icon: 'time-outline', text: timeSlot },
               ].map(row => (
                 <View key={row.icon} style={bkStyles.summaryRow}>
-                  <Ionicons name={row.icon as any} size={16} color={Colors.primary} />
+                  <Ionicons
+                    name={row.icon as any}
+                    size={16}
+                    color={Colors.primary}
+                  />
                   <Text style={bkStyles.summaryText}>{row.text}</Text>
                 </View>
               ))}
@@ -1442,7 +1909,10 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                 return (
                   <TouchableOpacity
                     key={b.id}
-                    style={[bkStyles.branchCard, selected && bkStyles.branchCardActive]}
+                    style={[
+                      bkStyles.branchCard,
+                      selected && bkStyles.branchCardActive,
+                    ]}
                     onPress={() => setBranchId(b.id)}
                     activeOpacity={0.8}
                   >
@@ -1454,12 +1924,19 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[bkStyles.branchName, selected && { color: Colors.primary }]}>
+                      <Text
+                        style={[
+                          bkStyles.branchName,
+                          selected && { color: Colors.primary },
+                        ]}
+                      >
                         {b.name}
                       </Text>
                       <Text style={bkStyles.branchAddress}>{b.address}</Text>
                     </View>
-                    <View style={[bkStyles.radio, selected && bkStyles.radioActive]}>
+                    <View
+                      style={[bkStyles.radio, selected && bkStyles.radioActive]}
+                    >
                       {selected && <View style={bkStyles.radioDot} />}
                     </View>
                   </TouchableOpacity>
@@ -1480,17 +1957,35 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                   return (
                     <TouchableOpacity
                       key={d.toISOString()}
-                      style={[bkStyles.dateChip, selected && bkStyles.dateChipActive]}
+                      style={[
+                        bkStyles.dateChip,
+                        selected && bkStyles.dateChipActive,
+                      ]}
                       onPress={() => setDate(d)}
                       activeOpacity={0.8}
                     >
-                      <Text style={[bkStyles.dateDay, selected && bkStyles.dateTextActive]}>
+                      <Text
+                        style={[
+                          bkStyles.dateDay,
+                          selected && bkStyles.dateTextActive,
+                        ]}
+                      >
                         {DAY_SHORT[d.getDay()]}
                       </Text>
-                      <Text style={[bkStyles.dateNum, selected && bkStyles.dateTextActive]}>
+                      <Text
+                        style={[
+                          bkStyles.dateNum,
+                          selected && bkStyles.dateTextActive,
+                        ]}
+                      >
                         {d.getDate()}
                       </Text>
-                      <Text style={[bkStyles.dateMon, selected && bkStyles.dateTextActive]}>
+                      <Text
+                        style={[
+                          bkStyles.dateMon,
+                          selected && bkStyles.dateTextActive,
+                        ]}
+                      >
                         {MONTH_SHORT[d.getMonth()]}
                       </Text>
                     </TouchableOpacity>
@@ -1508,11 +2003,19 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                   return (
                     <TouchableOpacity
                       key={slot}
-                      style={[bkStyles.timeChip, selected && bkStyles.timeChipActive]}
+                      style={[
+                        bkStyles.timeChip,
+                        selected && bkStyles.timeChipActive,
+                      ]}
                       onPress={() => setTimeSlot(slot)}
                       activeOpacity={0.8}
                     >
-                      <Text style={[bkStyles.timeText, selected && bkStyles.timeTextActive]}>
+                      <Text
+                        style={[
+                          bkStyles.timeText,
+                          selected && bkStyles.timeTextActive,
+                        ]}
+                      >
                         {slot}
                       </Text>
                     </TouchableOpacity>
@@ -1528,7 +2031,11 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                 onPress={() => canConfirm && setConfirmed(true)}
                 activeOpacity={canConfirm ? 0.82 : 1}
               >
-                <Ionicons name="checkmark-circle-outline" size={19} color={Colors.white} />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={19}
+                  color={Colors.white}
+                />
                 <Text style={styles.primaryBtnText}>Confirm Appointment</Text>
               </TouchableOpacity>
             </View>
@@ -1549,7 +2056,15 @@ const RefractionResult: React.FC<{
   colorVision: ColorResult;
   nearVision: 'clear' | 'blurry';
   onRetry: () => void;
-}> = ({ risk, acuityPass, contrast, astigmatism, colorVision, nearVision, onRetry }) => {
+}> = ({
+  risk,
+  acuityPass,
+  contrast,
+  astigmatism,
+  colorVision,
+  nearVision,
+  onRetry,
+}) => {
   const cfg = RISK_CONFIG[risk];
   const [showBooking, setShowBooking] = useState(false);
 
@@ -1610,9 +2125,16 @@ const RefractionResult: React.FC<{
       showsVerticalScrollIndicator={false}
     >
       {/* Risk badge */}
-      <View style={[rfStyles.riskCard, { backgroundColor: cfg.bg, borderColor: cfg.color + '40' }]}>
+      <View
+        style={[
+          rfStyles.riskCard,
+          { backgroundColor: cfg.bg, borderColor: cfg.color + '40' },
+        ]}
+      >
         <Ionicons name={cfg.icon as any} size={40} color={cfg.color} />
-        <Text style={[rfStyles.riskLabel, { color: cfg.color }]}>{cfg.label}</Text>
+        <Text style={[rfStyles.riskLabel, { color: cfg.color }]}>
+          {cfg.label}
+        </Text>
         <Text style={rfStyles.riskSummary}>{cfg.summary}</Text>
       </View>
 
@@ -1623,7 +2145,11 @@ const RefractionResult: React.FC<{
           <View
             style={[
               rfStyles.checkIcon,
-              { backgroundColor: c.ok ? 'rgba(45,189,126,0.12)' : 'rgba(231,76,60,0.12)' },
+              {
+                backgroundColor: c.ok
+                  ? 'rgba(45,189,126,0.12)'
+                  : 'rgba(231,76,60,0.12)',
+              },
             ]}
           >
             <Ionicons
@@ -1645,7 +2171,10 @@ const RefractionResult: React.FC<{
         <Text style={rfStyles.adviceText}>{cfg.advice}</Text>
       </View>
 
-      <BookingModal visible={showBooking} onClose={() => setShowBooking(false)} />
+      <BookingModal
+        visible={showBooking}
+        onClose={() => setShowBooking(false)}
+      />
 
       {/* CTAs */}
       {risk !== 'low' && (
@@ -1660,7 +2189,10 @@ const RefractionResult: React.FC<{
       )}
 
       <TouchableOpacity
-        style={[styles.outlineBtn, { marginTop: risk !== 'low' ? Spacing.sm : 0 }]}
+        style={[
+          styles.outlineBtn,
+          { marginTop: risk !== 'low' ? Spacing.sm : 0 },
+        ]}
         onPress={onRetry}
         activeOpacity={0.8}
       >
@@ -1669,7 +2201,11 @@ const RefractionResult: React.FC<{
       </TouchableOpacity>
 
       <View style={rfStyles.footerNote}>
-        <Ionicons name="information-circle-outline" size={13} color={Colors.gray400} />
+        <Ionicons
+          name="information-circle-outline"
+          size={13}
+          color={Colors.gray400}
+        />
         <Text style={rfStyles.footerNoteText}>
           Results are indicative only. A full clinical refraction by a licensed
           optometrist is required for a prescription.
@@ -1688,6 +2224,18 @@ const RefractionFlow: React.FC = () => {
   const [astigmatism, setAstigmatism] = useState<'equal' | 'unequal'>('equal');
   const [colorVision, setColorVision] = useState<ColorResult>('normal');
   const [nearVision, setNearVision] = useState<'clear' | 'blurry'>('clear');
+
+  // Fresh randomised content per run; `runId` bumps on retry to regenerate it.
+  const [runId, setRunId] = useState(0);
+  const testSet = useMemo(
+    () => ({
+      acuityRows: genAcuityRows(),
+      contrastLevels: genContrastLevels(),
+      cvPlates: genCvPlates(3),
+      nearText: genNearText(),
+    }),
+    [runId],
+  );
 
   const handleAcuityDone = (passCount: number) => {
     setAcuityPass(passCount);
@@ -1720,19 +2268,44 @@ const RefractionFlow: React.FC = () => {
     setAstigmatism('equal');
     setColorVision('normal');
     setNearVision('clear');
+    setRunId(prev => prev + 1); // regenerate randomised test content
     setStage('intro');
   };
 
-  if (stage === 'intro') return <RefractionIntro onStart={() => setStage('acuity')} />;
-  if (stage === 'acuity') return <AcuityStep onComplete={handleAcuityDone} />;
-  if (stage === 'contrast') return <ContrastStep onComplete={handleContrastDone} />;
-  if (stage === 'astigmatism') return <AstigmatismStep onComplete={handleAstigmatismDone} />;
-  if (stage === 'colorVision') return <ColorVisionStep onComplete={handleColorVisionDone} />;
-  if (stage === 'nearVision') return <NearVisionStep onComplete={handleNearVisionDone} />;
+  if (stage === 'intro')
+    return <RefractionIntro onStart={() => setStage('acuity')} />;
+  if (stage === 'acuity')
+    return <AcuityStep rows={testSet.acuityRows} onComplete={handleAcuityDone} />;
+  if (stage === 'contrast')
+    return (
+      <ContrastStep
+        levels={testSet.contrastLevels}
+        onComplete={handleContrastDone}
+      />
+    );
+  if (stage === 'astigmatism')
+    return <AstigmatismStep onComplete={handleAstigmatismDone} />;
+  if (stage === 'colorVision')
+    return (
+      <ColorVisionStep
+        plates={testSet.cvPlates}
+        onComplete={handleColorVisionDone}
+      />
+    );
+  if (stage === 'nearVision')
+    return (
+      <NearVisionStep text={testSet.nearText} onComplete={handleNearVisionDone} />
+    );
 
   return (
     <RefractionResult
-      risk={computeRisk(acuityPass, astigmatism, nearVision, contrast, colorVision)}
+      risk={computeRisk(
+        acuityPass,
+        astigmatism,
+        nearVision,
+        contrast,
+        colorVision,
+      )}
       acuityPass={acuityPass}
       contrast={contrast}
       astigmatism={astigmatism}
@@ -1746,12 +2319,38 @@ const RefractionFlow: React.FC = () => {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const ScanScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [tab, setTab] = useState<Tab>('face');
   const [faceScanStage, setFaceScanStage] = useState<FaceScanStage>('idle');
   const [faceShape, setFaceShape] = useState<FaceShape | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  const isScanning = tab === 'face' && faceScanStage === 'scanning';
+  const isScanning =
+    tab === 'face' &&
+    (faceScanStage === 'scanning' || faceScanStage === 'countdown');
+
+  // Hide the bottom tab bar while the countdown/camera is full-screen.
+  useEffect(() => {
+    navigation.setParams({ hideTabBar: isScanning });
+  }, [isScanning, navigation]);
+
+  // Ask for camera permission once. Android: the OS remembers the grant, so
+  // repeat scans skip the prompt. iOS: WKWebView reuses the app-level grant
+  // (NSCameraUsageDescription) via mediaCapturePermissionGrantType="grant".
+  const startFaceScan = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      const result = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+      );
+      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+        // Denied — fall back to manual face-shape selection.
+        setFaceScanStage('selecting');
+        return;
+      }
+    }
+    setFaceScanStage('countdown');
+  }, []);
 
   const handleShapeDetected = (shape: FaceShape) => {
     setFaceShape(shape);
@@ -1770,26 +2369,38 @@ const ScanScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
+    <View style={[styles.root, { paddingTop: isScanning ? 0 : insets.top }]}>
       {!isScanning && (
-        <TabBar active={tab} onChange={t => { setTab(t); }} />
+        <TabBar
+          active={tab}
+          onChange={t => {
+            setTab(t);
+          }}
+        />
       )}
 
       {tab === 'face' ? (
         <>
           {/* Idle — always shown unless camera is active or manual selector is open */}
           {faceScanStage === 'idle' && (
-            <FaceScanIdle onStart={() => setFaceScanStage('scanning')} />
+            <FaceScanIdle onStart={startFaceScan} />
           )}
 
-          {/* Real camera scan — fills the whole screen */}
-          {faceScanStage === 'scanning' && (
+          {/* Camera mounts during the countdown so it's already warmed up;
+              the countdown overlay then fades away to reveal the live feed. */}
+          {(faceScanStage === 'countdown' || faceScanStage === 'scanning') && (
             <View style={StyleSheet.absoluteFillObject}>
               <FaceScanCamera
+                armed={faceScanStage === 'scanning'}
                 onShapeDetected={handleShapeDetected}
                 onCameraError={() => setFaceScanStage('selecting')}
                 onCancel={() => setFaceScanStage('idle')}
               />
+              {faceScanStage === 'countdown' && (
+                <ScanCountdown
+                  onComplete={() => setFaceScanStage('scanning')}
+                />
+              )}
             </View>
           )}
 
@@ -1817,9 +2428,83 @@ const ScanScreen: React.FC = () => {
       ) : (
         <RefractionFlow />
       )}
-    </SafeAreaView>
+    </View>
   );
 };
+
+// ─── Product Recommendation Styles ────────────────────────────────────────────
+
+const prStyles = StyleSheet.create({
+  list: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  loading: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+  },
+  empty: {
+    paddingVertical: Spacing.lg,
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  emptyText: {
+    fontSize: FontSize.sm,
+    color: Colors.gray400,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    padding: Spacing.sm,
+    ...Shadow.sm,
+  },
+  image: {
+    width: 64,
+    height: 64,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.gray100,
+  },
+  info: {
+    flex: 1,
+    minWidth: 0,
+  },
+  name: {
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.black,
+  },
+  brand: {
+    fontSize: 11,
+    color: Colors.gray400,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 1,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginTop: 4,
+  },
+  reason: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    color: Colors.gray600,
+  },
+  price: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginTop: 4,
+  },
+});
 
 // ─── Glasses Bottom Sheet Styles ──────────────────────────────────────────────
 
@@ -1833,7 +2518,7 @@ const gsStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: SCREEN_HEIGHT * 0.88,
+    maxHeight: SCREEN_HEIGHT * 0.78,
     backgroundColor: Colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -1858,7 +2543,7 @@ const gsStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.glassBorder,
   },
@@ -1900,34 +2585,66 @@ const gsStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.lg,
     paddingBottom: Platform.OS === 'ios' ? 40 : Spacing.xxl,
   },
-  descCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
+  insightCard: {
     backgroundColor: Colors.primaryLight,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.primaryGlow,
     padding: Spacing.md,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
-  descText: {
-    flex: 1,
+  insightDesc: {
     fontSize: FontSize.sm,
     color: Colors.primary,
     lineHeight: 20,
     fontWeight: '500',
   },
-  sectionLabel: {
+  insightDivider: {
+    height: 1,
+    backgroundColor: Colors.primaryGlow,
+    marginVertical: Spacing.sm,
+  },
+  insightTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  insightTip: {
+    flex: 1,
     fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.gray400,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    color: Colors.primary,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
+  recHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
+  },
+  recBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: -0.2,
+  },
+  recSub: {
+    fontSize: FontSize.xs,
+    color: Colors.gray400,
+    fontWeight: '500',
+    marginTop: 1,
   },
   footerNote: {
     flexDirection: 'row',
@@ -2051,7 +2768,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
-    ...Shadow.glow,
   },
   heroTitle: {
     fontSize: FontSize.xxl,
@@ -2163,8 +2879,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.xs,
   },
-  stepCounter: { fontSize: FontSize.xs, color: Colors.gray500, fontWeight: '600' },
-  stepCounterRight: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '700' },
+  stepCounter: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    fontWeight: '600',
+  },
+  stepCounterRight: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
   progressTrack: {
     height: 4,
     backgroundColor: Colors.glassBorder,
@@ -2216,26 +2940,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray700,
     textAlign: 'center',
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-
-  // Tip card (face scan result)
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.primaryGlow,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  tipText: {
-    flex: 1,
-    fontSize: FontSize.sm,
-    color: Colors.primary,
     fontWeight: '600',
     lineHeight: 20,
   },
@@ -2489,86 +3193,6 @@ const rfStyles = StyleSheet.create({
   },
 });
 
-// ─── Result Screen Styles ─────────────────────────────────────────────────────
-
-const rsStyles = StyleSheet.create({
-  // Hair style chips
-  hairChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassSurface,
-  },
-  hairChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
-  },
-  hairChipText: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.gray500,
-  },
-  hairChipTextActive: {
-    color: Colors.white,
-  },
-
-  // Recommendation tab row
-  tabRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  recTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.glassBorder,
-    backgroundColor: Colors.glassSurface,
-  },
-  recTabActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
-  },
-  recTabDisabled: {
-    opacity: 0.45,
-  },
-  recTabText: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.gray400,
-  },
-  recTabTextActive: {
-    color: Colors.primary,
-  },
-
-  // Hair style prompt (when no hair selected on hair tab)
-  hairPrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  hairPromptText: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    color: Colors.gray400,
-    lineHeight: 16,
-  },
-});
-
 // ─── Booking Modal Styles ─────────────────────────────────────────────────────
 
 const bkStyles = StyleSheet.create({
@@ -2704,7 +3328,12 @@ const bkStyles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.primary,
   },
-  dateDay: { fontSize: 10, fontWeight: '600', color: Colors.gray400, textTransform: 'uppercase' },
+  dateDay: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.gray400,
+    textTransform: 'uppercase',
+  },
   dateNum: { fontSize: 18, fontWeight: '800', color: Colors.black },
   dateMon: { fontSize: 10, fontWeight: '500', color: Colors.gray500 },
   dateTextActive: { color: Colors.white },
