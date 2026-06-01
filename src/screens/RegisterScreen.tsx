@@ -177,7 +177,7 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
         <Animated.View style={[styles.top, { paddingTop: insets.top + 12, opacity: fadeAnim }]}>
           <View style={styles.logoWrap}>
             <Image
-              source={require('../assets/logo.jpg')}
+              source={require('../assets/logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />

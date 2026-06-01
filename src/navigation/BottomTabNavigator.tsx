@@ -96,6 +96,13 @@ const TabItem: React.FC<TabItemProps> = ({ isFocused, cfg, onPress }) => {
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
 
+  // A screen can request a full-screen experience (e.g. the face scanner) by
+  // setting a `hideTabBar` route param. Hide the bar entirely in that case.
+  const focusedRoute = state.routes[state.index];
+  if ((focusedRoute.params as { hideTabBar?: boolean } | undefined)?.hideTabBar) {
+    return null;
+  }
+
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {/* Top separator */}

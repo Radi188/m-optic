@@ -55,7 +55,7 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
           ]}
         >
           <Image
-            source={require('../assets/logo.jpg')}
+            source={require('../assets/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />

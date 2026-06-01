@@ -122,9 +122,9 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
         <View style={styles.headerLeft}>
           <View style={styles.logoWrap}>
             <Image
-              source={require('../../../assets/logo.jpg')}
+              source={require('../../../assets/logo.png')}
               style={styles.logo}
-              resizeMode="cover"
+              resizeMode="contain"
             />
           </View>
           <Text style={styles.brandName}>M Optic</Text>
@@ -195,16 +195,20 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   logoWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 5,
   },
   logo: {
-    width: 36,
-    height: 36,
+    width: '100%',
+    height: '100%',
   },
   brandName: {
     fontSize: FontSize.md,

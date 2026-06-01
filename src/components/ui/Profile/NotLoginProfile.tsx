@@ -14,7 +14,7 @@ const NotLoginProfile: React.FC<NotLoginProfileProps> = ({ onLoginPress }) => {
         <View style={styles.logoOuter}>
           <View style={styles.logoCircle}>
             <Image
-              source={require('../../../assets/logo.jpg')}
+              source={require('../../../assets/logo.png')}
               style={styles.logo}
               resizeMode="cover"
             />

@@ -13,7 +13,7 @@ export const Colors = {
   black: '#1A1208',
 
   // Grays (warm-tinted)
-  gray50:  '#FAF8F6',
+  gray50: '#FAF8F6',
   gray100: '#F3EEE9',
   gray200: '#E8DDD6',
   gray300: '#D4C5BC',
@@ -90,7 +90,7 @@ export const Shadow = {
   sm: {
     shadowColor: '#7A5040',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -111,7 +111,7 @@ export const Shadow = {
   glow: {
     shadowColor: '#9C8178',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.40,
+    shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
   },
