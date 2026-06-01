@@ -14,6 +14,7 @@ import NotificationSettingsScreen from '../screens/NotificationSettingScreen';
 import SupportScreen from '../screens/SupportScreen';
 import NotificationListScreen from '../screens/NotificationScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -65,6 +66,15 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Privacy"
             component={PrivacyPolicyScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_right',

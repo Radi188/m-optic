@@ -36,7 +36,8 @@ export type RootStackParamList = {
   NotificationSetting: undefined;
   Support: undefined;
   NotificationList: undefined;
-  Privacy: undefined
+  Privacy: undefined;
+  EditProfile: undefined
 };
 
 export type BottomTabParamList = {

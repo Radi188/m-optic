@@ -234,7 +234,7 @@ const ProfileScreen: React.FC = () => {
             notificationCount={2}
             onNotificationPress={() => navigation.navigate('NotificationList')}
             onEditPress={() => {
-              console.log('Edit profile');
+              navigation.navigate('EditProfile');
             }}
             onCameraPress={() => {
               console.log('Change profile image');
