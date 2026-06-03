@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -43,9 +44,16 @@ type RefractionStage =
   | 'astigmatism'
   | 'colorVision'
   | 'nearVision'
+  | 'visualField'
+  | 'eyeMuscle'
+  | 'pupil'
+  | 'eyeHealth'
   | 'result';
 type ContrastResult = 'good' | 'reduced' | 'poor';
 type ColorResult = 'normal' | 'mild' | 'deficient';
+type VisualFieldResult = 'full' | 'mild' | 'reduced';
+type EyeMuscleResult = 'aligned' | 'misaligned';
+type PupilResult = 'normal' | 'sensitive';
 type FaceShape = 'Oval' | 'Round' | 'Square' | 'Heart' | 'Oblong';
 type RiskLevel = 'low' | 'medium' | 'high';
 type HairStyle = 'Short' | 'Medium' | 'Long' | 'Curly' | 'Wavy' | 'Bald';
@@ -147,6 +155,10 @@ function computeRisk(
   nearVision: 'clear' | 'blurry',
   contrast: ContrastResult,
   colorVision: ColorResult,
+  visualField: VisualFieldResult,
+  eyeMuscle: EyeMuscleResult,
+  pupil: PupilResult,
+  healthRiskFactors: number,
 ): RiskLevel {
   let score = 0;
   if (acuityPassCount <= 1) score += 4;
@@ -158,7 +170,15 @@ function computeRisk(
   else if (contrast === 'reduced') score += 1;
   if (colorVision === 'deficient') score += 3;
   else if (colorVision === 'mild') score += 1;
-  if (score >= 6) return 'high';
+  // ── Eye-health screening tests ──
+  if (visualField === 'reduced') score += 3;
+  else if (visualField === 'mild') score += 1;
+  if (eyeMuscle === 'misaligned') score += 2;
+  if (pupil === 'sensitive') score += 1;
+  // Self-reported risk factors (family history, diabetes, etc.) nudge the
+  // recommendation but are capped so they can't dominate the measured tests.
+  score += Math.min(healthRiskFactors, 3);
+  if (score >= 7) return 'high';
   if (score >= 2) return 'medium';
   return 'low';
 }
@@ -1314,8 +1334,8 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </View>
       <Text style={styles.heroTitle}>Eye Refraction Test</Text>
       <Text style={styles.heroSub}>
-        A comprehensive 5-step screening to help identify potential refractive
-        errors, contrast issues, and colour vision deficiencies.
+        A comprehensive 9-step screening to help identify potential refractive
+        errors, contrast and colour issues, and other eye-health risk factors.
       </Text>
       <TouchableOpacity
         style={[
@@ -1356,6 +1376,26 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         icon: 'book-outline',
         title: 'Near Vision',
         desc: 'Read a short paragraph to assess your close-up focus.',
+      },
+      {
+        icon: 'scan-outline',
+        title: 'Visual Field',
+        desc: 'Tap dots that flash in your side vision to check peripheral awareness.',
+      },
+      {
+        icon: 'git-compare-outline',
+        title: 'Eye Alignment',
+        desc: 'Follow a moving dot to check eye-muscle coordination.',
+      },
+      {
+        icon: 'flash-outline',
+        title: 'Light Response',
+        desc: 'A brief flash to gauge how comfortably your eyes adjust to light.',
+      },
+      {
+        icon: 'heart-outline',
+        title: 'Eye Health',
+        desc: 'A few questions on risk factors for pressure and retinal health.',
       },
     ].map(item => (
       <View key={item.title} style={styles.featureRow}>
@@ -1412,7 +1452,7 @@ const AcuityStep: React.FC<{
     >
       {/* Progress */}
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 1 of 5 — Distance Vision</Text>
+        <Text style={styles.stepCounter}>Step 1 of 9 — Distance Vision</Text>
         <Text style={styles.stepCounterRight}>
           Row {rowIndex + 1}/{rows.length}
         </Text>
@@ -1477,10 +1517,10 @@ const AstigmatismStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 3 of 5 — Astigmatism Check</Text>
+      <Text style={styles.stepCounter}>Step 3 of 9 — Astigmatism Check</Text>
     </View>
     <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: '40%' }]} />
+      <View style={[styles.progressFill, { width: '33%' }]} />
     </View>
 
     <View style={styles.acuityCard}>
@@ -1544,10 +1584,10 @@ const NearVisionStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 5 of 5 — Near Vision</Text>
+      <Text style={styles.stepCounter}>Step 5 of 9 — Near Vision</Text>
     </View>
     <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: '80%' }]} />
+      <View style={[styles.progressFill, { width: '78%' }]} />
     </View>
 
     <View style={styles.acuityCard}>
@@ -1621,7 +1661,7 @@ const ContrastStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <Text style={styles.stepCounter}>
-          Step 2 of 5 — Contrast Sensitivity
+          Step 2 of 9 — Contrast Sensitivity
         </Text>
         <Text style={styles.stepCounterRight}>
           Level {levelIndex + 1}/{levels.length}
@@ -1718,7 +1758,7 @@ const ColorVisionStep: React.FC<{
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 4 of 5 — Colour Vision</Text>
+        <Text style={styles.stepCounter}>Step 4 of 9 — Colour Vision</Text>
         <Text style={styles.stepCounterRight}>
           Plate {plateIndex + 1}/{plates.length}
         </Text>
@@ -1785,6 +1825,630 @@ const ColorVisionStep: React.FC<{
     </ScrollView>
   );
 };
+
+// ─── Refraction — Step 6: Visual Field (peripheral awareness) ────────────────
+// Dots flash in the periphery while the user fixates on a centre point. Missed
+// dots hint at blind spots. Touch-based — not a clinical perimetry test.
+
+const VF_ROUNDS = 8;
+const VF_DOT = 34;
+const VF_PLAY_W = SCREEN_WIDTH - Spacing.lg * 2;
+const VF_PLAY_H = 400;
+
+const VisualFieldStep: React.FC<{
+  onComplete: (result: VisualFieldResult) => void;
+}> = ({ onComplete }) => {
+  const [started, setStarted] = useState(false);
+  const [shown, setShown] = useState(0);
+  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
+  const caughtRef = useRef(0);
+  const roundRef = useRef(0);
+  const missTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const finish = useCallback(() => {
+    const ratio = caughtRef.current / VF_ROUNDS;
+    onComplete(ratio >= 0.85 ? 'full' : ratio >= 0.6 ? 'mild' : 'reduced');
+  }, [onComplete]);
+
+  const scheduleNext = useCallback(() => {
+    if (roundRef.current >= VF_ROUNDS) {
+      finish();
+      return;
+    }
+    roundRef.current += 1;
+    setShown(roundRef.current);
+    // Short blank gap, then flash a dot somewhere in the peripheral ring.
+    showTimer.current = setTimeout(() => {
+      const cx = VF_PLAY_W / 2;
+      const cy = VF_PLAY_H / 2;
+      const ang = Math.random() * Math.PI * 2;
+      const rad =
+        (0.55 + Math.random() * 0.4) * (Math.min(VF_PLAY_W, VF_PLAY_H) / 2);
+      const x = Math.max(
+        4,
+        Math.min(VF_PLAY_W - VF_DOT - 4, cx + Math.cos(ang) * rad - VF_DOT / 2),
+      );
+      const y = Math.max(
+        4,
+        Math.min(VF_PLAY_H - VF_DOT - 4, cy + Math.sin(ang) * rad - VF_DOT / 2),
+      );
+      setDot({ x, y });
+      missTimer.current = setTimeout(() => {
+        setDot(null);
+        scheduleNext();
+      }, 1100);
+    }, 500 + Math.random() * 800);
+  }, [finish]);
+
+  const handleHit = () => {
+    if (missTimer.current) clearTimeout(missTimer.current);
+    caughtRef.current += 1;
+    setDot(null);
+    scheduleNext();
+  };
+
+  const start = () => {
+    setStarted(true);
+    scheduleNext();
+  };
+
+  useEffect(
+    () => () => {
+      if (missTimer.current) clearTimeout(missTimer.current);
+      if (showTimer.current) clearTimeout(showTimer.current);
+    },
+    [],
+  );
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 6 of 9 — Visual Field</Text>
+        {started && (
+          <Text style={styles.stepCounterRight}>
+            {Math.min(shown, VF_ROUNDS)}/{VF_ROUNDS}
+          </Text>
+        )}
+      </View>
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            { width: started ? `${(shown / VF_ROUNDS) * 100}%` : '0%' },
+          ]}
+        />
+      </View>
+
+      <Text style={styles.acuityInstruction}>
+        Keep your eyes fixed on the centre dot and hold the phone steady. Tap each
+        green dot the instant it appears in your side vision — try not to move your
+        eyes.
+      </Text>
+
+      <View style={etStyles.vfPlay}>
+        <View style={etStyles.vfFixation} />
+        {!started && (
+          <TouchableOpacity
+            style={etStyles.vfStartOverlay}
+            onPress={start}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="play-circle" size={56} color={Colors.primary} />
+            <Text style={etStyles.vfStartText}>Tap to start</Text>
+          </TouchableOpacity>
+        )}
+        {dot && (
+          <TouchableOpacity
+            style={[etStyles.vfTarget, { left: dot.x, top: dot.y }]}
+            onPress={handleHit}
+            activeOpacity={0.7}
+          />
+        )}
+      </View>
+
+      <View style={rfStyles.footerNote}>
+        <Ionicons
+          name="information-circle-outline"
+          size={13}
+          color={Colors.gray400}
+        />
+        <Text style={rfStyles.footerNoteText}>
+          A simple peripheral-awareness check. Missed dots may indicate blind
+          spots but can also result from distraction — it does not replace a
+          clinical visual-field exam.
+        </Text>
+      </View>
+    </ScrollView>
+  );
+};
+
+// ─── Refraction — Step 7: Eye Muscle & Alignment (follow-the-dot) ─────────────
+// A target traces an H/cross/diagonal path (a classic ocular-motility pattern).
+// The user follows with their eyes, then self-reports any doubling or jumping.
+
+const EM_R = 11; // dot radius
+const EM_PAD = 34;
+const EM_W = SCREEN_WIDTH - Spacing.lg * 2;
+const EM_H = 320;
+
+const EyeMuscleStep: React.FC<{
+  onComplete: (result: EyeMuscleResult) => void;
+}> = ({ onComplete }) => {
+  const [phase, setPhase] = useState<'ready' | 'running' | 'answer'>('ready');
+  const pos = useRef(
+    new Animated.ValueXY({ x: EM_W / 2 - EM_R, y: EM_H / 2 - EM_R }),
+  ).current;
+
+  const run = () => {
+    setPhase('running');
+    const cX = EM_W / 2;
+    const cY = EM_H / 2;
+    const lX = EM_PAD;
+    const rX = EM_W - EM_PAD;
+    const tY = EM_PAD;
+    const bY = EM_H - EM_PAD;
+    pos.setValue({ x: cX - EM_R, y: cY - EM_R });
+    const to = (x: number, y: number, d = 850) =>
+      Animated.timing(pos, {
+        toValue: { x: x - EM_R, y: y - EM_R },
+        duration: d,
+        useNativeDriver: true,
+      });
+    Animated.sequence([
+      to(lX, cY),
+      to(rX, cY),
+      to(cX, cY),
+      to(cX, tY),
+      to(cX, bY),
+      to(cX, cY),
+      to(lX, tY),
+      to(rX, bY),
+      to(lX, bY),
+      to(rX, tY),
+      to(cX, cY, 650),
+    ]).start(({ finished }) => {
+      if (finished) setPhase('answer');
+    });
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 7 of 9 — Eye Alignment</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: '70%' }]} />
+      </View>
+
+      <Text style={styles.acuityInstruction}>
+        Hold your head still and follow the moving dot with your eyes only. Watch
+        whether it ever splits into two, jumps, or one eye struggles to keep up.
+      </Text>
+
+      <View style={etStyles.emPlay}>
+        <Animated.View
+          style={[
+            etStyles.emDot,
+            { transform: [{ translateX: pos.x }, { translateY: pos.y }] },
+          ]}
+        />
+        {phase === 'ready' && (
+          <TouchableOpacity
+            style={etStyles.vfStartOverlay}
+            onPress={run}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="play-circle" size={56} color={Colors.primary} />
+            <Text style={etStyles.vfStartText}>Start tracking</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {phase === 'running' && (
+        <Text style={styles.acuityQuestion}>Follow the dot…</Text>
+      )}
+
+      {phase === 'answer' && (
+        <>
+          <Text style={styles.acuityQuestion}>
+            Did the dot stay single and move smoothly the whole time?
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { marginTop: Spacing.md }]}
+            onPress={() => onComplete('aligned')}
+            activeOpacity={0.82}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={20}
+              color={Colors.white}
+            />
+            <Text style={styles.primaryBtnText}>Yes, single and smooth</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
+            onPress={() => onComplete('misaligned')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="close-circle-outline"
+              size={18}
+              color={Colors.gray600}
+            />
+            <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+              It doubled / jumped / one eye lagged
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
+            onPress={run}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
+            <Text style={styles.outlineBtnText}>Replay</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </ScrollView>
+  );
+};
+
+// ─── Refraction — Step 8: Light Response (pupil / photophobia screen) ─────────
+// Phone cameras can't reliably measure pupil constriction, so this is framed as
+// a light-sensitivity self-report: the panel flashes bright, then the user
+// reports any pain or lingering afterimage.
+
+const PupilResponseStep: React.FC<{
+  onComplete: (result: PupilResult) => void;
+}> = ({ onComplete }) => {
+  const [phase, setPhase] = useState<'ready' | 'running' | 'answer'>('ready');
+  const bright = useRef(new Animated.Value(0)).current;
+
+  const run = () => {
+    setPhase('running');
+    bright.setValue(0);
+    const flash = () =>
+      Animated.sequence([
+        Animated.timing(bright, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: false,
+        }),
+        Animated.delay(1200),
+        Animated.timing(bright, {
+          toValue: 0,
+          duration: 650,
+          useNativeDriver: false,
+        }),
+        Animated.delay(600),
+      ]);
+    Animated.sequence([Animated.delay(500), flash(), flash()]).start(
+      ({ finished }) => {
+        if (finished) setPhase('answer');
+      },
+    );
+  };
+
+  const bg = bright.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#0b0b0d', '#ffffff'],
+  });
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 8 of 9 — Light Response</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: '85%' }]} />
+      </View>
+
+      <Text style={styles.acuityInstruction}>
+        Best done in a dim room. Look at the panel below and keep both eyes open —
+        it will flash bright twice. Notice how your eyes feel as the light changes.
+      </Text>
+
+      <Animated.View style={[etStyles.ppPanel, { backgroundColor: bg }]}>
+        {phase === 'ready' && (
+          <TouchableOpacity
+            style={etStyles.vfStartOverlay}
+            onPress={run}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="flash" size={48} color={Colors.primary} />
+            <Text style={etStyles.vfStartText}>Start light test</Text>
+          </TouchableOpacity>
+        )}
+      </Animated.View>
+
+      {phase === 'answer' && (
+        <>
+          <Text style={styles.acuityQuestion}>
+            When the screen flashed bright, did your eyes adjust comfortably?
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { marginTop: Spacing.md }]}
+            onPress={() => onComplete('normal')}
+            activeOpacity={0.82}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={20}
+              color={Colors.white}
+            />
+            <Text style={styles.primaryBtnText}>Yes, adjusted comfortably</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
+            onPress={() => onComplete('sensitive')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="close-circle-outline"
+              size={18}
+              color={Colors.gray600}
+            />
+            <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+              It was painful / left an afterimage
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
+            onPress={run}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
+            <Text style={styles.outlineBtnText}>Replay</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      <View style={rfStyles.footerNote}>
+        <Ionicons
+          name="information-circle-outline"
+          size={13}
+          color={Colors.gray400}
+        />
+        <Text style={rfStyles.footerNoteText}>
+          A light-comfort screen only. True pupil-reaction testing requires a
+          clinician's penlight examination.
+        </Text>
+      </View>
+    </ScrollView>
+  );
+};
+
+// ─── Refraction — Step 9: Eye Health Screening (tonometry / retinal) ──────────
+// Eye pressure (tonometry) and retinal/fundus health can't be measured on a
+// phone. Instead we educate and capture self-reported risk factors that feed
+// into the overall recommendation.
+
+const HEALTH_RISK_FACTORS: { key: string; label: string }[] = [
+  { key: 'family', label: 'Family history of glaucoma or eye disease' },
+  { key: 'systemic', label: 'Diabetes or high blood pressure' },
+  { key: 'age', label: 'Age 40 or older' },
+  { key: 'pain', label: 'Frequent eye pain, redness or headaches' },
+  { key: 'floaters', label: 'Flashes, floaters or sudden vision changes' },
+];
+
+const EyeHealthStep: React.FC<{
+  onComplete: (riskFactorCount: number) => void;
+}> = ({ onComplete }) => {
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const toggle = (k: string) =>
+    setSelected(s => ({ ...s, [k]: !s[k] }));
+  const count = Object.values(selected).filter(Boolean).length;
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepCounter}>Step 9 of 9 — Eye Health</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: '100%' }]} />
+      </View>
+
+      {[
+        {
+          icon: 'speedometer-outline',
+          title: 'Eye Pressure (Tonometry)',
+          desc: 'High intraocular pressure is a key glaucoma risk and can only be measured with clinical equipment — not a phone.',
+        },
+        {
+          icon: 'aperture-outline',
+          title: 'Retinal / Fundus Health',
+          desc: 'Examining the retina needs a specialised lens. We can flag your risk, but an in-store exam is required to check it.',
+        },
+      ].map(item => (
+        <View key={item.title} style={styles.featureRow}>
+          <View style={styles.featureIconBox}>
+            <Ionicons
+              name={item.icon as any}
+              size={20}
+              color={Colors.primary}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.featureTitle}>{item.title}</Text>
+            <Text style={styles.featureDesc}>{item.desc}</Text>
+          </View>
+        </View>
+      ))}
+
+      <Text style={[styles.sectionLabel, { marginTop: Spacing.md }]}>
+        Do any of these apply to you?
+      </Text>
+      {HEALTH_RISK_FACTORS.map(rf => {
+        const on = !!selected[rf.key];
+        return (
+          <TouchableOpacity
+            key={rf.key}
+            style={[etStyles.ehRow, on && etStyles.ehRowOn]}
+            onPress={() => toggle(rf.key)}
+            activeOpacity={0.8}
+          >
+            <View style={[etStyles.ehCheck, on && etStyles.ehCheckOn]}>
+              {on && <Ionicons name="checkmark" size={14} color={Colors.white} />}
+            </View>
+            <Text style={[etStyles.ehLabel, on && { color: Colors.primary }]}>
+              {rf.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+
+      <TouchableOpacity
+        style={[styles.primaryBtn, { marginTop: Spacing.md }]}
+        onPress={() => onComplete(count)}
+        activeOpacity={0.82}
+      >
+        <Ionicons
+          name="arrow-forward-circle-outline"
+          size={20}
+          color={Colors.white}
+        />
+        <Text style={styles.primaryBtnText}>See My Results</Text>
+      </TouchableOpacity>
+
+      <View style={rfStyles.footerNote}>
+        <Ionicons
+          name="information-circle-outline"
+          size={13}
+          color={Colors.gray400}
+        />
+        <Text style={rfStyles.footerNoteText}>
+          These factors help tailor your recommendation. They are not a diagnosis
+          of glaucoma or retinal disease.
+        </Text>
+      </View>
+    </ScrollView>
+  );
+};
+
+// ─── New-test Styles ──────────────────────────────────────────────────────────
+
+const etStyles = StyleSheet.create({
+  // Visual field play area
+  vfPlay: {
+    width: VF_PLAY_W,
+    height: VF_PLAY_H,
+    alignSelf: 'center',
+    backgroundColor: Colors.glassSurfaceHigh,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: Colors.glassBorderStrong,
+    marginVertical: Spacing.md,
+    overflow: 'hidden',
+  },
+  vfFixation: {
+    position: 'absolute',
+    left: VF_PLAY_W / 2 - 5,
+    top: VF_PLAY_H / 2 - 5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.gray600,
+  },
+  vfTarget: {
+    position: 'absolute',
+    width: VF_DOT,
+    height: VF_DOT,
+    borderRadius: VF_DOT / 2,
+    backgroundColor: Colors.primary,
+    ...Shadow.md,
+  },
+  vfStartOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  vfStartText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // Eye-muscle play area
+  emPlay: {
+    width: EM_W,
+    height: EM_H,
+    alignSelf: 'center',
+    backgroundColor: '#101012',
+    borderRadius: BorderRadius.xl,
+    marginVertical: Spacing.md,
+    overflow: 'hidden',
+  },
+  emDot: {
+    position: 'absolute',
+    width: EM_R * 2,
+    height: EM_R * 2,
+    borderRadius: EM_R,
+    backgroundColor: Colors.primary,
+    ...Shadow.md,
+  },
+
+  // Pupil / light panel
+  ppPanel: {
+    width: VF_PLAY_W,
+    height: 280,
+    alignSelf: 'center',
+    borderRadius: BorderRadius.xl,
+    marginVertical: Spacing.md,
+    overflow: 'hidden',
+  },
+
+  // Eye-health risk rows
+  ehRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.glassSurface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorder,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  ehRowOn: {
+    borderColor: Colors.primaryGlow,
+    backgroundColor: Colors.primaryLight,
+  },
+  ehCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: Colors.gray300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  ehCheckOn: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  ehLabel: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+});
 
 // ─── Booking Modal ────────────────────────────────────────────────────────────
 
@@ -2055,6 +2719,10 @@ const RefractionResult: React.FC<{
   astigmatism: 'equal' | 'unequal';
   colorVision: ColorResult;
   nearVision: 'clear' | 'blurry';
+  visualField: VisualFieldResult;
+  eyeMuscle: EyeMuscleResult;
+  pupil: PupilResult;
+  healthRiskFactors: number;
   onRetry: () => void;
 }> = ({
   risk,
@@ -2063,6 +2731,10 @@ const RefractionResult: React.FC<{
   astigmatism,
   colorVision,
   nearVision,
+  visualField,
+  eyeMuscle,
+  pupil,
+  healthRiskFactors,
   onRetry,
 }) => {
   const cfg = RISK_CONFIG[risk];
@@ -2119,6 +2791,47 @@ const RefractionResult: React.FC<{
     },
   ];
 
+  // Eye-health screening — shown as its own section (per design choice) but
+  // still folded into the overall risk score above.
+  const healthChecks: { label: string; ok: boolean; detail: string }[] = [
+    {
+      label: 'Visual Field',
+      ok: visualField === 'full',
+      detail:
+        visualField === 'full'
+          ? 'Full peripheral awareness'
+          : visualField === 'mild'
+          ? 'A few peripheral dots were missed'
+          : 'Several peripheral dots were missed',
+    },
+    {
+      label: 'Eye Alignment',
+      ok: eyeMuscle === 'aligned',
+      detail:
+        eyeMuscle === 'aligned'
+          ? 'Smooth, single tracking'
+          : 'Possible doubling or uneven tracking',
+    },
+    {
+      label: 'Light Response',
+      ok: pupil === 'normal',
+      detail:
+        pupil === 'normal'
+          ? 'Comfortable adjustment to light'
+          : 'Light sensitivity reported',
+    },
+    {
+      label: 'Health Risk Factors',
+      ok: healthRiskFactors === 0,
+      detail:
+        healthRiskFactors === 0
+          ? 'No risk factors reported'
+          : `${healthRiskFactors} risk factor${
+              healthRiskFactors > 1 ? 's' : ''
+            } reported`,
+    },
+  ];
+
   return (
     <ScrollView
       contentContainerStyle={[styles.contentPad, { paddingBottom: 40 }]}
@@ -2138,8 +2851,8 @@ const RefractionResult: React.FC<{
         <Text style={rfStyles.riskSummary}>{cfg.summary}</Text>
       </View>
 
-      {/* Per-test breakdown */}
-      <Text style={styles.sectionLabel}>Test Results</Text>
+      {/* Per-test breakdown — Vision Tests */}
+      <Text style={styles.sectionLabel}>Vision Test Results</Text>
       {checks.map(c => (
         <View key={c.label} style={rfStyles.checkRow}>
           <View
@@ -2156,6 +2869,35 @@ const RefractionResult: React.FC<{
               name={c.ok ? 'checkmark' : 'close'}
               size={16}
               color={c.ok ? '#2DBD7E' : '#E74C3C'}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={rfStyles.checkLabel}>{c.label}</Text>
+            <Text style={rfStyles.checkDetail}>{c.detail}</Text>
+          </View>
+        </View>
+      ))}
+
+      {/* Separate section — Eye Health Screening */}
+      <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>
+        Eye Health Screening
+      </Text>
+      {healthChecks.map(c => (
+        <View key={c.label} style={rfStyles.checkRow}>
+          <View
+            style={[
+              rfStyles.checkIcon,
+              {
+                backgroundColor: c.ok
+                  ? 'rgba(45,189,126,0.12)'
+                  : 'rgba(244,168,48,0.14)',
+              },
+            ]}
+          >
+            <Ionicons
+              name={c.ok ? 'checkmark' : 'alert'}
+              size={16}
+              color={c.ok ? '#2DBD7E' : '#F4A830'}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -2224,6 +2966,10 @@ const RefractionFlow: React.FC = () => {
   const [astigmatism, setAstigmatism] = useState<'equal' | 'unequal'>('equal');
   const [colorVision, setColorVision] = useState<ColorResult>('normal');
   const [nearVision, setNearVision] = useState<'clear' | 'blurry'>('clear');
+  const [visualField, setVisualField] = useState<VisualFieldResult>('full');
+  const [eyeMuscle, setEyeMuscle] = useState<EyeMuscleResult>('aligned');
+  const [pupil, setPupil] = useState<PupilResult>('normal');
+  const [healthRiskFactors, setHealthRiskFactors] = useState(0);
 
   // Fresh randomised content per run; `runId` bumps on retry to regenerate it.
   const [runId, setRunId] = useState(0);
@@ -2259,6 +3005,26 @@ const RefractionFlow: React.FC = () => {
 
   const handleNearVisionDone = (result: 'clear' | 'blurry') => {
     setNearVision(result);
+    setStage('visualField');
+  };
+
+  const handleVisualFieldDone = (result: VisualFieldResult) => {
+    setVisualField(result);
+    setStage('eyeMuscle');
+  };
+
+  const handleEyeMuscleDone = (result: EyeMuscleResult) => {
+    setEyeMuscle(result);
+    setStage('pupil');
+  };
+
+  const handlePupilDone = (result: PupilResult) => {
+    setPupil(result);
+    setStage('eyeHealth');
+  };
+
+  const handleEyeHealthDone = (riskFactorCount: number) => {
+    setHealthRiskFactors(riskFactorCount);
     setStage('result');
   };
 
@@ -2268,6 +3034,10 @@ const RefractionFlow: React.FC = () => {
     setAstigmatism('equal');
     setColorVision('normal');
     setNearVision('clear');
+    setVisualField('full');
+    setEyeMuscle('aligned');
+    setPupil('normal');
+    setHealthRiskFactors(0);
     setRunId(prev => prev + 1); // regenerate randomised test content
     setStage('intro');
   };
@@ -2296,6 +3066,14 @@ const RefractionFlow: React.FC = () => {
     return (
       <NearVisionStep text={testSet.nearText} onComplete={handleNearVisionDone} />
     );
+  if (stage === 'visualField')
+    return <VisualFieldStep onComplete={handleVisualFieldDone} />;
+  if (stage === 'eyeMuscle')
+    return <EyeMuscleStep onComplete={handleEyeMuscleDone} />;
+  if (stage === 'pupil')
+    return <PupilResponseStep onComplete={handlePupilDone} />;
+  if (stage === 'eyeHealth')
+    return <EyeHealthStep onComplete={handleEyeHealthDone} />;
 
   return (
     <RefractionResult
@@ -2305,12 +3083,20 @@ const RefractionFlow: React.FC = () => {
         nearVision,
         contrast,
         colorVision,
+        visualField,
+        eyeMuscle,
+        pupil,
+        healthRiskFactors,
       )}
       acuityPass={acuityPass}
       contrast={contrast}
       astigmatism={astigmatism}
       colorVision={colorVision}
       nearVision={nearVision}
+      visualField={visualField}
+      eyeMuscle={eyeMuscle}
+      pupil={pupil}
+      healthRiskFactors={healthRiskFactors}
       onRetry={handleRetry}
     />
   );

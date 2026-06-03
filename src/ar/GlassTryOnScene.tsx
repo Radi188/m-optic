@@ -1,24 +1,40 @@
 /**
  * GlassTryOnScene — real-time AR glasses try-on
  *
- * Uses the same oculos.obj as GlassModelScene:
- *  1. OBJ text fetched from Metro in the RN JS thread, embedded in HTML.
- *  2. Parsed + rendered by Three.js on an alpha-transparent canvas
- *     overlaid on the mirrored front-camera video.
- *  3. MediaPipe FaceMesh drives position / rotation / scale every frame.
+ * Always renders the default `oculos.obj` model:
+ *  1. The OBJ text is fetched from Metro in the RN JS thread and embedded
+ *     in the HTML.
+ *  2. Parsed + rendered by Three.js on an alpha-transparent canvas overlaid
+ *     on the mirrored front-camera video.
+ *  3. MediaPipe FaceMesh drives position / rotation / scale every frame, with a
+ *     depth-only occluder so the temple arms hide behind the sides of the face.
  */
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from 'react';
 import {
-  View, Text, StyleSheet, Alert, Linking,
-  ActivityIndicator, Image,
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Linking,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { GlassItem } from '../types/navigation';
 
-interface Props { glass: GlassItem; }
+interface Props {
+  glass: GlassItem;
+}
 
+// Default try-on model used for every glass item.
 const OBJ_URI = Image.resolveAssetSource(
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('../assets/models/oculos.obj'),
@@ -27,13 +43,13 @@ const OBJ_URI = Image.resolveAssetSource(
 function escapeObj(raw: string): string {
   return raw
     .replace(/\\/g, '\\\\')
-    .replace(/`/g,  '\\`')
+    .replace(/`/g, '\\`')
     .replace(/\${/g, '\\${');
 }
 
 function buildHtml(glass: GlassItem, objText: string): string {
   const accentHex = Colors.primary;
-  const safeObj   = escapeObj(objText);
+  const safeObj = escapeObj(objText);
 
   return `<!DOCTYPE html>
 <html>
@@ -80,6 +96,7 @@ function buildHtml(glass: GlassItem, objText: string): string {
 <div id="loading"><div class="spinner"></div>Initialising AR…</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/environments/RoomEnvironment.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js"       crossorigin="anonymous"></script>
 
@@ -89,6 +106,36 @@ function buildHtml(glass: GlassItem, objText: string): string {
 
 const ACCENT     = '${accentHex}';
 const GLASS_NAME = '${glass.name.replace(/'/g, "\\'")}';
+
+// If the glasses appear to face away from the camera, set this to Math.PI.
+const MODEL_BASE_ROT_Y = 0;
+
+// Overall size of the glasses relative to the temple-to-temple span.
+// 1.0 = exactly temple width. Increase to make the glasses bigger.
+const SIZE_MULT = 1.25;
+
+// ── Temple (arm) progressive reveal ───────────────────────────────────────────
+// The OBJ mesh is split into a "front" piece (rims / lenses / bridge) and the two
+// "temple" side arms (left + right). Facing the camera head-on both arms are
+// hidden. As the head turns, BOTH arms fade in — bit by bit with the turn angle.
+// The arm rotating toward the camera shows in front of the cheek; the far arm is
+// kept behind the face by the depth occluder, so it reads as "behind the head".
+// Fraction of the model's front-most Z used as the rim/temple split plane.
+const TEMPLE_SPLIT_FRAC = 0.66;
+// |yaw| (normalised, 0 = head-on) where the arms just begin to appear…
+const TEMPLE_REVEAL_START = 0.10;
+// …and where they reach full opacity.
+const TEMPLE_REVEAL_FULL = 0.45;
+
+// ── Occlusion ────────────────────────────────────────────────────────────────
+// Renders an invisible "occluder" face mesh that writes depth only, so the
+// temple arms get hidden behind the sides of the face when the head turns.
+const OCCLUSION_ENABLED = true;
+// Pushes the occluder surface back along Z. More negative = occluder sits
+// further behind the lenses (lenses stay visible, arms get hidden sooner).
+const OCC_BASE_Z  = -0.12;
+// How much MediaPipe depth relief to apply to the occluder (face curvature).
+const OCC_Z_GAIN  = 1.0;
 
 const video   = document.getElementById('video');
 const loading = document.getElementById('loading');
@@ -100,15 +147,28 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true 
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x000000, 0);   // fully transparent
+renderer.outputEncoding   = THREE.sRGBEncoding;
+renderer.toneMapping      = THREE.ACESFilmicToneMapping;   // filmic PBR look
+renderer.toneMappingExposure = 1.05;
+renderer.physicallyCorrectLights = true;
 
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.001, 200);
 camera.position.z = 10;
 
-scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+scene.add(new THREE.AmbientLight(0xffffff, 1.6));
 const key  = new THREE.DirectionalLight(0xfff8ee, 2.0); key.position.set(2, 4, 6);  scene.add(key);
 const fill = new THREE.DirectionalLight(0xddeeff, 0.7); fill.position.set(-3, 1, 3); scene.add(fill);
 
+// ── PBR environment map — gives metal/glass realistic reflections ────────────
+try {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+} catch (e) {
+  console.warn('Environment map unavailable:', e.message);
+}
+
+// ── Glass material (reflects the PBR environment map) ────────────────────────
 const glassMat = new THREE.MeshPhysicalMaterial({
   color:      new THREE.Color('#0F0B08'),
   metalness:  0.60,
@@ -117,7 +177,7 @@ const glassMat = new THREE.MeshPhysicalMaterial({
   clearcoatRoughness: 0.12,
 });
 
-// ── OBJ parser (same as GlassModelScene) ─────────────────────────────────────
+// ── OBJ parser ───────────────────────────────────────────────────────────────
 function parseOBJ(text) {
   const positions = [], normals = [], uvs = [];
   const posOut = [], normOut = [], uvOut = [];
@@ -171,9 +231,51 @@ function parseOBJ(text) {
   return geo;
 }
 
-// ── Parse + centre the model ──────────────────────────────────────────────────
+// ── Split a (non-indexed) triangle-soup geometry by a per-triangle predicate ───
+// pick(cx,cy,cz) receives each triangle's centroid; true -> group A, false -> B.
+function partitionSoup(geo, pick) {
+  const p = geo.attributes.position.array;
+  const n = geo.attributes.normal ? geo.attributes.normal.array : null;
+  const u = geo.attributes.uv ? geo.attributes.uv.array : null;
+  const A = { p: [], n: [], u: [] };
+  const B = { p: [], n: [], u: [] };
+
+  // 9 position/normal floats per triangle (3 verts × xyz); 6 uv floats per tri.
+  for (let t = 0; t < p.length; t += 9) {
+    const cx = (p[t]     + p[t + 3] + p[t + 6]) / 3;
+    const cy = (p[t + 1] + p[t + 4] + p[t + 7]) / 3;
+    const cz = (p[t + 2] + p[t + 5] + p[t + 8]) / 3;
+    const dst = pick(cx, cy, cz) ? A : B;
+    for (let k = 0; k < 9; k++) dst.p.push(p[t + k]);
+    if (n) for (let k = 0; k < 9; k++) dst.n.push(n[t + k]);
+    if (u) { const ub = (t / 9) * 6; for (let k = 0; k < 6; k++) dst.u.push(u[ub + k]); }
+  }
+
+  function make(o) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(o.p, 3));
+    if (o.n.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(o.n, 3));
+    if (o.u.length) g.setAttribute('uv',     new THREE.Float32BufferAttribute(o.u, 2));
+    if (!o.n.length) g.computeVertexNormals();
+    return g;
+  }
+  return { a: make(A), b: make(B) };
+}
+
+// ── Parse + centre the OBJ model ─────────────────────────────────────────────
 let glassGroup  = null;
+let templePlus  = null;   // temple arm on the +X side — fades in with head yaw
+let templeMinus = null;   // temple arm on the −X side — fades in with head yaw
 let MODEL_WIDTH = 1.0;   // raw X-span after centring (used for AR scale)
+
+// A temple material that can fade from invisible → solid as the head turns.
+function makeTempleMat() {
+  const m = glassMat.clone();
+  m.transparent = true;
+  m.opacity = 0;
+  m.depthWrite = false;   // depth-tested against the occluder, but never writes
+  return m;
+}
 
 try {
   const geo = parseOBJ(\`${safeObj}\`);
@@ -186,15 +288,81 @@ try {
   const cz = (box.max.z + box.min.z) / 2;
   geo.translate(-cx, -cy, -cz);
 
-  MODEL_WIDTH = box.max.x - box.min.x;   // width in raw OBJ units (≈1.547)
+  MODEL_WIDTH = box.max.x - box.min.x;   // width in raw OBJ units
 
-  const mesh = new THREE.Mesh(geo, glassMat);
+  // 1) Split into front rims + temple arms on a Z plane near the front.
+  geo.computeBoundingBox();
+  const splitZ = geo.boundingBox.max.z * TEMPLE_SPLIT_FRAC;
+  const byZ = partitionSoup(geo, (x, y, z) => z >= splitZ);   // a=front, b=temples
+
+  // 2) Split the temple arms into +X / −X halves (kept separate so each side
+  //    can be tuned independently; both currently fade in together).
+  const byX = partitionSoup(byZ.b, x => x >= 0);              // a=+X, b=−X
+
   glassGroup = new THREE.Group();
-  glassGroup.add(mesh);
+
+  const frontMesh = new THREE.Mesh(byZ.a, glassMat);
+  frontMesh.renderOrder = 1;   // draw AFTER the occluder so depth can hide arms
+  glassGroup.add(frontMesh);
+
+  templePlus = new THREE.Mesh(byX.a, makeTempleMat());
+  templePlus.renderOrder = 2;  // draw after the front rims (it's a fading overlay)
+  glassGroup.add(templePlus);
+
+  templeMinus = new THREE.Mesh(byX.b, makeTempleMat());
+  templeMinus.renderOrder = 2;
+  glassGroup.add(templeMinus);
+
+  glassGroup.rotation.y = MODEL_BASE_ROT_Y;
   glassGroup.visible = false;
   scene.add(glassGroup);
 } catch (e) {
   console.warn('OBJ parse error:', e.message);
+}
+
+// ── Occluder: invisible face mesh that writes depth only ─────────────────────
+// Built from MediaPipe's FACEMESH_FACE_OVAL ring (a closed loop around the
+// face). We fan-triangulate it into a cap and update its vertices each frame.
+let occluder    = null;   // THREE.Mesh
+let OCC_RING    = null;   // ordered array of landmark indices around the oval
+
+function buildOccluderRing(connections) {
+  // connections: array of [a,b] edges forming a directed cycle
+  const next = new Map();
+  connections.forEach(function (c) { next.set(c[0], c[1]); });
+  const start = connections[0][0];
+  const ring  = [start];
+  let cur = next.get(start), guard = 0;
+  while (cur !== undefined && cur !== start && guard < 500) {
+    ring.push(cur);
+    cur = next.get(cur);
+    guard++;
+  }
+  return ring;
+}
+
+function setupOccluder() {
+  if (occluder || !OCCLUSION_ENABLED) return;
+  if (typeof FACEMESH_FACE_OVAL === 'undefined') return;
+
+  OCC_RING = buildOccluderRing(FACEMESH_FACE_OVAL);
+  const N = OCC_RING.length;
+
+  // Vertices: N ring points + 1 centroid (last). Positions filled per-frame.
+  const positions = new Float32Array((N + 1) * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+
+  const index = [];
+  for (let i = 0; i < N; i++) index.push(N, i, (i + 1) % N);   // triangle fan
+  geo.setIndex(index);
+
+  // colorWrite:false → invisible, but still writes depth.
+  const mat = new THREE.MeshBasicMaterial({ colorWrite: false });
+  occluder = new THREE.Mesh(geo, mat);
+  occluder.renderOrder    = 0;       // before the glasses (renderOrder 1)
+  occluder.frustumCulled  = false;
+  scene.add(occluder);
 }
 
 // ── Render loop ───────────────────────────────────────────────────────────────
@@ -230,14 +398,12 @@ function applyFacePose(lm) {
 
   // ── Width: use temple-to-temple landmarks (234 / 454) ─────────────────────
   // This is how real glasses are sized — they span from temple to temple.
-  // Target = 90 % of temple span so the frame sits just inside the hairline.
   const lTemple = px(lm[234]);
   const rTemple = px(lm[454]);
   const templePx    = Math.abs(rTemple.x - lTemple.x);
 
   // ── Vertical position ─────────────────────────────────────────────────────
   // Nose-bridge landmark 6 sits right between the eyes on the bridge.
-  // Place the glasses centre there — the frame naturally covers both eyes.
   const noseBridge = px(lm[6]);
   const faceCX     = eyeMidX;
   // 60 % eye-midpoint + 40 % nose-bridge so glasses sit slightly lower,
@@ -261,19 +427,53 @@ function applyFacePose(lm) {
   const wY = (faceCY / H - 0.5) * -worldH;
 
   // ── Scale ────────────────────────────────────────────────────────────────
-  // Real glasses span slightly beyond the temples — 1.05× gives a natural fit.
+  // Sized relative to the temple-to-temple span (see SIZE_MULT to tune).
   const worldTemple = (templePx / W) * worldW;
-  const targetWidth = worldTemple * 1.05;
+  const targetWidth = worldTemple * SIZE_MULT;
   const scale       = targetWidth / MODEL_WIDTH;
 
   glassGroup.position.set(wX, wY, 0);
   glassGroup.scale.setScalar(scale);
   glassGroup.rotation.order = 'YXZ';
   // Negate yaw: MediaPipe reads unflipped pixels; the video is CSS-mirrored.
-  // Without negation the glasses rotate opposite to the head turn direction.
-  glassGroup.rotation.y = -yaw;
+  glassGroup.rotation.y = MODEL_BASE_ROT_Y - yaw;
   glassGroup.rotation.x =  pitch;
   glassGroup.rotation.z = -roll;
+
+  // ── Reveal the temple arms progressively as the head turns ────────────────
+  // Both arms fade in bit by bit with the turn angle. The arm rotating toward
+  // the camera shows in front of the cheek; the far arm is depth-tested against
+  // the occluder (depthWrite:false), so it stays behind the face / head.
+  if (templePlus && templeMinus) {
+    const reveal = Math.max(0, Math.min(1,
+      (Math.abs(yaw) - TEMPLE_REVEAL_START) /
+      (TEMPLE_REVEAL_FULL - TEMPLE_REVEAL_START)));
+    templePlus.material.opacity  = reveal;
+    templeMinus.material.opacity = reveal;
+    templePlus.visible  = reveal > 0.001;
+    templeMinus.visible = reveal > 0.001;
+  }
+
+  // ── Update the occluder face mesh to the live landmarks ────────────────────
+  if (occluder && OCC_RING) {
+    const pos = occluder.geometry.attributes.position;
+    const arr = pos.array;
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < OCC_RING.length; i++) {
+      const l  = lm[OCC_RING[i]];
+      const ox = (1 - l.x) * W;
+      const oy = l.y * H;
+      const vx = (ox / W - 0.5) *  worldW;
+      const vy = (oy / H - 0.5) * -worldH;
+      // MediaPipe z: more negative = closer to camera → larger world Z.
+      const vz = OCC_BASE_Z - l.z * worldW * OCC_Z_GAIN;
+      arr[i * 3] = vx; arr[i * 3 + 1] = vy; arr[i * 3 + 2] = vz;
+      cx += vx; cy += vy; cz += vz;
+    }
+    const c = OCC_RING.length;
+    arr[c * 3] = cx / c; arr[c * 3 + 1] = cy / c; arr[c * 3 + 2] = cz / c;
+    pos.needsUpdate = true;
+  }
 }
 
 // ── Camera stream ─────────────────────────────────────────────────────────────
@@ -303,6 +503,7 @@ function onResults(results) {
     if (!faceFound) {
       faceFound = true;
       loading.style.display = 'none';
+      setupOccluder();
       if (glassGroup) glassGroup.visible = true;
       status.textContent    = GLASS_NAME + ' — try on';
       status.style.background = ACCENT + 'CC';
@@ -354,16 +555,22 @@ else window.addEventListener('load', initFaceMesh);
 
 const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const webviewRef = useRef<WebView>(null);
-  const [objText,   setObjText]   = useState<string | null>(null);
+  const [objText, setObjText] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     setObjText(null);
     setLoadError(false);
     fetch(OBJ_URI)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
       .then(setObjText)
-      .catch(e => { console.warn('[TryOn] OBJ fetch failed:', e); setLoadError(true); });
+      .catch(e => {
+        console.warn('[TryOn] OBJ fetch failed:', e);
+        setLoadError(true);
+      });
   }, []);
 
   const html = useMemo(
@@ -376,21 +583,24 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     Linking.openSettings().catch(() => {});
   }, []);
 
-  const onMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === 'cameraError') {
-        Alert.alert(
-          'Camera Access Required',
-          'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: openSettings },
-          ],
-        );
-      }
-    } catch {}
-  }, [openSettings]);
+  const onMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === 'cameraError') {
+          Alert.alert(
+            'Camera Access Required',
+            'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: openSettings },
+            ],
+          );
+        }
+      } catch {}
+    },
+    [openSettings],
+  );
 
   if (!html && !loadError) {
     return (
@@ -407,7 +617,8 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
         <Text style={styles.errorIcon}>⚠</Text>
         <Text style={styles.errorTitle}>Could not load model</Text>
         <Text style={styles.errorSub}>
-          Make sure Metro bundler is running{'\n'}and the device is on the same network.
+          Make sure Metro bundler is running{'\n'}and the device is on the same
+          network.
         </Text>
       </View>
     );
@@ -434,7 +645,9 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
       <View style={styles.bottomBar}>
         <View style={styles.glassInfo}>
           <Text style={styles.glassName}>{glass.name}</Text>
-          <Text style={styles.glassBrand}>{glass.brand} · ${glass.price}</Text>
+          <Text style={styles.glassBrand}>
+            {glass.brand} · ${glass.price}
+          </Text>
         </View>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>3D LIVE</Text>
@@ -448,30 +661,54 @@ export default GlassTryOnScene;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  webview:   { flex: 1, backgroundColor: '#000' },
+  webview: { flex: 1, backgroundColor: '#000' },
 
   center: {
-    flex: 1, backgroundColor: '#000',
-    alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, paddingHorizontal: Spacing.xl,
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
   },
-  loadingText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
-  errorIcon:   { fontSize: 36, color: '#F7A440' },
-  errorTitle:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
-  errorSub:    { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 20 },
+  loadingText: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.45)',
+    fontWeight: '500',
+  },
+  errorIcon: { fontSize: 36, color: '#F7A440' },
+  errorTitle: { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  errorSub: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.82)',
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
   },
-  glassInfo:  { flex: 1 },
-  glassName:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
-  glassBrand: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  glassInfo: { flex: 1 },
+  glassName: { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  glassBrand: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
   badge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
     borderRadius: BorderRadius.sm,
   },
-  badgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 1 },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 1,
+  },
 });
