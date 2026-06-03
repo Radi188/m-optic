@@ -43,6 +43,7 @@ import { useHome } from '../hook/useHome';
 import HeroSlider from '../components/ui/Home/HeroSlider';
 import HomeSkeleton from '../components/ui/Loading/HomeLoadingScreen';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import ErrorComponent from '../components/ui/Error/ErrorComponent';
 
 // ─── Promo Modal ─────────────────────────────────────────────────────────────
 const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -454,10 +455,6 @@ const HomeScreen: React.FC = () => {
       .finally(() => setLocLoading(false));
   }, []);
 
-  useEffect(() => {
-    console.log('Data', data);
-  }, [data]);
-
   const openMaps = (placeId: string) =>
     Linking.openURL(`https://www.google.com/maps/place/?q=place_id:${placeId}`);
 
@@ -466,6 +463,12 @@ const HomeScreen: React.FC = () => {
 
   if (loading) {
     return <HomeSkeleton />;
+  }
+
+  if (error || !data) {
+    return (
+      <ErrorComponent headerTitle="Something wentwrong" onRetry={onRefresh} />
+    );
   }
 
   return (

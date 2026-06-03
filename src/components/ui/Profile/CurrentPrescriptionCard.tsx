@@ -16,7 +16,7 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
   onPress,
 }) => {
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={onPress}>
       {/* Background/Bottom-Right Lens Image */}
       <Image
         source={require('../../../assets/images/len.png')}
@@ -62,7 +62,7 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
         <Text style={styles.buttonText}>View Details</Text>
         <Ionicons name="chevron-forward" size={14} color={'#412616'} />
       </TouchableOpacity> */}
-    </View>
+    </TouchableOpacity>
   );
 };
 

@@ -12,6 +12,7 @@ export type SettingItem = {
 };
 
 type ProfileSettingSectionProps = {
+  title?: string;
   items?: SettingItem[];
 };
 
@@ -49,10 +50,13 @@ const defaultItems: SettingItem[] = [
 ];
 
 const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
+  title = 'Account Settings',
   items = defaultItems,
 }) => {
   return (
     <View style={styles.section}>
+      {title ? <Text style={styles.sectionTitle}>{title}</Text> : null}
+
       <View style={styles.card}>
         {items.map((item, index) => {
           const isLogout = item.id === 'logout';
@@ -110,6 +114,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     marginBottom: Spacing.xl,
   },
+
+  sectionTitle: {
+    marginBottom: 10,
+    marginLeft: 4,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
   card: {
     backgroundColor: Colors.white,
     borderRadius: 26,
@@ -117,6 +132,7 @@ const styles = StyleSheet.create({
     borderColor: '#F0E7E3',
     overflow: 'hidden',
   },
+
   item: {
     minHeight: 72,
     flexDirection: 'row',
@@ -125,12 +141,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F3ECE8',
   },
+
   logoutItem: {
     backgroundColor: '#FFF7F6',
   },
+
   lastItem: {
     borderBottomWidth: 0,
   },
+
   iconBox: {
     width: 42,
     height: 42,
@@ -140,25 +159,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
+
   logoutIconBox: {
     backgroundColor: '#FEE4E2',
   },
+
   textWrap: {
     flex: 1,
   },
+
   title: {
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,
   },
+
   logoutTitle: {
     color: '#D92D20',
   },
+
   subtitle: {
     marginTop: 3,
     fontSize: FontSize.sm,
     color: Colors.gray500,
   },
+
   logoutSubtitle: {
     color: '#B42318',
   },

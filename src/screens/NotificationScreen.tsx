@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,137 +6,82 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ImageSourcePropType,
+  useWindowDimensions, // 1. Import useWindowDimensions for width tracking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import RenderHTML from 'react-native-render-html'; // 2. Bring back your HTML render library
 import { Colors, FontSize, Spacing } from '../theme';
+import { useAnnouncements, AnnouncementItem } from '../hook/useAnnouncement';
+import AnnouncementSkeleton from '../components/ui/Loading/AnnouncementLoadingSkeleton';
+import Header from '../components/ui/Header/HeaderComponent';
+import ErrorComponent from '../components/ui/Error/ErrorComponent';
 
-type NotificationType =
-  | 'order'
-  | 'appointment'
-  | 'ready'
-  | 'promotion'
-  | 'newProduct'
-  | 'app';
-
-type NotificationItem = {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  type: NotificationType;
-  isRead: boolean;
-  image?: ImageSourcePropType;
-};
-
-const initialNotifications: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Your glasses are ready',
-    message: 'Your new glasses are ready for pickup at M Optic store.',
-    time: '5 min ago',
-    type: 'ready',
-    isRead: false,
-  },
-  {
-    id: '2',
-    title: 'Appointment reminder',
-    message: 'You have an eye test appointment tomorrow at 10:00 AM.',
-    time: '1 hour ago',
-    type: 'appointment',
-    isRead: false,
-  },
-  {
-    id: '3',
-    title: 'Order updated',
-    message:
-      'Your order status has been updated. Please check your order details.',
-    time: 'Today',
-    type: 'order',
-    isRead: true,
-  },
-  {
-    id: '4',
-    title: 'New collection available',
-    message: 'Discover our latest frame collection available now in store.',
-    time: 'Yesterday',
-    type: 'newProduct',
-    isRead: true,
-    // image: require('../assets/images/demo/frame.png'),
-  },
-  {
-    id: '5',
-    title: 'Special offer',
-    message: 'Get a limited-time discount on selected lenses and frames.',
-    time: '2 days ago',
-    type: 'promotion',
-    isRead: true,
-    // image: require('../assets/images/demo/promotion.png'),
-  },
-  {
-    id: '6',
-    title: 'App update',
-    message: 'We improved app performance and fixed small issues.',
-    time: '3 days ago',
-    type: 'app',
-    isRead: true,
-  },
-];
-
-const getNotificationIcon = (type: NotificationType) => {
-  switch (type) {
-    case 'order':
-      return 'bag-check-outline';
-    case 'appointment':
-      return 'calendar-outline';
-    case 'ready':
-      return 'glasses-outline';
-    case 'promotion':
-      return 'pricetag-outline';
-    case 'newProduct':
-      return 'sparkles-outline';
-    case 'app':
-      return 'phone-portrait-outline';
-    default:
-      return 'notifications-outline';
-  }
+const getNotificationIcon = (title: string) => {
+  const t = title.toLowerCase();
+  if (t.includes('order')) return 'bag-check-outline';
+  if (t.includes('appoint')) return 'calendar-outline';
+  if (t.includes('promo') || t.includes('off')) return 'pricetag-outline';
+  return 'notifications-outline';
 };
 
 const NotificationListScreen = () => {
   const navigation = useNavigation();
+  const { width } = useWindowDimensions(); // 3. Dynamically read width for your dynamic padding calculations
+  const { data, loading, error, refetch } = useAnnouncements();
+  // helpers/htmlTruncate.ts
+  /**
+   * Truncate HTML content safely while preserving inline tags like <b>, <i>, <strong>, <em>
+   * @param htmlString - original HTML string
+   * @param maxLength - maximum number of characters
+   * @returns truncated HTML string
+   */
+  const truncateHtml = (htmlString: string, maxLength = 70) => {
+    if (!htmlString) return '';
 
-  const [notifications, setNotifications] =
-    useState<NotificationItem[]>(initialNotifications);
+    // 1. Replace block elements with spaces so words don't run together
+    let text = htmlString.replace(/<\/p>|<br\s*\/?>|<\/div>|<\/li>/gi, ' ');
 
-  const unreadCount = notifications.filter(item => !item.isRead).length;
+    // 2. Remove all tags except inline formatting
+    text = text.replace(/<(?!\/?(b|strong|i|em)\b)[^>]*>/gi, '');
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(item =>
-        item.id === id
-          ? {
-              ...item,
-              isRead: true,
-            }
-          : item,
-      ),
-    );
+    // 3. Truncate without breaking inline tags
+    if (text.length <= maxLength) return text;
+
+    // Cut to maxLength, then close any open tags
+    let truncated = text.substring(0, maxLength);
+
+    // Optional: simple way to ensure no dangling tags by removing last incomplete tag
+    truncated = truncated.replace(/<[^>]*$/g, '');
+
+    return truncated + '...';
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(item => ({
-        ...item,
-        isRead: true,
-      })),
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Header title="Notifications" onBack={() => navigation.goBack()} />
+        <AnnouncementSkeleton />
+      </SafeAreaView>
     );
-  };
+  }
+
+  if (error || !data) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Header title="Notifications" onBack={() => navigation.goBack()} />
+        <ErrorComponent onRetry={refetch} />
+      </SafeAreaView>
+    );
+  }
+
+  const announcements: AnnouncementItem[] = data?.data || [];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
+        {/* App Header */}
         <View style={styles.appHeader}>
           <TouchableOpacity
             style={styles.headerButton}
@@ -148,37 +93,29 @@ const NotificationListScreen = () => {
 
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Notifications</Text>
-            <Text style={styles.headerSubtitle}>
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-            </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.85}
-            onPress={markAllAsRead}
-          >
+          {/* <TouchableOpacity style={styles.headerButton} activeOpacity={0.85}>
             <Ionicons
               name="checkmark-done-outline"
               size={21}
               color={Colors.primary}
             />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          <View style={styles.summaryCard}>
+          {/* Summary Banner Card */}
+          {/* <View style={styles.summaryCard}>
             <View style={styles.summaryIconBox}>
               <Ionicons
                 name="notifications-outline"
                 size={22}
                 color={Colors.primary}
               />
-
-              {unreadCount > 0 ? <View style={styles.badgeDot} /> : null}
             </View>
 
             <View style={styles.summaryTextWrap}>
@@ -187,9 +124,10 @@ const NotificationListScreen = () => {
                 Orders, appointments, pickup alerts and offers.
               </Text>
             </View>
-          </View>
+          </View> */}
 
-          {notifications.length === 0 ? (
+          {/* List Layout conditional mapping */}
+          {announcements.length === 0 ? (
             <View style={styles.emptyBox}>
               <View style={styles.emptyIconBox}>
                 <Ionicons
@@ -198,41 +136,30 @@ const NotificationListScreen = () => {
                   color={Colors.gray500}
                 />
               </View>
-
               <Text style={styles.emptyTitle}>No notifications yet</Text>
-
               <Text style={styles.emptyText}>
                 New updates about your orders and appointments will appear here.
               </Text>
             </View>
           ) : (
             <View style={styles.notificationList}>
-              {notifications.map(item => {
-                const iconName = getNotificationIcon(item.type);
+              {announcements.map(item => {
+                const iconName = getNotificationIcon(item.title);
 
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[
-                      styles.notificationItem,
-                      !item.isRead && styles.unreadItem,
-                    ]}
+                    style={styles.notificationItem}
                     activeOpacity={0.86}
-                    onPress={() => markAsRead(item.id)}
                   >
-                    {item.image ? (
+                    {item.banner_image ? (
                       <Image
-                        source={item.image}
+                        source={{ uri: item.banner_image }}
                         style={styles.notificationImage}
                         resizeMode="cover"
                       />
                     ) : (
-                      <View
-                        style={[
-                          styles.iconBox,
-                          !item.isRead && styles.unreadIconBox,
-                        ]}
-                      >
+                      <View style={styles.iconBox}>
                         <Ionicons
                           name={iconName as any}
                           size={21}
@@ -243,26 +170,31 @@ const NotificationListScreen = () => {
 
                     <View style={styles.textWrap}>
                       <View style={styles.titleRow}>
-                        <Text
-                          style={[
-                            styles.title,
-                            !item.isRead && styles.unreadTitle,
-                          ]}
-                          numberOfLines={1}
-                        >
+                        <Text style={styles.title} numberOfLines={1}>
                           {item.title}
                         </Text>
-
-                        {!item.isRead ? (
-                          <View style={styles.unreadDot} />
-                        ) : null}
                       </View>
 
-                      <Text style={styles.message} numberOfLines={2}>
-                        {item.message}
-                      </Text>
+                      {/* 4. Swapped out plain <Text> for your customized <RenderHTML /> component */}
+                      <View style={styles.htmlContainer}>
+                        {/* We wrap the clean string in a native layout Text element */}
 
-                      <Text style={styles.time}>{item.time}</Text>
+                        <RenderHTML
+                          contentWidth={
+                            width - Spacing.lg * 2 - Spacing.md * 2 - 50
+                          }
+                          // Pass the cleaned HTML string here
+                          source={{ html: truncateHtml(item.content) }}
+                          tagsStyles={{
+                            strong: styles.htmlStrong,
+                            b: styles.htmlStrong,
+                          }}
+                        />
+                      </View>
+
+                      <Text style={styles.time}>
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -478,5 +410,35 @@ const styles = StyleSheet.create({
     color: Colors.gray500,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Keep all your original styles, just add these targets at the end:
+  htmlContainer: {
+    marginTop: 4,
+  },
+  htmlBase: {
+    color: Colors.gray500,
+  },
+  htmlP: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    lineHeight: 18,
+    marginVertical: 2,
+  },
+  htmlUl: {
+    paddingLeft: 12,
+    marginVertical: 2,
+  },
+  htmlOl: {
+    paddingLeft: 12,
+    marginVertical: 2,
+  },
+  htmlLi: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    lineHeight: 18,
+  },
+  htmlStrong: {
+    fontWeight: '800',
+    color: Colors.black,
   },
 });

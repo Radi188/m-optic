@@ -15,6 +15,9 @@ import SupportScreen from '../screens/SupportScreen';
 import NotificationListScreen from '../screens/NotificationScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import PointsMemberScreen from '../screens/PointsMemberScreen';
+import RewardScreen from '../screens/RewardScreen';
+import PrescriptionDetailScreen from '../screens/PrescriptionDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -75,6 +78,32 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="EditProfile"
             component={EditProfileScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+
+          <Stack.Screen
+            name="PointMember"
+            component={PointsMemberScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+
+          <Stack.Screen
+            name="Reward"
+            component={RewardScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="PrescriptionDetail"
+            component={PrescriptionDetailScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_right',

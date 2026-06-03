@@ -37,7 +37,10 @@ export type RootStackParamList = {
   Support: undefined;
   NotificationList: undefined;
   Privacy: undefined;
-  EditProfile: undefined
+  EditProfile: undefined;
+  PointMember: undefined;
+  Reward: undefined;
+  PrescriptionDetail: undefined;
 };
 
 export type BottomTabParamList = {

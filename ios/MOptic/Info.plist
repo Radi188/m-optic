@@ -35,6 +35,10 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>MOptic uses the camera so you can try on glasses in augmented reality.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo library access to choose your profile photo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need permission to save edited photos.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>MOptic uses face tracking to place glasses on your face during AR try-on.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

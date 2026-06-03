@@ -18,6 +18,7 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../../../theme';
 import { selectUser } from '../../../store/slices/authSlice';
 import type { RootStackParamList } from '../../../types/navigation';
 import { BannerItem } from '../../../types/home';
+import { buildFileUrl } from '../../../utils/fileUrlHelper';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SLIDER_HEIGHT = 300;
@@ -92,7 +93,8 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
           index,
         })}
         renderItem={({ item }) => {
-          const imageUrl = item.image_url || '';
+          const imageUrl =
+            item.image_url || buildFileUrl(item.image_path) || '';
 
           return (
             <View style={{ width: SCREEN_WIDTH, height: totalHeight }}>

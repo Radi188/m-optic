@@ -35,6 +35,13 @@ import ProfilePointSection from '../components/ui/Profile/ProfilePointSection';
 import NotLoginProfile from '../components/ui/Profile/NotLoginProfile';
 import LanguagePickerModal from '../components/ui/Modal/LanguagePickerModal';
 import LogoutModal from '../components/ui/Modal/LogoutModal';
+import RewardButton from '../components/ui/Profile/RewardButton';
+import { useUserProfile } from '../hook/useUserProfile';
+import { formatDate } from '../utils/dateHelper';
+import ProfileHeaderSkeleton from '../components/ui/Profile/Loading/ProfileHeaderSkeleton';
+import CurrentPrescriptionCardSkeleton from '../components/ui/Profile/Loading/CurrentPrescriptionCardSkeleton';
+import ProfilePointSectionSkeleton from '../components/ui/Profile/Loading/ProfilePointSkeleton';
+import ProfileTitleHeader from '../components/ui/Profile/ProfileTitleHeader';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -112,12 +119,14 @@ const ProfileScreen: React.FC = () => {
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
-  const handleConfirmLogout = () => {
+  const { profile, isLoading, error, refetch } = useUserProfile();
+
+  const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
 
     // Clear token / user data here
-    // await AsyncStorage.removeItem('auth_token');
-    // navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+    await dispatch(clearUser());
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
 
     console.log('Logout confirmed');
   };
@@ -203,6 +212,34 @@ const ProfileScreen: React.FC = () => {
 
   const tierProgress = Math.min((user.loyaltyPoints % 1000) / 10, 100);
 
+  const calculateTierProgress = (
+    totalPoints?: number | null,
+    currentTierMinPoints?: number | null,
+    nextTierMinPoints?: number | null,
+  ) => {
+    if (
+      totalPoints === null ||
+      totalPoints === undefined ||
+      currentTierMinPoints === null ||
+      currentTierMinPoints === undefined ||
+      nextTierMinPoints === null ||
+      nextTierMinPoints === undefined
+    ) {
+      return 0;
+    }
+
+    const tierRange = nextTierMinPoints - currentTierMinPoints;
+
+    if (tierRange <= 0) {
+      return 100;
+    }
+
+    const earnedInCurrentTier = totalPoints - currentTierMinPoints;
+    const progress = (earnedInCurrentTier / tierRange) * 100;
+
+    return Math.min(Math.max(Math.round(progress), 0), 100);
+  };
+
   return (
     <GlassBackground>
       <View style={{ flex: 1, paddingTop: insets.top }}>
@@ -226,20 +263,59 @@ const ProfileScreen: React.FC = () => {
                 member benefits.
               </Text>
             </View> */}
-
-          <ProfileHeader
-            name={user.name}
-            subtitle={user.customerType}
-            avatarUrl="https://images.unsplash.com/photo-1654110455429-cf322b40a906?q=80&w=580&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          <ProfileTitleHeader
             notificationCount={2}
-            onNotificationPress={() => navigation.navigate('NotificationList')}
-            onEditPress={() => {
-              navigation.navigate('EditProfile');
-            }}
-            onCameraPress={() => {
-              console.log('Change profile image');
-            }}
+            hasUnreadNotification={true}
+            notificationPress={() => navigation.navigate('NotificationList')}
           />
+
+          {!isLoading ? (
+            <>
+              <ProfileHeader
+                name={profile?.customer_name}
+                subtitle={profile?.tier?.name}
+                avatarUrl={profile?.avatar_url || ''}
+                notificationCount={2}
+                onNotificationPress={() =>
+                  navigation.navigate('NotificationList')
+                }
+                onEditPress={() => {
+                  navigation.navigate('EditProfile');
+                }}
+                onCameraPress={() => {
+                  console.log('Change profile image');
+                }}
+              />
+              <CurrentPrescriptionCard
+                rightEye={profile?.prescription?.right_eye}
+                leftEye={profile?.prescription?.left_eye}
+                updatedAt={formatDate(profile?.prescription?.created_at)}
+                onPress={() => navigation.navigate('PrescriptionDetail')}
+              />
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('PointMember')}
+              >
+                <ProfilePointSection
+                  tierName={profile?.tier?.name}
+                  points={profile?.loyalty_total_points}
+                  remainingPoints={profile?.points_to_next_tier}
+                  nextTier={profile?.next_tier?.name}
+                  progress={calculateTierProgress(
+                    profile?.loyalty_total_points,
+                    profile?.tier?.min_points,
+                    profile?.next_tier?.min_points,
+                  )}
+                />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ProfileHeaderSkeleton />
+              <CurrentPrescriptionCardSkeleton />
+              <ProfilePointSectionSkeleton />
+            </>
+          )}
 
           {/* <View style={guestStyles.grid}>
               {GUEST_FEATURES.map(f => (
@@ -253,15 +329,7 @@ const ProfileScreen: React.FC = () => {
               ))}
             </View> */}
 
-          <CurrentPrescriptionCard />
-
-          <ProfilePointSection
-            tierName="M Optic Gold"
-            points={1250}
-            remainingPoints={750}
-            nextTier="Platinum"
-            progress={70}
-          />
+          <RewardButton onPress={() => navigation.navigate('Reward')} />
 
           <ProfileSettingSection items={settingItems} />
 
@@ -311,450 +379,6 @@ const ProfileScreen: React.FC = () => {
 };
 
 // ─── Authenticated styles ─────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background },
-
-  // Hero — View wrapper fills screen width; gradient sits inside as absoluteFill
-  heroContainer: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
-    overflow: 'hidden',
-  },
-  heroBubble1: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(255,255,255,0.055)',
-    top: -100,
-    right: -80,
-  },
-  heroBubble2: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.038)',
-    bottom: 10,
-    left: -60,
-  },
-  heroBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xl,
-  },
-  heroBarLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.95)',
-    letterSpacing: -0.2,
-  },
-  editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Avatar — explicit 104×104 so the absolute member badge never escapes
-  avatarWrap: {
-    width: 104,
-    height: 104,
-    marginBottom: Spacing.md + 2,
-  },
-  avatarOuter: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.30)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  avatarInner: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: 2,
-  },
-  memberBadge: {
-    position: 'absolute',
-    bottom: 3,
-    right: 3,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#3A1C10',
-    borderWidth: 2.5,
-    borderColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  heroName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: -0.4,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  heroSub: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.52)',
-    fontWeight: '400',
-    marginBottom: Spacing.xl,
-    textAlign: 'center',
-  },
-
-  // Stats row — alignSelf:'stretch' works inside alignItems:'center' parent
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md + 2,
-    paddingHorizontal: Spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statValue: {
-    fontSize: FontSize.md,
-    fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.50)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-
-  // Body
-  body: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    gap: Spacing.sm,
-  },
-
-  // Quick actions
-  quickRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  quickItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.glassSurface,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    ...Shadow.sm,
-  },
-  quickIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.gray600,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-  },
-
-  // Loyalty
-  loyaltyInner: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  loyaltyTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  loyaltyLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  loyaltyIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loyaltyLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.gray400,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 1,
-  },
-  loyaltyPoints: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: Colors.primary,
-    letterSpacing: -0.8,
-  },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primaryGlow,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  tierText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  // Progress
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.primaryLight,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-  },
-  progressLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.gray400,
-    fontWeight: '600',
-  },
-  progressHint: {
-    fontSize: 10,
-    color: Colors.gray400,
-    fontWeight: '500',
-    marginTop: -2,
-  },
-
-  // Section label
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.gray400,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-
-  // Card shadow wrapper — separates elevation from overflow:hidden+borderRadius
-  cardShadow: {
-    borderRadius: BorderRadius.lg,
-    ...Shadow.sm,
-  },
-
-  // Info rows
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  rowText: { flex: 1 },
-  rowLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.gray400,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  rowValue: {
-    fontSize: FontSize.sm,
-    color: Colors.black,
-    fontWeight: '500',
-  },
-
-  // Menu rows
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-  },
-  menuLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.black,
-  },
-  menuSub: {
-    fontSize: FontSize.xs,
-    color: Colors.gray400,
-    marginTop: 1,
-  },
-
-  // Badge
-  badge: {
-    backgroundColor: '#E74C3C',
-    borderRadius: BorderRadius.full,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  badgeText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
-
-  rowChevron: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-
-  // Separator — inset from icon column, flush on right
-  sep: {
-    height: 1,
-    backgroundColor: Colors.divider,
-    marginLeft: 36 + Spacing.md + Spacing.md,
-    marginRight: Spacing.md,
-  },
-
-  // Sign out
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    marginTop: Spacing.xs,
-    backgroundColor: Colors.glassSurface,
-    borderWidth: 1,
-    borderColor: 'rgba(231,76,60,0.15)',
-    ...Shadow.sm,
-  },
-  signOutIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: 'rgba(231,76,60,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signOutText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: '#E74C3C',
-    flex: 1,
-  },
-  signOutChevron: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Modal
-  logoutBody: { fontSize: FontSize.md, color: Colors.gray600, lineHeight: 22 },
-  emptyNotif: {
-    fontSize: FontSize.sm,
-    color: Colors.gray400,
-    textAlign: 'center',
-    paddingVertical: Spacing.md,
-  },
-  notifItem: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xs,
-  },
-  notifUnread: { backgroundColor: Colors.primaryLight },
-  notifRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  notifTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.black,
-    flex: 1,
-  },
-  notifDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    marginLeft: Spacing.xs,
-  },
-  notifMsg: {
-    fontSize: FontSize.xs,
-    color: Colors.gray500,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-});
 
 // ─── Guest styles ─────────────────────────────────────────────────────────────
 
