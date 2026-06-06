@@ -7,6 +7,7 @@ type ProfileHeaderProps = {
   name?: string;
   subtitle?: string;
   avatarUrl?: string;
+  notificationCount?: number;
   onEditPress?: () => void;
   onCameraPress?: () => void;
   onNotificationPress?: () => void;
@@ -16,28 +17,15 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   name = 'Antar Adil',
   subtitle = 'Premium Member',
   avatarUrl,
+  notificationCount = 0,
   onEditPress,
   onCameraPress,
   onNotificationPress,
 }) => {
+  const hasUnreadNotification = notificationCount > 0;
+
   return (
     <View>
-      <View style={styles.topSection}>
-        <Text style={styles.screenTitle}>My Profile</Text>
-
-        <TouchableOpacity
-          style={styles.notificationBtn}
-          activeOpacity={0.85}
-          onPress={onNotificationPress}
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={22}
-            color={Colors.black}
-          />
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.card}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatarWrap}>
@@ -83,32 +71,6 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 export default ProfileHeader;
 
 const styles = StyleSheet.create({
-  topSection: {
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  screenTitle: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: Colors.black,
-    letterSpacing: -0.6,
-  },
-
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#F0E7E3',
-  },
-
   card: {
     position: 'relative',
     marginBottom: Spacing.md,

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
 
-type SettingItem = {
+export type SettingItem = {
   id: string;
   title: string;
   subtitle?: string;
@@ -12,6 +12,7 @@ type SettingItem = {
 };
 
 type ProfileSettingSectionProps = {
+  title?: string;
   items?: SettingItem[];
 };
 
@@ -49,38 +50,58 @@ const defaultItems: SettingItem[] = [
 ];
 
 const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
+  title = 'Account Settings',
   items = defaultItems,
 }) => {
   return (
     <View style={styles.section}>
-      {/* <Text style={styles.sectionTitle}>Settings</Text> */}
+      {title ? <Text style={styles.sectionTitle}>{title}</Text> : null}
 
       <View style={styles.card}>
-        {items.map((item, index) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.item, index === items.length - 1 && styles.lastItem]}
-            activeOpacity={0.85}
-            onPress={item.onPress}
-          >
-            <View style={styles.iconBox}>
+        {items.map((item, index) => {
+          const isLogout = item.id === 'logout';
+
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.item,
+                isLogout && styles.logoutItem,
+                index === items.length - 1 && styles.lastItem,
+              ]}
+              activeOpacity={0.85}
+              onPress={item.onPress}
+            >
+              <View style={[styles.iconBox, isLogout && styles.logoutIconBox]}>
+                <Ionicons
+                  name={item.icon as any}
+                  size={21}
+                  color={isLogout ? '#D92D20' : Colors.primary}
+                />
+              </View>
+
+              <View style={styles.textWrap}>
+                <Text style={[styles.title, isLogout && styles.logoutTitle]}>
+                  {item.title}
+                </Text>
+
+                {item.subtitle ? (
+                  <Text
+                    style={[styles.subtitle, isLogout && styles.logoutSubtitle]}
+                  >
+                    {item.subtitle}
+                  </Text>
+                ) : null}
+              </View>
+
               <Ionicons
-                name={item.icon as any}
-                size={21}
-                color={Colors.primary}
+                name="chevron-forward"
+                size={20}
+                color={isLogout ? '#D92D20' : Colors.gray500}
               />
-            </View>
-
-            <View style={styles.textWrap}>
-              <Text style={styles.title}>{item.title}</Text>
-              {item.subtitle ? (
-                <Text style={styles.subtitle}>{item.subtitle}</Text>
-              ) : null}
-            </View>
-
-            <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -93,12 +114,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     marginBottom: Spacing.xl,
   },
+
   sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '900',
-    color: Colors.black,
-    marginBottom: Spacing.md,
+    marginBottom: 10,
+    marginLeft: 4,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
+
   card: {
     backgroundColor: Colors.white,
     borderRadius: 26,
@@ -106,6 +132,7 @@ const styles = StyleSheet.create({
     borderColor: '#F0E7E3',
     overflow: 'hidden',
   },
+
   item: {
     minHeight: 72,
     flexDirection: 'row',
@@ -114,9 +141,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F3ECE8',
   },
+
+  logoutItem: {
+    backgroundColor: '#FFF7F6',
+  },
+
   lastItem: {
     borderBottomWidth: 0,
   },
+
   iconBox: {
     width: 42,
     height: 42,
@@ -126,17 +159,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
+
+  logoutIconBox: {
+    backgroundColor: '#FEE4E2',
+  },
+
   textWrap: {
     flex: 1,
   },
+
   title: {
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,
   },
+
+  logoutTitle: {
+    color: '#D92D20',
+  },
+
   subtitle: {
     marginTop: 3,
     fontSize: FontSize.sm,
     color: Colors.gray500,
+  },
+
+  logoutSubtitle: {
+    color: '#B42318',
   },
 });

@@ -12,8 +12,7 @@ export const useHome = () => {
 
 const fetchHome = useCallback(async (isRefresh = false) => {
   try {
-    console.log('fetchHome started');
-
+   
     if (isRefresh) {
       setRefreshing(true);
     } else {

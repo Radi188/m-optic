@@ -33,6 +33,14 @@ export type RootStackParamList = {
     initialIndex?: number;
     productName?: string;
   };
+  NotificationSetting: undefined;
+  Support: undefined;
+  NotificationList: undefined;
+  Privacy: undefined;
+  EditProfile: undefined;
+  PointMember: undefined;
+  Reward: undefined;
+  PrescriptionDetail: undefined;
 };
 
 export type BottomTabParamList = {

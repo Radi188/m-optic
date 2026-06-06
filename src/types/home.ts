@@ -1,6 +1,3 @@
-import { BrandResponse } from "./brand";
-import { Product } from "./glasses";
-
 export interface HomeResponse {
   status: string;
   data: HomeData;
@@ -17,14 +14,44 @@ export interface HomeData {
 export interface BannerItem {
   id: number;
   title: string;
-  image_url: string | null;
-  link_url: string | null;
+  description: string | null;
+  image_path: string;
+  image_url: string;
+  cta_text: string | null;
+  cta_link: string | null;
+  alt_text: string | null;
+  platform: 'mobile' | 'web' | 'both';
   sort_order: number;
+  is_active: 0 | 1;
+  start_date: string | null;
+  end_date: string | null;
+  text_color: string | null;
+  button_color: string | null;
 }
 
-
-export interface ProductCategory {
-  [key: string]: unknown;
+export interface Product {
+  id: number;
+  item_code: string;
+  name: string;
+  description: string | null;
+  price: number;
+  slug: string;
+  product_type: string | null;
+  gender: string | null;
+  stock_type: string;
+  image: string;
+  is_active_mobile: boolean;
+  is_active_web: boolean;
+  total_sold: number | null;
+  created_at: string;
+  updated_at: string;
+  category: Record<string, unknown>;
+  brand: ProductBrand | null;
+  color: ProductColor | null;
+  frame_shape: ProductFrameShape | null;
+  materials: Record<string, unknown>;
+  assets: ProductAsset[];
+  tags: ProductTag[];
 }
 
 export interface ProductBrand {
@@ -43,16 +70,26 @@ export interface ProductFrameShape {
   name: string;
 }
 
-export interface ProductMaterials {
-  [key: string]: unknown;
-}
-
 export interface ProductAsset {
   id: number;
   url: string;
-  type: string | null;
+  type: string | null; // gallery or 3d_model
+  format: string | null;
 }
 
+export interface ProductTag {
+  id: number;
+  name: string;
+}
+
+export interface BrandResponse {
+  id: number;
+  name: string;
+  description: string | null;
+  slug: string;
+  logo: string | null;
+  seo: BrandSeo;
+}
 
 export interface BrandSeo {
   title: string | null;
