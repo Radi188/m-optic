@@ -558,10 +558,29 @@ const HomeScreen: React.FC = () => {
 
         {/* Brand Section */}
 
-        <BrandSection brands={data?.brands || []} />
+        <BrandSection
+          title="Brands"
+          brands={data?.brands || []}
+          onPressBrand={brand => {
+            navigation.navigate('GlassesList', {
+              from: 'brand',
+              brandId: brand.id,
+              brandName: brand.name,
+            });
+          }}
+        />
 
         {/*Frame Section  */}
-        <FramesSection frames={data?.frame_shapes || []} />
+        <FramesSection
+          title="Frame Types"
+          frames={data?.frame_shapes}
+          onPressFrame={frame => {
+            navigation.navigate('GlassesList', {
+              from: 'frame',
+              frameShape: frame.name,
+            });
+          }}
+        />
 
         {/* Announment Section */}
         <AnnouncementSection annoucements={data?.announcements || []} />

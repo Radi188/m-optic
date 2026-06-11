@@ -42,6 +42,7 @@ import ProfileHeaderSkeleton from '../components/ui/Profile/Loading/ProfileHeade
 import CurrentPrescriptionCardSkeleton from '../components/ui/Profile/Loading/CurrentPrescriptionCardSkeleton';
 import ProfilePointSectionSkeleton from '../components/ui/Profile/Loading/ProfilePointSkeleton';
 import ProfileTitleHeader from '../components/ui/Profile/ProfileTitleHeader';
+import ProfileErrorState from '../components/ui/Profile/ProfileErrorState';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -269,7 +270,9 @@ const ProfileScreen: React.FC = () => {
             notificationPress={() => navigation.navigate('NotificationList')}
           />
 
-          {!isLoading ? (
+          {error ? (
+            <ProfileErrorState onRetry={refetch} />
+          ) : !isLoading ? (
             <>
               <ProfileHeader
                 name={profile?.customer_name}
@@ -279,13 +282,10 @@ const ProfileScreen: React.FC = () => {
                 onNotificationPress={() =>
                   navigation.navigate('NotificationList')
                 }
-                onEditPress={() => {
-                  navigation.navigate('EditProfile');
-                }}
-                onCameraPress={() => {
-                  console.log('Change profile image');
-                }}
+                onEditPress={() => navigation.navigate('EditProfile')}
+                onCameraPress={() => console.log('Change profile image')}
               />
+
               <CurrentPrescriptionCard
                 rightEye={profile?.prescription?.right_eye}
                 leftEye={profile?.prescription?.left_eye}

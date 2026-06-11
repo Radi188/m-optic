@@ -71,7 +71,8 @@ export type ProductListFilters = {
   orderBy?: 'asc' | 'desc';
   is_active_mobile?: boolean;
   is_active_web?: boolean;
-  limit?: number
+  limit?: number;
+  brand?: string;
 };
 
 

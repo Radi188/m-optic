@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Animated, ScrollView } from 'react-native';
+import { StyleSheet, Animated, ScrollView } from 'react-native';
 import { Spacing } from '../../../theme';
 
 const AnnouncementSkeleton: React.FC = () => {

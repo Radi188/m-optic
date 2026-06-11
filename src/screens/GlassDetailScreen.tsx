@@ -12,7 +12,10 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,6 +31,7 @@ import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
 import { useProductDetail } from '../hook/useProductDetail';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
+import ErrorComponent from '../components/ui/Error/ErrorComponent';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -366,32 +370,70 @@ const GlassDetailScreen: React.FC = () => {
     }
   };
   if (loading) {
-    return <GlassesDetailSkeleton />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={20} color={Colors.black} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {product?.name}
+          </Text>
+          <View
+            style={[
+              styles.stockBadge,
+              {
+                backgroundColor: accentColor + '20',
+                borderColor: accentColor + '50',
+              },
+            ]}
+          >
+            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
+            {/* <Text style={[styles.stockText, { color: accentColor }]}>
+            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
+          </Text> */}
+          </View>
+        </View>
+        <GlassesDetailSkeleton />
+      </SafeAreaView>
+    );
   }
 
   if (error) {
     return (
-      <View style={styles.loadingContainer}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="transparent"
-          translucent
-        />
-
-        <View style={styles.loadingCard}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={42}
-            color={Colors.error}
-          />
-          <Text style={styles.loadingTitle}>Failed to load product</Text>
-          <Text style={styles.loadingSubtitle}>{error}</Text>
-
-          <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
-            <Text style={styles.retryBtnText}>Try Again</Text>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={20} color={Colors.black} />
           </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {product?.name}
+          </Text>
+          <View
+            style={[
+              styles.stockBadge,
+              {
+                backgroundColor: accentColor + '20',
+                borderColor: accentColor + '50',
+              },
+            ]}
+          >
+            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
+            {/* <Text style={[styles.stockText, { color: accentColor }]}>
+            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
+          </Text> */}
+          </View>
         </View>
-      </View>
+        <ErrorComponent onRetry={refetch} />
+      </SafeAreaView>
     );
   }
 
