@@ -12,10 +12,16 @@ import ImagePicker from 'react-native-image-crop-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
 
+export type SelectedProfileImage = {
+  uri: string;
+  type: string;
+  name: string;
+};
+
 type ChangePhotoModalProps = {
   visible: boolean;
   onClose: () => void;
-  onImageSelected: (imagePath: string) => void;
+  onImageSelected: (image: SelectedProfileImage) => void;
   onRemovePhoto?: () => void;
 };
 
@@ -25,6 +31,17 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
   onImageSelected,
   onRemovePhoto,
 }) => {
+  const handleSelectedImage = (image: any) => {
+    const selectedImage: SelectedProfileImage = {
+      uri: image.path,
+      type: image.mime || 'image/jpeg',
+      name: image.filename || `profile-${Date.now()}.jpg`,
+    };
+
+    onImageSelected(selectedImage);
+    onClose();
+  };
+
   const openCamera = async () => {
     try {
       const image = await ImagePicker.openCamera({
@@ -36,8 +53,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
         mediaType: 'photo',
       });
 
-      onImageSelected(image.path);
-      onClose();
+      handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
         Alert.alert('Camera Error', 'Unable to open camera.');
@@ -56,8 +72,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
         mediaType: 'photo',
       });
 
-      onImageSelected(image.path);
-      onClose();
+      handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
         Alert.alert('Gallery Error', 'Unable to open gallery.');
@@ -97,6 +112,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
             </View>
 
             <Text style={styles.title}>Change Photo</Text>
+
             <Text style={styles.subtitle}>
               Take a new photo or choose one from your gallery. You can crop it
               before saving.
@@ -118,13 +134,15 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
               onPress={openGallery}
             />
 
-            {/* <PhotoAction
-              icon="trash-outline"
-              title="Remove Photo"
-              subtitle="Use default profile icon"
-              danger
-              onPress={handleRemovePhoto}
-            /> */}
+            {onRemovePhoto && (
+              <PhotoAction
+                icon="trash-outline"
+                title="Remove Photo"
+                subtitle="Use default profile icon"
+                danger
+                onPress={handleRemovePhoto}
+              />
+            )}
           </View>
 
           <TouchableOpacity
@@ -207,7 +225,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
     borderWidth: 1,
     borderColor: '#EFE5E0',
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -215,7 +232,6 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.18,
     shadowRadius: 24,
-
     elevation: 12,
   },
   modalHandle: {

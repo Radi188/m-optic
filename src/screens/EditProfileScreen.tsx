@@ -10,21 +10,41 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, FontSize, Spacing } from '../theme';
-import ChangePhotoModal from '../components/ui/Modal/ChangePhotoModal';
+import ChangePhotoModal, {
+  SelectedProfileImage,
+} from '../components/ui/Modal/ChangePhotoModal';
 import { useUserProfile } from '../hook/useUserProfile';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation<any>();
 
-  const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
+  const {
+    profile,
+    refetch,
+    uploadAvatar,
+    isUploadingAvatar,
+    isLoading,
+    error,
+    isRefreshing,
+  } = useUserProfile();
 
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | undefined>();
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+
+  const handleImageSelected = async (image: SelectedProfileImage) => {
+    try {
+      setLocalAvatarUrl(image.uri);
+      await uploadAvatar(image);
+    } catch {
+      Alert.alert('Upload Error', 'Unable to update profile photo.');
+    }
+  };
 
   const displayAvatar = localAvatarUrl || profile?.avatar_url || undefined;
 
@@ -32,7 +52,6 @@ const EditProfileScreen = () => {
 
   const isPremium = useMemo(() => {
     const tier = tierName.toLowerCase();
-
     return tier === 'gold' || tier === 'platinum' || tier === 'premium';
   }, [tierName]);
 
@@ -125,7 +144,8 @@ const EditProfileScreen = () => {
             <TouchableOpacity
               style={styles.avatarOuterRing}
               activeOpacity={0.88}
-              onPress={() => setShowPhotoModal(true)}
+              onPress={() => setPhotoModalVisible(true)}
+              disabled={isUploadingAvatar}
             >
               <View style={styles.avatarWrap}>
                 {displayAvatar ? (
@@ -139,6 +159,12 @@ const EditProfileScreen = () => {
                     size={46}
                     color={Colors.primary}
                   />
+                )}
+
+                {isUploadingAvatar && (
+                  <View style={styles.avatarLoadingOverlay}>
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  </View>
                 )}
               </View>
 
@@ -239,14 +265,9 @@ const EditProfileScreen = () => {
         </ScrollView>
 
         <ChangePhotoModal
-          visible={showPhotoModal}
-          onClose={() => setShowPhotoModal(false)}
-          onImageSelected={imagePath => {
-            setLocalAvatarUrl(imagePath);
-          }}
-          onRemovePhoto={() => {
-            setLocalAvatarUrl(undefined);
-          }}
+          visible={photoModalVisible}
+          onClose={() => setPhotoModalVisible(false)}
+          onImageSelected={handleImageSelected}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -291,26 +312,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F4F1',
   },
-
   container: {
     flex: 1,
     backgroundColor: '#F8F4F1',
   },
-
   centerState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
   },
-
   centerStateText: {
     marginTop: 14,
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.gray500,
   },
-
   errorIconBox: {
     width: 58,
     height: 58,
@@ -320,13 +337,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
-
   errorTitle: {
     fontSize: FontSize.lg,
     fontWeight: '900',
     color: Colors.black,
   },
-
   errorText: {
     marginTop: 8,
     fontSize: FontSize.sm,
@@ -334,7 +349,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: Colors.gray500,
   },
-
   retryButton: {
     marginTop: 18,
     height: 44,
@@ -344,13 +358,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   retryButtonText: {
     fontSize: FontSize.sm,
     fontWeight: '900',
     color: Colors.white,
   },
-
   appHeader: {
     minHeight: 66,
     flexDirection: 'row',
@@ -358,7 +370,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     backgroundColor: '#F8F4F1',
   },
-
   headerButton: {
     width: 44,
     height: 44,
@@ -369,36 +380,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EDE1DA',
   },
-
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
-
   headerTitle: {
     fontSize: FontSize.md,
     fontWeight: '900',
     color: Colors.black,
   },
-
   headerSubtitle: {
     marginTop: 3,
     fontSize: 12,
     fontWeight: '700',
     color: Colors.gray500,
   },
-
   headerPlaceholder: {
     width: 44,
     height: 44,
   },
-
   content: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: 40,
   },
-
   heroCard: {
     position: 'relative',
     alignItems: 'center',
@@ -410,7 +415,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EFE5E0',
     overflow: 'hidden',
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -420,7 +424,6 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 6,
   },
-
   heroGlow: {
     position: 'absolute',
     top: -80,
@@ -430,7 +433,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7E8DF',
     opacity: 0.85,
   },
-
   avatarOuterRing: {
     width: 122,
     height: 122,
@@ -440,7 +442,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#EADBD3',
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -450,7 +451,6 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 6,
   },
-
   avatarWrap: {
     width: 108,
     height: 108,
@@ -460,13 +460,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-
   avatar: {
     width: 108,
     height: 108,
     borderRadius: 54,
   },
-
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarCameraBadge: {
     position: 'absolute',
     right: 6,
@@ -480,7 +484,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: Colors.white,
   },
-
   heroName: {
     marginTop: Spacing.md,
     fontSize: 22,
@@ -488,14 +491,12 @@ const styles = StyleSheet.create({
     color: Colors.black,
     letterSpacing: -0.6,
   },
-
   heroMeta: {
     marginTop: 8,
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.gray500,
   },
-
   premiumBadge: {
     marginTop: 10,
     flexDirection: 'row',
@@ -507,7 +508,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1D7A8',
   },
-
   premiumBadgeText: {
     marginLeft: 6,
     fontSize: 12,
@@ -515,26 +515,6 @@ const styles = StyleSheet.create({
     color: '#9B6A3D',
     letterSpacing: -0.1,
   },
-
-  changePhotoButton: {
-    marginTop: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAF7F5',
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#EADBD3',
-  },
-
-  changePhotoText: {
-    marginLeft: 7,
-    fontSize: FontSize.sm,
-    fontWeight: '900',
-    color: Colors.primary,
-  },
-
   sectionHeader: {
     marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
@@ -542,14 +522,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
   sectionTitle: {
     fontSize: FontSize.md,
     fontWeight: '900',
     color: Colors.black,
     letterSpacing: -0.2,
   },
-
   lockPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -560,14 +538,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EFE5E0',
   },
-
   lockPillText: {
     marginLeft: 5,
     fontSize: 11,
     fontWeight: '900',
     color: Colors.gray500,
   },
-
   card: {
     backgroundColor: Colors.white,
     borderRadius: 28,
@@ -575,7 +551,6 @@ const styles = StyleSheet.create({
     borderColor: '#EFE5E0',
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -585,7 +560,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 4,
   },
-
   profileItem: {
     minHeight: 78,
     flexDirection: 'row',
@@ -594,11 +568,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1E8E3',
   },
-
   profileItemLast: {
     borderBottomWidth: 0,
   },
-
   profileIconBox: {
     width: 46,
     height: 46,
@@ -608,11 +580,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
-
   profileInfo: {
     flex: 1,
   },
-
   profileLabel: {
     fontSize: 12,
     fontWeight: '800',
@@ -621,14 +591,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-
   profileValue: {
     fontSize: FontSize.md,
     fontWeight: '900',
     color: Colors.black,
     letterSpacing: -0.2,
   },
-
   readOnlyBadge: {
     width: 34,
     height: 34,
@@ -639,7 +607,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0E7E3',
   },
-
   noticeBox: {
     marginTop: Spacing.lg,
     flexDirection: 'row',
@@ -649,7 +616,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EFE5E0',
     padding: Spacing.md,
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -659,7 +625,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 2,
   },
-
   noticeIcon: {
     width: 42,
     height: 42,
@@ -669,18 +634,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.sm,
   },
-
   noticeContent: {
     flex: 1,
   },
-
   noticeTitle: {
     fontSize: FontSize.sm,
     fontWeight: '900',
     color: Colors.black,
     marginBottom: 4,
   },
-
   noticeText: {
     fontSize: FontSize.sm,
     fontWeight: '600',

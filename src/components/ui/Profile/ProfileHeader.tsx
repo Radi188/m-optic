@@ -36,13 +36,13 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
           </View>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.cameraBtn}
             activeOpacity={0.85}
             onPress={onCameraPress}
           >
             <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.info}>
