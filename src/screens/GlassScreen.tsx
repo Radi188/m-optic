@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
+
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   Dimensions,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
@@ -41,6 +43,7 @@ import { Product } from '../types/glasses';
 import { useProductList } from '../hook/useProductList';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
+import ErrorComponent from '../components/ui/Error/ErrorComponent';
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -211,6 +214,20 @@ const GlassScreen: React.FC = () => {
     [brands],
   );
 
+  const hasMore =
+    meta?.current_page && meta?.last_page
+      ? meta.current_page < meta.last_page
+      : products.length >= Number(filters.limit || 10);
+
+  const loadMoreProducts = useCallback(() => {
+    if (loading || !hasMore) return;
+
+    setFilters(prev => ({
+      ...prev,
+      page: Number(prev.page || 1) + 1,
+    }));
+  }, [loading, hasMore, setFilters]);
+
   const renderCard = ({ item }: { item: Product }) => {
     if (item.empty) {
       return <View style={[styles.card, { opacity: 0 }]} />;
@@ -314,20 +331,11 @@ const GlassScreen: React.FC = () => {
           {selectedBrand !== 'All' ? ` · ${selectedBrand}` : ''}
         </Text>
         {/* Grid */}
-        {loading ? (
+        {loading && products.length === 0 ? (
           <GlassScreenSkeleton />
-        ) : error ? (
+        ) : !error && products.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={40}
-              color={Colors.error}
-            />
-            <Text style={styles.emptyText}>{error}</Text>
-
-            <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
+            <ErrorComponent onRetry={refetch} />
           </View>
         ) : (
           <FlatList
@@ -338,6 +346,15 @@ const GlassScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             renderItem={renderCard}
+            onEndReached={loadMoreProducts}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              loading && products.length > 0 ? (
+                <View style={{ paddingVertical: 20 }}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Ionicons

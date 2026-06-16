@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type {
@@ -92,6 +93,7 @@ const GlassesListScreen: React.FC = () => {
     refetch,
     refetchBrands,
     refetchFrames,
+    meta,
   } = useProductList({
     page: 1,
     is_active_mobile: true,
@@ -227,6 +229,20 @@ const GlassesListScreen: React.FC = () => {
     }));
   };
 
+  const hasMore =
+    meta?.current_page && meta?.last_page
+      ? meta.current_page < meta.last_page
+      : products.length >= Number(filters.limit || 10);
+
+  const handleLoadMore = useCallback(() => {
+    if (loading || !hasMore) return;
+
+    setFilters(prev => ({
+      ...prev,
+      page: Number(prev.page || 1) + 1,
+    }));
+  }, [loading, hasMore, setFilters]);
+
   const handleRetry = () => {
     refetch();
 
@@ -288,7 +304,7 @@ const GlassesListScreen: React.FC = () => {
     );
   };
 
-  if (error) {
+  if (error && products.length === 0) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
@@ -309,7 +325,7 @@ const GlassesListScreen: React.FC = () => {
           </View>
         </View>
 
-        <ErrorComponent onRetry={refetch} />
+        <ErrorComponent onRetry={handleRetry} />
       </SafeAreaView>
     );
   }
@@ -449,7 +465,7 @@ const GlassesListScreen: React.FC = () => {
           </Text>
         )}
 
-        {loading ? (
+        {loading && products.length === 0 ? (
           <GlassScreenSkeleton />
         ) : (
           <FlatList
@@ -460,6 +476,15 @@ const GlassesListScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             renderItem={renderCard}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              loading && products.length > 0 ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Ionicons
@@ -772,6 +797,11 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: FontSize.md,
     fontWeight: '700',
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
