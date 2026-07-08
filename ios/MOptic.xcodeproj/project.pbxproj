@@ -12,7 +12,11 @@
 		18510C5EF7E8643A0EBD8FAE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		B7EBF82F3B084DEF9CA68602 /* DMSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E2B21E8CCC1D4D87A5B2D70A /* DMSans-Bold.ttf */; };
+		CA6D64F488924A7F8192B4AC /* Hanuman-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B78B2660B8B8490BB67A4DD3 /* Hanuman-Regular.ttf */; };
+		CDB5BDE15E6F4F24AFBF884A /* Hanuman-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 931AAED1D7CE48FAABE64551 /* Hanuman-Bold.ttf */; };
 		D583396F5FEEC2870415542D /* libPods-MOptic.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6D92686D7E505CBE8A182738 /* libPods-MOptic.a */; };
+		E0E8731B53144091B5D12477 /* DMSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CC4DF7F9E491482DA81CD537 /* DMSans-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +30,10 @@
 		6D92686D7E505CBE8A182738 /* libPods-MOptic.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MOptic.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MOptic/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MOptic/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		931AAED1D7CE48FAABE64551 /* Hanuman-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Hanuman-Bold.ttf"; path = "../src/assets/fonts/Hanuman-Bold.ttf"; sourceTree = "<group>"; };
+		B78B2660B8B8490BB67A4DD3 /* Hanuman-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "Hanuman-Regular.ttf"; path = "../src/assets/fonts/Hanuman-Regular.ttf"; sourceTree = "<group>"; };
+		CC4DF7F9E491482DA81CD537 /* DMSans-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "DMSans-Regular.ttf"; path = "../src/assets/fonts/DMSans-Regular.ttf"; sourceTree = "<group>"; };
+		E2B21E8CCC1D4D87A5B2D70A /* DMSans-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = "DMSans-Bold.ttf"; path = "../src/assets/fonts/DMSans-Bold.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -78,6 +86,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				922BB0005BEC4362828D6510 /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -90,6 +99,18 @@
 				13B07F961A680F5B00A75B9A /* MOptic.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		922BB0005BEC4362828D6510 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B78B2660B8B8490BB67A4DD3 /* Hanuman-Regular.ttf */,
+				931AAED1D7CE48FAABE64551 /* Hanuman-Bold.ttf */,
+				CC4DF7F9E491482DA81CD537 /* DMSans-Regular.ttf */,
+				E2B21E8CCC1D4D87A5B2D70A /* DMSans-Bold.ttf */,
+			);
+			name = Resources;
+			path = "";
 			sourceTree = "<group>";
 		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
@@ -166,6 +187,10 @@
 				11CE28F22F86219B00876F5D /* GoogleService-Info.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				18510C5EF7E8643A0EBD8FAE /* PrivacyInfo.xcprivacy in Resources */,
+				CA6D64F488924A7F8192B4AC /* Hanuman-Regular.ttf in Resources */,
+				CDB5BDE15E6F4F24AFBF884A /* Hanuman-Bold.ttf in Resources */,
+				E0E8731B53144091B5D12477 /* DMSans-Regular.ttf in Resources */,
+				B7EBF82F3B084DEF9CA68602 /* DMSans-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

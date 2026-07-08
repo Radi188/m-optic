@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { AppModal, Input } from '../index';
 import { Colors, FontSize, Spacing, BorderRadius } from '../../../theme';
+import AppText from '../../AppText';
 
 type BrandItem = {
   id: number | string;
@@ -49,26 +51,29 @@ const FilterModal: React.FC<FilterModalProps> = ({
   setTempMinPrice,
   setTempMaxPrice,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <AppModal
       visible={visible}
       onClose={onClose}
-      title="Filter Products"
+      title={t('filterProductsTitle')}
       actions={[
         {
-          label: 'Apply',
+          label: t('commonApply'),
           onPress: onApply,
           variant: 'primary',
         },
         {
-          label: 'Reset',
+          label: t('commonReset'),
           onPress: onReset,
           variant: 'ghost',
         },
       ]}
     >
       <View style={styles.section}>
-        <Text style={styles.label}>Brand</Text>
+        <AppText style={styles.label}>{t('filterBrand')}</AppText>
+
         <View style={styles.chipsWrap}>
           {brandTabs.map(item => {
             const brandValue = item.id === 'all' ? 'all' : Number(item.id);
@@ -80,11 +85,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
                 onPress={() => setTempBrand(brandValue)}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Text
+                <AppText
                   style={[styles.chipText, active && styles.chipTextActive]}
                 >
-                  {item.name}
-                </Text>
+                  {t(item.name)}
+                </AppText>
               </Pressable>
             );
           })}
@@ -92,7 +97,8 @@ const FilterModal: React.FC<FilterModalProps> = ({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Frame</Text>
+        <AppText style={styles.label}>{t('filterFrame')}</AppText>
+
         <View style={styles.chipsWrap}>
           {frameOptions.map(item => {
             const active = tempFrame === item.value;
@@ -103,11 +109,11 @@ const FilterModal: React.FC<FilterModalProps> = ({
                 onPress={() => setTempFrame(item.value)}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Text
+                <AppText
                   style={[styles.chipText, active && styles.chipTextActive]}
                 >
-                  {item.label}
-                </Text>
+                  {t(item.label)}
+                </AppText>
               </Pressable>
             );
           })}
@@ -115,12 +121,12 @@ const FilterModal: React.FC<FilterModalProps> = ({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Price</Text>
+        <AppText style={styles.label}>{t('filterPrice')}</AppText>
 
         <View style={styles.priceRow}>
           <View style={styles.inputWrap}>
             <Input
-              label="Min Price"
+              label={t('filterMinPrice')}
               placeholder="0"
               keyboardType="number-pad"
               value={tempMinPrice}
@@ -130,7 +136,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
 
           <View style={styles.inputWrap}>
             <Input
-              label="Max Price"
+              label={t('filterMaxPrice')}
               placeholder="500"
               keyboardType="number-pad"
               value={tempMaxPrice}

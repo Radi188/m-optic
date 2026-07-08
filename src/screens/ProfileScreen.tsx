@@ -43,6 +43,8 @@ import CurrentPrescriptionCardSkeleton from '../components/ui/Profile/Loading/Cu
 import ProfilePointSectionSkeleton from '../components/ui/Profile/Loading/ProfilePointSkeleton';
 import ProfileTitleHeader from '../components/ui/Profile/ProfileTitleHeader';
 import ProfileErrorState from '../components/ui/Profile/ProfileErrorState';
+import { AppLanguage, changeAppLanguage } from '../localizations/i18n';
+import { useTranslation } from 'react-i18next';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -96,6 +98,7 @@ const GUEST_FEATURES = [
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const ProfileScreen: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
   const navigation = useNavigation<NavProp>();
   const insets = useSafeAreaInsets();
@@ -108,13 +111,15 @@ const ProfileScreen: React.FC = () => {
   const [logoutModal, setLogoutModal] = useState(false);
   const [pwModal, setPwModal] = useState(false);
   const [notifModal, setNotifModal] = useState(false);
+  const currentLanguage: AppLanguage =
+    i18n.resolvedLanguage === 'km' ? 'km' : 'en';
 
   const [editName, setEditName] = useState(user?.name ?? '');
   const [editEmail, setEditEmail] = useState(user?.email ?? '');
   const [editPhone, setEditPhone] = useState(user?.phone ?? '');
 
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [selectedLanguage, setSelectedLanguage] = useState(currentLanguage);
 
   const languageLabel = selectedLanguage === 'km' ? 'ភាសាខ្មែរ' : 'English';
 
@@ -132,6 +137,11 @@ const ProfileScreen: React.FC = () => {
     console.log('Logout confirmed');
   };
 
+  const handleChangeLanguage = async (language: AppLanguage) => {
+    await changeAppLanguage(language);
+    setSelectedLanguage(language);
+  };
+
   const settingItems = useMemo(
     () => [
       {
@@ -144,14 +154,14 @@ const ProfileScreen: React.FC = () => {
       {
         id: 'notifications',
         title: 'Notifications',
-        subtitle: 'Manage alerts',
+        subtitle: 'ManageAlerts',
         icon: 'notifications-outline',
         onPress: () => navigation.navigate('NotificationSetting'),
       },
       {
         id: 'support',
         title: 'Support',
-        subtitle: 'Help center',
+        subtitle: 'HelpCenter',
         icon: 'headset-outline',
         onPress: () => {
           navigation.navigate('Support');
@@ -159,8 +169,8 @@ const ProfileScreen: React.FC = () => {
       },
       {
         id: 'privacy',
-        title: 'Privacy Policy',
-        subtitle: 'Data and security',
+        title: 'PrivacyPolicy',
+        subtitle: 'DataAndSecurity',
         icon: 'shield-checkmark-outline',
         onPress: () => {
           navigation.navigate('Privacy');
@@ -169,7 +179,7 @@ const ProfileScreen: React.FC = () => {
       {
         id: 'logout',
         title: 'Logout',
-        subtitle: 'Sign out from account',
+        subtitle: 'SignOutFromAccount',
         icon: 'log-out-outline',
         onPress: () => {
           setLogoutModalVisible(true);
@@ -179,39 +189,9 @@ const ProfileScreen: React.FC = () => {
     [languageLabel],
   );
 
-  const openEditModal = () => {
-    setEditName(user?.name ?? '');
-    setEditEmail(user?.email ?? '');
-    setEditPhone(user?.phone ?? '');
-    setEditModal(true);
-  };
-
-  const handleSaveProfile = () => {
-    dispatch(
-      updateUser({
-        name: editName.trim(),
-        email: editEmail.trim(),
-        phone: editPhone.trim(),
-      }),
-    );
-    setEditModal(false);
-  };
-
-  const handleLogout = () => {
-    dispatch(clearUser());
-    setLogoutModal(false);
-  };
-
   // ── Guest view ────────────────────────────────────────────────────────────
-  if (!user) {
-    return (
-      <NotLoginProfile onLoginPress={() => navigation.navigate('Login')} />
-    );
-  }
 
   // ── Authenticated view ────────────────────────────────────────────────────
-
-  const tierProgress = Math.min((user.loyaltyPoints % 1000) / 10, 100);
 
   const calculateTierProgress = (
     totalPoints?: number | null,
@@ -236,136 +216,124 @@ const ProfileScreen: React.FC = () => {
     }
 
     const earnedInCurrentTier = totalPoints - currentTierMinPoints;
+
     const progress = (earnedInCurrentTier / tierRange) * 100;
 
     return Math.min(Math.max(Math.round(progress), 0), 100);
   };
 
+  // ── Screen ─────────────────────────────────────────────────────────────
+
   return (
     <GlassBackground>
-      <View style={{ flex: 1, paddingTop: insets.top }}>
+      <View
+        style={{
+          flex: 1,
+          paddingTop: insets.top,
+        }}
+      >
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={guestStyles.scroll}
         >
-          {/* <View style={guestStyles.hero}>
-              <View style={guestStyles.iconWrap}>
-                <Ionicons
-                  name="person-circle-outline"
-                  size={52}
-                  color={Colors.primary}
-                />
-              </View>
-              <Text style={guestStyles.heading}>
-                Your Eyecare,{'\n'}All in One Place
-              </Text>
-              <Text style={guestStyles.sub}>
-                Sign in to unlock your personal eyecare dashboard and exclusive
-                member benefits.
-              </Text>
-            </View> */}
           <ProfileTitleHeader
-            notificationCount={2}
-            hasUnreadNotification={true}
+            notificationCount={unreadCount}
+            hasUnreadNotification={unreadCount > 0}
             notificationPress={() => navigation.navigate('NotificationList')}
+            label={t('MyProfile')}
           />
 
-          {error ? (
-            <ProfileErrorState onRetry={refetch} />
-          ) : !isLoading ? (
-            <>
-              <ProfileHeader
-                name={profile?.customer_name}
-                subtitle={profile?.tier?.name}
-                avatarUrl={profile?.avatar_url || ''}
-                notificationCount={2}
-                onNotificationPress={() =>
-                  navigation.navigate('NotificationList')
-                }
-                onEditPress={() => navigation.navigate('EditProfile')}
-                onCameraPress={() => console.log('Change profile image')}
-              />
+          {/* =======================
+            GUEST USER
+        ======================== */}
+          {!user && (
+            <NotLoginProfile
+              onLoginPress={() => navigation.navigate('Login')}
+            />
+          )}
 
-              <CurrentPrescriptionCard
-                rightEye={profile?.prescription?.right_eye}
-                leftEye={profile?.prescription?.left_eye}
-                updatedAt={formatDate(profile?.prescription?.created_at)}
-                onPress={() => navigation.navigate('PrescriptionDetail')}
-              />
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate('PointMember')}
-              >
-                <ProfilePointSection
-                  tierName={profile?.tier?.name}
-                  points={profile?.loyalty_total_points}
-                  remainingPoints={profile?.points_to_next_tier}
-                  nextTier={profile?.next_tier?.name}
-                  progress={calculateTierProgress(
-                    profile?.loyalty_total_points,
-                    profile?.tier?.min_points,
-                    profile?.next_tier?.min_points,
-                  )}
-                />
-              </TouchableOpacity>
-            </>
-          ) : (
+          {/* =======================
+            MEMBER USER
+        ======================== */}
+          {user && (
             <>
-              <ProfileHeaderSkeleton />
-              <CurrentPrescriptionCardSkeleton />
-              <ProfilePointSectionSkeleton />
+              {error ? (
+                <ProfileErrorState onRetry={refetch} />
+              ) : !isLoading ? (
+                <>
+                  <ProfileHeader
+                    name={profile?.customer_name}
+                    subtitle={profile?.tier?.name}
+                    avatarUrl={profile?.avatar_url || ''}
+                    notificationCount={unreadCount}
+                    editLabel={t('Edit')}
+                    onEditPress={() => navigation.navigate('EditProfile')}
+                  />
+
+                  <CurrentPrescriptionCard
+                    rightEye={profile?.prescription?.right_eye}
+                    leftEye={profile?.prescription?.left_eye}
+                    updatedAt={formatDate(profile?.prescription?.created_at)}
+                    onPress={() => navigation.navigate('PrescriptionDetail')}
+                    title={t('CurrentPrescription')}
+                    rightLabel={t('RightEye')}
+                    leftLabel={t('LeftEye')}
+                  />
+
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('PointMember')}
+                  >
+                    <ProfilePointSection
+                      tierName={profile?.tier?.name}
+                      points={profile?.loyalty_total_points}
+                      remainingPoints={profile?.points_to_next_tier}
+                      nextTier={profile?.next_tier?.name}
+                      progress={calculateTierProgress(
+                        profile?.loyalty_total_points,
+                        profile?.tier?.min_points,
+                        profile?.next_tier?.min_points,
+                      )}
+                    />
+                  </TouchableOpacity>
+
+                  <RewardButton
+                    title={t('Rewards')}
+                    subtitle={t('RewardSubtitle')}
+                    onPress={() => navigation.navigate('Reward')}
+                  />
+                </>
+              ) : (
+                <>
+                  <ProfileHeaderSkeleton />
+
+                  <CurrentPrescriptionCardSkeleton />
+
+                  <ProfilePointSectionSkeleton />
+                </>
+              )}
             </>
           )}
 
-          {/* <View style={guestStyles.grid}>
-              {GUEST_FEATURES.map(f => (
-                <View key={f.title} style={guestStyles.featureCard}>
-                  <View style={[guestStyles.featureIconWrap, { backgroundColor: f.bg }]}>
-                    <Ionicons name={f.icon as any} size={22} color={f.color} />
-                  </View>
-                  <Text style={guestStyles.featureTitle}>{f.title}</Text>
-                  <Text style={guestStyles.featureDesc}>{f.desc}</Text>
-                </View>
-              ))}
-            </View> */}
+          {/* =======================
+            SETTINGS FOR EVERYONE
+        ======================== */}
 
-          <RewardButton onPress={() => navigation.navigate('Reward')} />
-
-          <ProfileSettingSection items={settingItems} />
-
-          {/* <View style={guestStyles.ctaWrap}>
-              <TouchableOpacity
-                style={guestStyles.signInBtn}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('Login')}
-              >
-                <Ionicons
-                  name="log-in-outline"
-                  size={18}
-                  color={Colors.white}
-                />
-                <Text style={guestStyles.signInText}>Sign In</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={guestStyles.registerBtn}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate('Register')}
-              >
-                <Text style={guestStyles.registerText}>
-                  New here?{'  '}
-                  <Text style={guestStyles.registerLink}>
-                    Create an account
-                  </Text>
-                </Text>
-              </TouchableOpacity>
-            </View> */}
+          <ProfileSettingSection
+            items={
+              user
+                ? settingItems
+                : settingItems.filter(item => item.id !== 'logout')
+            }
+          />
         </ScrollView>
 
         <LanguagePickerModal
           visible={languageModalVisible}
           selectedLanguage={selectedLanguage}
           onClose={() => setLanguageModalVisible(false)}
-          onSelectLanguage={setSelectedLanguage}
+          onSelectLanguage={handleChangeLanguage}
+          title={t('Languages')}
+          subtitle={t('ChooseYourLanguage')}
         />
 
         <LogoutModal

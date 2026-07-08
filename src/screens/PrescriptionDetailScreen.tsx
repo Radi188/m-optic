@@ -11,23 +11,29 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { Colors, FontSize, Spacing } from '../theme';
 import { useUserProfile } from '../hook/useUserProfile';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
+import AppText from '../components/AppText';
 
 const PrescriptionDetailScreen = () => {
   const navigation = useNavigation<any>();
+  const { t, i18n } = useTranslation();
   const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
 
   const prescription = profile?.prescription;
+  const locale = i18n.language === 'kh' ? 'km-KH' : 'en-GB';
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.centerText}>Loading prescription...</Text>
+          <AppText style={styles.centerText}>
+            {t('LoadingPrescription')}
+          </AppText>
         </View>
       </SafeAreaView>
     );
@@ -41,17 +47,19 @@ const PrescriptionDetailScreen = () => {
             <Ionicons name="alert-circle-outline" size={30} color="#D92D20" />
           </View>
 
-          <Text style={styles.errorTitle}>Unable to load prescription</Text>
-          <Text style={styles.errorText}>
-            {error || 'Something went wrong. Please try again.'}
-          </Text>
+          <AppText style={styles.errorTitle}>
+            {t('UnableToLoadPrescription')}
+          </AppText>
+          <AppText style={styles.errorText}>
+            {error || t('SomethingWentWrongTryAgain')}
+          </AppText>
 
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.retryButton}
             onPress={refetch}
           >
-            <Text style={styles.retryButtonText}>Try Again</Text>
+            <AppText style={styles.retryButtonText}>{t('TryAgain')}</AppText>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -70,7 +78,7 @@ const PrescriptionDetailScreen = () => {
             <Ionicons name="chevron-back" size={24} color="#241812" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Prescription</Text>
+          <AppText style={styles.headerTitle}>{t('Prescription')}</AppText>
 
           <View style={styles.headerPlaceholder} />
         </View>
@@ -85,23 +93,28 @@ const PrescriptionDetailScreen = () => {
           <CurrentPrescriptionCard
             rightEye={profile?.prescription?.right_eye}
             leftEye={profile?.prescription?.left_eye}
-            updatedAt={formatDate(profile?.prescription?.created_at)}
+            updatedAt={formatDate(profile?.prescription?.created_at, t, locale)}
             onPress={() => navigation.navigate('PrescriptionDetail')}
+            leftLabel={t('LeftEye')}
+            rightLabel={t('RightEye')}
+            title={t('CurrentPrescription')}
           />
 
           {prescription ? (
             <>
-              <Text style={styles.sectionLabel}>Prescription Details</Text>
+              <AppText style={styles.sectionLabel}>
+                {t('PrescriptionDetails')}
+              </AppText>
 
               <View style={styles.detailCard}>
                 <PrescriptionRow
-                  label="Right Eye"
+                  label={t('RightEye')}
                   value={prescription.right_eye}
                   icon="eye-outline"
                 />
 
                 <PrescriptionRow
-                  label="Left Eye"
+                  label={t('LeftEye')}
                   value={prescription.left_eye}
                   icon="eye-outline"
                 />
@@ -119,8 +132,8 @@ const PrescriptionDetailScreen = () => {
                 />
 
                 <PrescriptionRow
-                  label="Last Updated"
-                  value={formatDateTime(prescription.created_at)}
+                  label={t('LastUpdated')}
+                  value={formatDateTime(prescription.created_at, t, locale)}
                   icon="calendar-outline"
                   isLast
                 />
@@ -136,11 +149,12 @@ const PrescriptionDetailScreen = () => {
                 </View>
 
                 <View style={styles.noteTextBox}>
-                  <Text style={styles.noteTitle}>Important note</Text>
-                  <Text style={styles.noteText}>
-                    Please confirm your prescription with our optical specialist
-                    before ordering new glasses or lenses.
-                  </Text>
+                  <AppText style={styles.noteTitle}>
+                    {t('ImportantNote')}
+                  </AppText>
+                  <AppText style={styles.noteText}>
+                    {t('PrescriptionConfirmNote')}
+                  </AppText>
                 </View>
               </View>
             </>
@@ -154,10 +168,12 @@ const PrescriptionDetailScreen = () => {
                 />
               </View>
 
-              <Text style={styles.emptyTitle}>No prescription yet</Text>
-              <Text style={styles.emptyText}>
-                Your prescription will appear here after your eye check-up.
-              </Text>
+              <AppText style={styles.emptyTitle}>
+                {t('NoPrescriptionYet')}
+              </AppText>
+              <AppText style={styles.emptyText}>
+                {t('PrescriptionEmptyMessage')}
+              </AppText>
             </View>
           )}
         </ScrollView>
@@ -186,10 +202,10 @@ const PrescriptionRow: React.FC<PrescriptionRowProps> = ({
           <Ionicons name={icon as any} size={19} color="#9B6A3D" />
         </View>
 
-        <Text style={styles.detailLabel}>{label}</Text>
+        <AppText style={styles.detailLabel}>{label}</AppText>
       </View>
 
-      <Text style={styles.detailValue}>{formatValue(value)}</Text>
+      <AppText style={styles.detailValue}>{formatValue(value)}</AppText>
     </View>
   );
 };
@@ -202,28 +218,36 @@ const formatValue = (value?: string | number | null) => {
   return String(value);
 };
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return 'Not provided';
+const formatDate = (
+  dateString: string | null | undefined,
+  t: any,
+  locale: string,
+) => {
+  if (!dateString) return t('NotProvided');
 
   const date = new Date(dateString);
 
-  if (isNaN(date.getTime())) return 'Invalid date';
+  if (isNaN(date.getTime())) return t('InvalidDate');
 
-  return date.toLocaleDateString('en-GB', {
+  return date.toLocaleDateString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 };
 
-const formatDateTime = (dateString?: string | null) => {
-  if (!dateString) return 'Not provided';
+const formatDateTime = (
+  dateString: string | null | undefined,
+  t: any,
+  locale: string,
+) => {
+  if (!dateString) return t('NotProvided');
 
   const date = new Date(dateString);
 
-  if (isNaN(date.getTime())) return 'Invalid date';
+  if (isNaN(date.getTime())) return t('InvalidDate');
 
-  return date.toLocaleString('en-GB', {
+  return date.toLocaleString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

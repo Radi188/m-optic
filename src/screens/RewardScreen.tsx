@@ -7,22 +7,24 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
-  ImageSourcePropType,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../theme';
 import { useReward } from '../hook/useReward';
 import { RewardItem } from '../types/reward';
 import SkeletonRewardScreen from '../components/ui/Loading/RewardLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import Header from '../components/ui/Header/HeaderComponent';
+import AppText from '../components/AppText';
 
 type RewardScreenProps = {
   navigation?: any;
 };
 
 const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
-  const { rewardsData, isLoading, isRefreshing, error, refetch } = useReward();
+  const { t } = useTranslation();
+  const { rewardsData, isLoading, error, refetch } = useReward();
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) {
@@ -33,18 +35,15 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
   const handleRedeem = (userPoint: number, reward: RewardItem) => {
     const canRedeem = userPoint >= reward.points_required && reward.available;
 
-    if (!canRedeem) {
-      return;
-    }
+    if (!canRedeem) return;
 
     console.log('Redeem reward:', reward);
-    // Later you can open a confirmation modal here.
   };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Header title="Rewards" onBack={() => navigation.goBack()} />
+        <Header title={t('Rewards')} onBack={() => navigation.goBack()} />
         <SkeletonRewardScreen />
       </SafeAreaView>
     );
@@ -53,8 +52,8 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
   if (error || !rewardsData) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Header title="Rewards" onBack={() => navigation.goBack()} />
-        <ErrorComponent onRetry={refetch} headerTitle="Rewards Error" />
+        <Header title={t('Rewards')} onBack={() => navigation.goBack()} />
+        <ErrorComponent onRetry={refetch} headerTitle={t('RewardsError')} />
       </SafeAreaView>
     );
   }
@@ -62,7 +61,6 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             activeOpacity={0.75}
@@ -72,7 +70,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             <Ionicons name="chevron-back" size={24} color="#241812" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Rewards</Text>
+          <AppText style={styles.headerTitle}>{t('Rewards')}</AppText>
 
           <TouchableOpacity
             activeOpacity={0.75}
@@ -86,17 +84,17 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Points Balance */}
           <View style={styles.balanceCard}>
             <View style={styles.balanceContent}>
-              <Text style={styles.balanceLabel}>Available Points</Text>
-              <Text style={styles.balancePoint}>
+              <AppText style={styles.balanceLabel}>
+                {t('AvailablePoints')}
+              </AppText>
+              <AppText style={styles.balancePoint}>
                 {rewardsData?.available_points.toLocaleString()}
-              </Text>
-              <Text style={styles.balanceSubtitle}>
-                Redeem your points for optical products, discounts, and special
-                rewards.
-              </Text>
+              </AppText>
+              <AppText style={styles.balanceSubtitle}>
+                {t('RedeemPointsSubtitle')}
+              </AppText>
             </View>
 
             <View style={styles.balanceIconBox}>
@@ -104,7 +102,6 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Info */}
           <View style={styles.infoCard}>
             <View style={styles.infoIconBox}>
               <Ionicons
@@ -114,16 +111,17 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
               />
             </View>
 
-            <Text style={styles.infoText}>
-              Rewards can be redeemed at store during checkout.
-            </Text>
+            <AppText style={styles.infoText}>
+              {t('RewardsStoreCheckoutNote')}
+            </AppText>
           </View>
 
-          {/* Rewards */}
           {rewardsData?.rewards?.length > 0 && (
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Available Rewards</Text>
-              <Text style={styles.sectionHint}>Tap to redeem</Text>
+              <AppText style={styles.sectionTitle}>
+                {t('AvailableRewards')}
+              </AppText>
+              <AppText style={styles.sectionHint}>{t('TapToRedeem')}</AppText>
             </View>
           )}
 
@@ -131,6 +129,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             const canRedeem =
               rewardsData.available_points >= reward.points_required &&
               reward.available;
+
             const pointsLeft =
               reward.points_required - rewardsData.available_points;
 
@@ -163,7 +162,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                       />
                     ) : (
                       <Ionicons
-                        name={'gift-outline' as any}
+                        name="gift-outline"
                         size={24}
                         color={canRedeem ? '#9B6A3D' : '#AFA6A0'}
                       />
@@ -172,7 +171,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
 
                   <View style={styles.rewardContent}>
                     <View style={styles.rewardTitleRow}>
-                      <Text
+                      <AppText
                         style={[
                           styles.rewardTitle,
                           !canRedeem && styles.rewardTitleDisabled,
@@ -180,16 +179,18 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                         numberOfLines={1}
                       >
                         {reward.title}
-                      </Text>
+                      </AppText>
 
                       {reward.tag && canRedeem ? (
                         <View style={styles.rewardTag}>
-                          <Text style={styles.rewardTagText}>{reward.tag}</Text>
+                          <AppText style={styles.rewardTagText}>
+                            {reward.tag}
+                          </AppText>
                         </View>
                       ) : null}
                     </View>
 
-                    <Text
+                    <AppText
                       style={[
                         styles.rewardSubtitle,
                         !canRedeem && styles.rewardSubtitleDisabled,
@@ -197,7 +198,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                       numberOfLines={2}
                     >
                       {reward.description}
-                    </Text>
+                    </AppText>
                   </View>
                 </View>
 
@@ -208,19 +209,21 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                       size={14}
                       color={canRedeem ? '#9B6A3D' : '#9B928B'}
                     />
-                    <Text
+                    <AppText
                       style={[
                         styles.pointPillText,
                         !canRedeem && styles.pointPillTextDisabled,
                       ]}
                     >
-                      {reward.points_required.toLocaleString()} pts
-                    </Text>
+                      {reward.points_required.toLocaleString()} {t('Pts')}
+                    </AppText>
                   </View>
 
                   {canRedeem ? (
                     <View style={styles.redeemButton}>
-                      <Text style={styles.redeemButtonText}>Redeem</Text>
+                      <AppText style={styles.redeemButtonText}>
+                        {t('Redeem')}
+                      </AppText>
                     </View>
                   ) : (
                     <View style={styles.lockedButton}>
@@ -229,9 +232,11 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                         size={13}
                         color="#8B7C72"
                       />
-                      <Text style={styles.lockedButtonText}>
-                        Need {pointsLeft.toLocaleString()} pts
-                      </Text>
+                      <AppText style={styles.lockedButtonText}>
+                        {t('NeedPoints', {
+                          points: pointsLeft.toLocaleString(),
+                        })}
+                      </AppText>
                     </View>
                   )}
                 </View>
@@ -239,12 +244,11 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             );
           })}
 
-          {/* Redeem History */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Redeem History</Text>
+            <AppText style={styles.sectionTitle}>{t('RedeemHistory')}</AppText>
 
             <TouchableOpacity activeOpacity={0.75} style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View all</Text>
+              <AppText style={styles.viewAllText}>{t('ViewAll')}</AppText>
               <Ionicons name="chevron-forward" size={18} color="#9B6A3D" />
             </TouchableOpacity>
           </View>
@@ -255,10 +259,12 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             </View>
 
             <View style={styles.historyTextBox}>
-              <Text style={styles.historyTitle}>No rewards redeemed yet</Text>
-              <Text style={styles.historySubtitle}>
-                Your redeemed rewards will appear here.
-              </Text>
+              <AppText style={styles.historyTitle}>
+                {t('NoRewardsRedeemedYet')}
+              </AppText>
+              <AppText style={styles.historySubtitle}>
+                {t('RedeemedRewardsAppearHere')}
+              </AppText>
             </View>
           </View>
         </ScrollView>

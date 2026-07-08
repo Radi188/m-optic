@@ -25,6 +25,8 @@ import GlassCard from '../components/ui/GlassesCard/GlassesCard';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import { useProductList } from '../hook/useProductList';
 import { Product } from '../types/glasses';
+import AppText from '../components/AppText';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = NativeStackScreenProps<
@@ -55,6 +57,8 @@ const SearchResultScreen = () => {
     is_active_mobile: true,
     search: currentQuery,
   });
+
+  const { t } = useTranslation();
 
   const openSearchMode = () => {
     setInputQuery(currentQuery);
@@ -152,7 +156,7 @@ const SearchResultScreen = () => {
                 ref={inputRef}
                 value={inputQuery}
                 onChangeText={setInputQuery}
-                placeholder="Search frames..."
+                placeholder={t('SearchFrames')}
                 placeholderTextColor={Colors.gray400}
                 style={styles.searchInput}
                 returnKeyType="search"
@@ -181,16 +185,19 @@ const SearchResultScreen = () => {
                 color={Colors.gray400}
               />
 
-              <Text style={styles.searchText} numberOfLines={1}>
+              <AppText style={styles.searchText} numberOfLines={1}>
                 {currentQuery}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           )}
         </View>
 
         {isSearching ? (
           <View style={styles.searchContent}>
-            <Text style={styles.sectionTitle}>Popular searches</Text>
+            <AppText style={styles.sectionTitle}>
+              {' '}
+              {t('PopularSearches')}
+            </AppText>
 
             <View style={styles.chipWrap}>
               {popularSearches.map(item => (
@@ -200,7 +207,7 @@ const SearchResultScreen = () => {
                   activeOpacity={0.8}
                   onPress={() => handleSearch(item)}
                 >
-                  <Text style={styles.chipText}>{item}</Text>
+                  <AppText style={styles.chipText}>{item}</AppText>
                 </TouchableOpacity>
               ))}
             </View>
@@ -209,10 +216,12 @@ const SearchResultScreen = () => {
           <>
             {!loading && (
               <View style={styles.resultHeader}>
-                <Text style={styles.subtitle}>
-                  {products.length} frame{products.length !== 1 ? 's' : ''}{' '}
-                  found for “{currentQuery}”
-                </Text>
+                <AppText style={styles.subtitle}>
+                  {t('FramesFound', {
+                    count: products.length,
+                    query: currentQuery,
+                  })}
+                </AppText>
               </View>
             )}
 
@@ -225,11 +234,13 @@ const SearchResultScreen = () => {
                   size={42}
                   color={Colors.error}
                 />
-                <Text style={styles.emptyTitle}>Something went wrong</Text>
-                <Text style={styles.emptyText}>{error}</Text>
+                <AppText style={styles.emptyTitle}>
+                  {t('SomethingWentWrong')}
+                </AppText>
+                <AppText style={styles.emptyText}>{error}</AppText>
 
                 <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
-                  <Text style={styles.retryText}>Retry</Text>
+                  <AppText style={styles.retryText}>Retry</AppText>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -248,16 +259,18 @@ const SearchResultScreen = () => {
                       size={42}
                       color={Colors.gray300}
                     />
-                    <Text style={styles.emptyTitle}>No frames found</Text>
-                    <Text style={styles.emptyText}>
-                      Try another keyword or search by brand name.
-                    </Text>
+                    <AppText style={styles.emptyTitle}>
+                      {t('NoFramesFound')}
+                    </AppText>
+                    <AppText style={styles.emptyText}>{t('Retry')}</AppText>
 
                     <TouchableOpacity
                       style={styles.retryBtn}
                       onPress={openSearchMode}
                     >
-                      <Text style={styles.retryText}>Search Again</Text>
+                      <AppText style={styles.retryText}>
+                        {t('TryAnotherKeyword')}
+                      </AppText>
                     </TouchableOpacity>
                   </View>
                 }

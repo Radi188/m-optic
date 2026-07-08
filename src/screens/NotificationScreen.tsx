@@ -17,6 +17,7 @@ import { useAnnouncements, AnnouncementItem } from '../hook/useAnnouncement';
 import AnnouncementSkeleton from '../components/ui/Loading/AnnouncementLoadingSkeleton';
 import Header from '../components/ui/Header/HeaderComponent';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import AppText from '../components/AppText';
 
 const getNotificationIcon = (title: string) => {
   const t = title.toLowerCase();
@@ -92,7 +93,7 @@ const NotificationListScreen = () => {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Notifications</Text>
+            <AppText style={styles.headerTitle}>Notifications</AppText>
           </View>
 
           {/* <TouchableOpacity style={styles.headerButton} activeOpacity={0.85}>
@@ -119,10 +120,10 @@ const NotificationListScreen = () => {
             </View>
 
             <View style={styles.summaryTextWrap}>
-              <Text style={styles.summaryTitle}>Latest updates</Text>
-              <Text style={styles.summarySubtitle}>
+              <AppText style={styles.summaryTitle}>Latest updates</AppText>
+              <AppText style={styles.summarySubtitle}>
                 Orders, appointments, pickup alerts and offers.
-              </Text>
+              </AppText>
             </View>
           </View> */}
 
@@ -136,10 +137,10 @@ const NotificationListScreen = () => {
                   color={Colors.gray500}
                 />
               </View>
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
-              <Text style={styles.emptyText}>
+              <AppText style={styles.emptyTitle}>No notifications yet</AppText>
+              <AppText style={styles.emptyText}>
                 New updates about your orders and appointments will appear here.
-              </Text>
+              </AppText>
             </View>
           ) : (
             <View style={styles.notificationList}>
@@ -170,12 +171,12 @@ const NotificationListScreen = () => {
 
                     <View style={styles.textWrap}>
                       <View style={styles.titleRow}>
-                        <Text style={styles.title} numberOfLines={1}>
+                        <AppText style={styles.title} numberOfLines={1}>
                           {item.title}
-                        </Text>
+                        </AppText>
                       </View>
 
-                      {/* 4. Swapped out plain <Text> for your customized <RenderHTML /> component */}
+                      {/* 4. Swapped out plain <AppText> for your customized <RenderHTML /> component */}
                       <View style={styles.htmlContainer}>
                         {/* We wrap the clean string in a native layout Text element */}
 
@@ -192,9 +193,9 @@ const NotificationListScreen = () => {
                         />
                       </View>
 
-                      <Text style={styles.time}>
+                      <AppText style={styles.time}>
                         {new Date(item.created_at).toLocaleDateString()}
-                      </Text>
+                      </AppText>
                     </View>
                   </TouchableOpacity>
                 );

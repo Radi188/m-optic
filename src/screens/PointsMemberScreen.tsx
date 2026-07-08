@@ -10,10 +10,12 @@ import {
   RefreshControl,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import ProfilePointSection from '../components/ui/Profile/ProfilePointSection';
 import { usePoints } from '../hook/usePoint';
 import Header from '../components/ui/Header/HeaderComponent';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import AppText from '../components/AppText';
 
 type PointsMemberScreenProps = {
   navigation?: any;
@@ -22,14 +24,16 @@ type PointsMemberScreenProps = {
 const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   navigation,
 }) => {
+  const { t, i18n } = useTranslation();
   const { pointsData, transactions, isLoading, isRefreshing, error, refetch } =
     usePoints();
 
-  const currentTierName = pointsData?.tier?.name ?? 'Silver';
-  const nextTierName = pointsData?.next_tier?.name ?? 'Max Tier';
+  const currentTierName = pointsData?.tier?.name ?? t('Silver');
+  const nextTierName = pointsData?.next_tier?.name ?? t('MaxTier');
   const progress = pointsData?.progress_percentage ?? 0;
 
   const tiers = useMemo(() => pointsData?.all_tiers ?? [], [pointsData]);
+
   const activeTierIndex = useMemo(() => {
     return tiers.findIndex(tier => tier.id === pointsData?.tier?.id);
   }, [tiers, pointsData?.tier?.id]);
@@ -51,46 +55,56 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
     return Math.min(Math.max(totalProgress, 0), 100);
   }, [tiers, activeTierIndex, progress, pointsData?.next_tier]);
 
-  const benefits = [
-    {
-      icon: 'sparkles-outline',
-      title: 'Free Cleaning',
-      subtitle: 'Unlimited lens cleaning',
-    },
-    {
-      icon: 'gift-outline',
-      title: 'Birthday Gift',
-      subtitle: 'Special gift on birthday',
-    },
-    {
-      icon: 'pricetag-outline',
-      title: `${pointsData?.tier?.discount_percentage ?? '0'}% Discount`,
-      subtitle: 'Exclusive product discount',
-    },
-  ];
+  const benefits = useMemo(
+    () => [
+      {
+        icon: 'sparkles-outline',
+        title: t('FreeCleaning'),
+        subtitle: t('UnlimitedLensCleaning'),
+      },
+      {
+        icon: 'gift-outline',
+        title: t('BirthdayGift'),
+        subtitle: t('SpecialGiftOnBirthday'),
+      },
+      {
+        icon: 'pricetag-outline',
+        title: `${pointsData?.tier?.discount_percentage ?? '0'}% ${t(
+          'Discount',
+        )}`,
+        subtitle: t('ExclusiveProductDiscount'),
+      },
+    ],
+    [t, pointsData?.tier?.discount_percentage],
+  );
 
-  const earnPoints = [
-    {
-      icon: 'eye-outline',
-      title: 'Buy glasses',
-      points: '+100 pts',
-    },
-    {
-      icon: 'eye-outline',
-      title: 'Eye check-up',
-      points: '+50 pts',
-    },
-    {
-      icon: 'people-outline',
-      title: 'Refer a friend',
-      points: '+200 pts',
-    },
-    {
-      icon: 'star-outline',
-      title: 'Review our store',
-      points: '+30 pts',
-    },
-  ];
+  const earnPoints = useMemo(
+    () => [
+      {
+        icon: 'eye-outline',
+        title: t('BuyGlasses'),
+        points: `+100 ${t('Pts')}`,
+      },
+      {
+        icon: 'eye-outline',
+        title: t('EyeCheckUp'),
+        points: `+50 ${t('Pts')}`,
+      },
+      {
+        icon: 'people-outline',
+        title: t('ReferFriend'),
+        points: `+200 ${t('Pts')}`,
+      },
+      {
+        icon: 'star-outline',
+        title: t('ReviewOurStore'),
+        points: `+30 ${t('Pts')}`,
+      },
+    ],
+    [t],
+  );
+
+  const locale = i18n.language === 'kh' ? 'km-KH' : 'en-GB';
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) {
@@ -103,7 +117,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color="#9B6A3D" />
-          <Text style={styles.centerText}>Loading points...</Text>
+          <AppText style={styles.centerText}>{t('LoadingPoints')}</AppText>
         </View>
       </SafeAreaView>
     );
@@ -112,8 +126,8 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   if (error || !pointsData) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Header title="My Points" onBack={() => navigation.goBack()} />
-        <ErrorComponent onRetry={refetch} headerTitle="Rewards Error" />
+        <Header title={t('MyPoints')} onBack={() => navigation.goBack()} />
+        <ErrorComponent onRetry={refetch} headerTitle={t('RewardsError')} />
       </SafeAreaView>
     );
   }
@@ -130,7 +144,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
             <Ionicons name="chevron-back" size={24} color="#241812" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>My Points</Text>
+          <AppText style={styles.headerTitle}>{t('MyPoints')}</AppText>
 
           <TouchableOpacity activeOpacity={0.75} style={styles.headerButton}>
             <Ionicons name="time-outline" size={22} color="#241812" />
@@ -172,7 +186,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                   <TierItem
                     key={tier.id}
                     title={tier.name}
-                    points={`${tier.min_points.toLocaleString()} pts`}
+                    points={`${tier.min_points.toLocaleString()} ${t('Pts')}`}
                     icon={isActive ? 'diamond' : 'diamond-outline'}
                     active={isActive}
                     completed={isCompleted}
@@ -183,7 +197,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rewards</Text>
+            <AppText style={styles.sectionTitle}>{t('Rewards')}</AppText>
           </View>
 
           <TouchableOpacity
@@ -197,12 +211,12 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
               </View>
 
               <View style={styles.rewardPreviewTextBox}>
-                <Text style={styles.rewardPreviewTitle}>
-                  Redeem Your Points
-                </Text>
-                <Text style={styles.rewardPreviewSubtitle}>
-                  Use your points for discounts and special gifts
-                </Text>
+                <AppText style={styles.rewardPreviewTitle}>
+                  {t('RedeemYourPoints')}
+                </AppText>
+                <AppText style={styles.rewardPreviewSubtitle}>
+                  {t('UsePointsForDiscounts')}
+                </AppText>
               </View>
             </View>
 
@@ -210,7 +224,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
           </TouchableOpacity>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Benefits</Text>
+            <AppText style={styles.sectionTitle}>{t('YourBenefits')}</AppText>
           </View>
 
           <View style={styles.benefitRow}>
@@ -224,19 +238,19 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                   <Ionicons name={item.icon as any} size={20} color="#8A552E" />
                 </View>
 
-                <Text style={styles.benefitTitle} numberOfLines={1}>
+                <AppText style={styles.benefitTitle} numberOfLines={1}>
                   {item.title}
-                </Text>
+                </AppText>
 
-                <Text style={styles.benefitSubtitle} numberOfLines={2}>
+                <AppText style={styles.benefitSubtitle} numberOfLines={2}>
                   {item.subtitle}
-                </Text>
+                </AppText>
               </TouchableOpacity>
             ))}
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Earn More Points</Text>
+            <AppText style={styles.sectionTitle}>{t('EarnMorePoints')}</AppText>
           </View>
 
           <View style={styles.listCard}>
@@ -257,11 +271,11 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                       color="#9B6A3D"
                     />
                   </View>
-                  <Text style={styles.listTitle}>{item.title}</Text>
+                  <AppText style={styles.listTitle}>{item.title}</AppText>
                 </View>
 
                 <View style={styles.listRight}>
-                  <Text style={styles.earnPointText}>{item.points}</Text>
+                  <AppText style={styles.earnPointText}>{item.points}</AppText>
                   <Ionicons name="chevron-forward" size={20} color="#A39186" />
                 </View>
               </TouchableOpacity>
@@ -269,12 +283,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-
-            {/* <TouchableOpacity activeOpacity={0.75} style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9B6A3D" />
-            </TouchableOpacity> */}
+            <AppText style={styles.sectionTitle}>{t('RecentActivity')}</AppText>
           </View>
 
           {transactions?.data?.length > 0 ? (
@@ -303,24 +312,24 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                       </View>
 
                       <View style={styles.activityTextBox}>
-                        <Text style={styles.listTitle}>
-                          {item.description || 'Point transaction'}
-                        </Text>
-                        <Text style={styles.activityDate}>
-                          {formatDateTime(item.created_at)}
-                        </Text>
+                        <AppText style={styles.listTitle}>
+                          {item.description || t('PointTransaction')}
+                        </AppText>
+                        <AppText style={styles.activityDate}>
+                          {formatDateTime(item.created_at, locale)}
+                        </AppText>
                       </View>
                     </View>
 
-                    <Text
+                    <AppText
                       style={[
                         styles.activityPointText,
                         isMinus && styles.minusPointText,
                       ]}
                     >
                       {isMinus ? '' : '+'}
-                      {item.points} pts
-                    </Text>
+                      {item.points} {t('Pts')}
+                    </AppText>
                   </View>
                 );
               })}
@@ -331,10 +340,10 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                 <Ionicons name="receipt-outline" size={24} color="#9B6A3D" />
               </View>
 
-              <Text style={styles.emptyTitle}>No activity yet</Text>
-              <Text style={styles.emptyText}>
-                Your points history will appear here.
-              </Text>
+              <AppText style={styles.emptyTitle}>{t('NoActivityYet')}</AppText>
+              <AppText style={styles.emptyText}>
+                {t('PointsHistoryAppearHere')}
+              </AppText>
             </View>
           )}
         </ScrollView>
@@ -374,15 +383,15 @@ const TierItem: React.FC<TierItemProps> = ({
         />
       </View>
 
-      <Text style={[styles.tierTitle, active && styles.tierTitleActive]}>
+      <AppText style={[styles.tierTitle, active && styles.tierTitleActive]}>
         {title}
-      </Text>
-      <Text style={styles.tierPoint}>{points}</Text>
+      </AppText>
+      <AppText style={styles.tierPoint}>{points}</AppText>
     </View>
   );
 };
 
-const formatDateTime = (dateString?: string | null) => {
+const formatDateTime = (dateString?: string | null, locale = 'en-GB') => {
   if (!dateString) {
     return '';
   }
@@ -393,7 +402,7 @@ const formatDateTime = (dateString?: string | null) => {
     return '';
   }
 
-  return date.toLocaleString('en-GB', {
+  return date.toLocaleString(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -413,7 +422,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFDFB',
   },
-
   centerState: {
     flex: 1,
     alignItems: 'center',
@@ -461,7 +469,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
   },
-
   header: {
     height: 64,
     paddingHorizontal: 20,
@@ -493,12 +500,10 @@ const styles = StyleSheet.create({
     color: '#1F1712',
     letterSpacing: -0.3,
   },
-
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
-
   tierCard: {
     marginTop: 18,
     backgroundColor: '#FFFFFF',
@@ -581,7 +586,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9E9188',
   },
-
   sectionHeader: {
     marginTop: 24,
     marginBottom: 12,
@@ -595,7 +599,6 @@ const styles = StyleSheet.create({
     color: '#211813',
     letterSpacing: -0.3,
   },
-
   rewardPreviewCard: {
     minHeight: 84,
     backgroundColor: '#FFFFFF',
@@ -646,7 +649,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#8B7C72',
   },
-
   benefitRow: {
     flexDirection: 'row',
     gap: 10,
@@ -694,7 +696,6 @@ const styles = StyleSheet.create({
     color: '#8B7C72',
     textAlign: 'center',
   },
-
   listCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
@@ -758,7 +759,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#9B6A3D',
   },
-
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -768,7 +768,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#9B6A3D',
   },
-
   activityTextBox: {
     flex: 1,
   },
@@ -786,7 +785,6 @@ const styles = StyleSheet.create({
   minusPointText: {
     color: '#8F3E2F',
   },
-
   emptyActivityCard: {
     minHeight: 120,
     backgroundColor: '#FFFFFF',

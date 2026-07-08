@@ -17,15 +17,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useDispatch } from 'react-redux';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 
 import { setUser } from '../store/slices/authSlice';
 import type { AppDispatch } from '../store';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
+import AppText from '../components/AppText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
-// ─── Form field (identical to LoginScreen) ────────────────────────────────────
 interface FieldProps {
   label: string;
   icon: string;
@@ -39,19 +40,31 @@ interface FieldProps {
 }
 
 const FormField: React.FC<FieldProps> = ({
-  label, icon, value, onChangeText, placeholder,
-  keyboardType, autoCapitalize, autoCorrect, secure,
+  label,
+  icon,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  autoCapitalize,
+  autoCorrect,
+  secure,
 }) => {
-  const [hidden,  setHidden]  = useState(secure ?? false);
+  const [hidden, setHidden] = useState(secure ?? false);
   const [focused, setFocused] = useState(false);
 
   return (
     <View style={[field.wrap, focused && field.wrapFocused]}>
       <View style={field.iconWrap}>
-        <Ionicons name={icon} size={19} color={focused ? Colors.primary : Colors.gray400} />
+        <Ionicons
+          name={icon as any}
+          size={19}
+          color={focused ? Colors.primary : Colors.gray400}
+        />
       </View>
+
       <View style={field.content}>
-        <Text style={field.label}>{label}</Text>
+        <AppText style={field.label}>{label}</AppText>
         <TextInput
           style={field.input}
           value={value}
@@ -66,8 +79,12 @@ const FormField: React.FC<FieldProps> = ({
           onBlur={() => setFocused(false)}
         />
       </View>
+
       {secure && (
-        <TouchableOpacity onPress={() => setHidden(h => !h)} style={field.eyeBtn}>
+        <TouchableOpacity
+          onPress={() => setHidden(h => !h)}
+          style={field.eyeBtn}
+        >
           <Ionicons
             name={hidden ? 'eye-outline' : 'eye-off-outline'}
             size={19}
@@ -76,6 +93,248 @@ const FormField: React.FC<FieldProps> = ({
         </TouchableOpacity>
       )}
     </View>
+  );
+};
+
+const RegisterScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const dispatch = useDispatch<AppDispatch>();
+
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cardAnim = useRef(new Animated.Value(80)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 480,
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 10,
+        delay: 120,
+      }),
+    ]).start();
+  }, [cardAnim, fadeAnim]);
+
+  const validate = (): string | null => {
+    if (!name.trim()) return t('ErrorFullNameRequired');
+    if (!phone.trim()) return t('ErrorPhoneRequired');
+    if (phone.replace(/\D/g, '').length < 8) return t('ErrorPhoneInvalid');
+    if (password.length < 6) return t('ErrorPasswordMin');
+    if (password !== confirm) return t('ErrorPasswordMismatch');
+    return null;
+  };
+
+  const handleRegister = () => {
+    const err = validate();
+
+    if (err) {
+      setError(err);
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    setTimeout(() => {
+      setLoading(false);
+
+      dispatch(
+        setUser({
+          id: `usr_${Date.now()}`,
+          name: name.trim(),
+          email: '',
+          phone: phone.trim(),
+          role: 'customer',
+          loyaltyPoints: 0,
+          loyaltyTotalPoints: 0,
+          loyaltyTierId: 1,
+          isMember: false,
+        }),
+      );
+    }, 1200);
+  };
+
+  return (
+    <LinearGradient
+      colors={[Colors.primary, Colors.primaryMid, Colors.background]}
+      locations={[0, 0.42, 1]}
+      style={styles.root}
+    >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Animated.View
+          style={[
+            styles.top,
+            { paddingTop: insets.top + 12, opacity: fadeAnim },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            activeOpacity={0.8}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color={Colors.white} />
+            <AppText style={styles.backText}>{t('Back')}</AppText>
+          </TouchableOpacity>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <AppText style={styles.title}>{t('GoAheadSetupAccount')}</AppText>
+          <AppText style={styles.subtitle}>{t('RegisterSubtitle')}</AppText>
+        </Animated.View>
+
+        <Animated.View
+          style={[styles.cardOuter, { transform: [{ translateY: cardAnim }] }]}
+        >
+          <ScrollView
+            style={styles.card}
+            contentContainerStyle={[
+              styles.cardContent,
+              { paddingBottom: insets.bottom + 24 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <View style={styles.tabBar}>
+              <TouchableOpacity
+                style={styles.tabInactive}
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.7}
+              >
+                <AppText style={styles.tabInactiveText}>{t('Login')}</AppText>
+              </TouchableOpacity>
+
+              <View style={styles.tabActive}>
+                <AppText style={styles.tabActiveText}>{t('Register')}</AppText>
+              </View>
+            </View>
+
+            <FormField
+              label={t('FullName')}
+              icon="person-outline"
+              value={name}
+              onChangeText={value => {
+                setName(value);
+                setError(null);
+              }}
+              placeholder={t('FullNamePlaceholder')}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+
+            <FormField
+              label={t('PhoneNumber')}
+              icon="call-outline"
+              value={phone}
+              onChangeText={value => {
+                setPhone(value);
+                setError(null);
+              }}
+              placeholder={t('PhonePlaceholder')}
+              keyboardType="phone-pad"
+            />
+
+            <FormField
+              label={t('Password')}
+              icon="lock-closed-outline"
+              value={password}
+              onChangeText={value => {
+                setPassword(value);
+                setError(null);
+              }}
+              placeholder={t('PasswordPlaceholder')}
+              secure
+            />
+
+            <FormField
+              label={t('ConfirmPassword')}
+              icon="shield-checkmark-outline"
+              value={confirm}
+              onChangeText={value => {
+                setConfirm(value);
+                setError(null);
+              }}
+              placeholder={t('ConfirmPasswordPlaceholder')}
+              secure
+            />
+
+            {error && (
+              <View style={styles.errorBox}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={14}
+                  color={Colors.error}
+                />
+                <AppText style={styles.errorText}>{error}</AppText>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionBtn, loading && { opacity: 0.7 }]}
+              onPress={handleRegister}
+              activeOpacity={0.85}
+              disabled={loading}
+            >
+              <AppText style={styles.actionBtnText}>
+                {loading ? t('CreatingAccount') : t('CreateAccount')}
+              </AppText>
+            </TouchableOpacity>
+
+            <AppText style={styles.terms}>
+              {t('RegisterTermsText')}{' '}
+              <AppText style={styles.termsLink}>{t('TermsOfService')}</AppText>{' '}
+              {t('And')}{' '}
+              <AppText style={styles.termsLink}>{t('PrivacyPolicy')}</AppText>.
+            </AppText>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <AppText style={styles.dividerText}>{t('OrSignUpWith')}</AppText>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.socialRow}>
+              <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8}>
+                <Ionicons name="logo-google" size={22} color="#DB4437" />
+                <AppText style={styles.socialText}>Google</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8}>
+                <Ionicons name="logo-facebook" size={22} color="#1877F2" />
+                <AppText style={styles.socialText}>Facebook</AppText>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
@@ -109,219 +368,39 @@ const field = StyleSheet.create({
   eyeBtn: { paddingLeft: Spacing.sm },
 });
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
-const RegisterScreen: React.FC<Props> = ({ navigation }) => {
-  const insets   = useSafeAreaInsets();
-  const dispatch = useDispatch<AppDispatch>();
-
-  const [name,     setName]     = useState('');
-  const [phone,    setPhone]    = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
-
-  const cardAnim = useRef(new Animated.Value(80)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 480, useNativeDriver: true }),
-      Animated.spring(cardAnim, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10, delay: 120 }),
-    ]).start();
-  }, []);
-
-  const validate = (): string | null => {
-    if (!name.trim())                         return 'Please enter your full name.';
-    if (!phone.trim())                        return 'Please enter your phone number.';
-    if (phone.replace(/\D/g, '').length < 8) return 'Please enter a valid phone number.';
-    if (password.length < 6)                 return 'Password must be at least 6 characters.';
-    if (password !== confirm)                return 'Passwords do not match.';
-    return null;
-  };
-
-  const handleRegister = () => {
-    const err = validate();
-    if (err) { setError(err); return; }
-    setError(null);
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      dispatch(setUser({
-        id: `usr_${Date.now()}`,
-        name: name.trim(),
-        email: '',
-        phone: phone.trim(),
-        role: 'customer',
-        loyaltyPoints: 0,
-        loyaltyTotalPoints: 0,
-        loyaltyTierId: 1,
-        isMember: false,
-      }));
-      // Navigator switches automatically when isAuthenticated becomes true
-    }, 1200);
-  };
-
-  return (
-    <LinearGradient
-      colors={[Colors.primary, Colors.primaryMid, Colors.background]}
-      locations={[0, 0.42, 1]}
-      style={styles.root}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* ── Top: compact branding ─────────────────────────────── */}
-        <Animated.View style={[styles.top, { paddingTop: insets.top + 12, opacity: fadeAnim }]}>
-          <View style={styles.logoWrap}>
-            <Image
-              source={require('../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.title}>Go ahead and{'\n'}set up your account</Text>
-          <Text style={styles.subtitle}>Sign up to enjoy the best eyewear experience</Text>
-        </Animated.View>
-
-        {/* ── Bottom card — flex: 1 fills the rest ──────────────── */}
-        <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }] }]}>
-          <ScrollView
-            style={styles.card}
-            contentContainerStyle={[styles.cardContent, { paddingBottom: insets.bottom + 24 }]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-          >
-            {/* Tab toggle */}
-            <View style={styles.tabBar}>
-              <TouchableOpacity
-                style={styles.tabInactive}
-                onPress={() => navigation.navigate('Login')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.tabInactiveText}>Login</Text>
-              </TouchableOpacity>
-              <View style={styles.tabActive}>
-                <Text style={styles.tabActiveText}>Register</Text>
-              </View>
-            </View>
-
-            {/* Form fields */}
-            <FormField
-              label="Full Name"
-              icon="person-outline"
-              value={name}
-              onChangeText={t => { setName(t); setError(null); }}
-              placeholder="John Doe"
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-            <FormField
-              label="Phone Number"
-              icon="call-outline"
-              value={phone}
-              onChangeText={t => { setPhone(t); setError(null); }}
-              placeholder="+1 234 567 8900"
-              keyboardType="phone-pad"
-            />
-            <FormField
-              label="Password"
-              icon="lock-closed-outline"
-              value={password}
-              onChangeText={t => { setPassword(t); setError(null); }}
-              placeholder="At least 6 characters"
-              secure
-            />
-            <FormField
-              label="Confirm Password"
-              icon="shield-checkmark-outline"
-              value={confirm}
-              onChangeText={t => { setConfirm(t); setError(null); }}
-              placeholder="Repeat your password"
-              secure
-            />
-
-            {/* Error */}
-            {error && (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={14} color={Colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-
-            {/* Register button */}
-            <TouchableOpacity
-              style={[styles.actionBtn, loading && { opacity: 0.7 }]}
-              onPress={handleRegister}
-              activeOpacity={0.85}
-              disabled={loading}
-            >
-              <Text style={styles.actionBtnText}>
-                {loading ? 'Creating account…' : 'Create Account'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Terms */}
-            <Text style={styles.terms}>
-              By registering you agree to our{' '}
-              <Text style={styles.termsLink}>Terms of Service</Text>
-              {' '}and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>.
-            </Text>
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Or sign up with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social buttons */}
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8}>
-                <Ionicons name="logo-google" size={22} color="#DB4437" />
-                <Text style={styles.socialText}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8}>
-                <Ionicons name="logo-facebook" size={22} color="#1877F2" />
-                <Text style={styles.socialText}>Facebook</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </LinearGradient>
-  );
-};
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  // ── Top ─────────────────────────────────────────────────────────
   top: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.lg,
   },
+  backButton: {
+    borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+
+    marginBottom: Spacing.md,
+    flexDirection: 'row',
+  },
+  backText: {
+    fontSize: 16,
+    color: Colors.white,
+    textDecorationLine: 'underline',
+  },
   logoWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 13,
+    borderRadius: 100,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.20)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.45)',
+
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: Spacing.lg,
   },
-  logo: { width: 48, height: 48 },
+  logo: { width: 56, height: 56, borderRadius: 13 },
   title: {
     fontSize: 30,
     fontWeight: '800',
     color: Colors.white,
     letterSpacing: -0.8,
-    lineHeight: 38,
+    lineHeight: 52,
     marginBottom: Spacing.xs,
   },
   subtitle: {
@@ -330,8 +409,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 20,
   },
-
-  // ── Card ────────────────────────────────────────────────────────
   cardOuter: { flex: 1 },
   card: {
     flex: 1,
@@ -344,8 +421,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.xl,
   },
-
-  // Tab toggle — identical to LoginScreen
   tabBar: {
     flexDirection: 'row',
     backgroundColor: Colors.gray100,
@@ -376,8 +451,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.gray400,
   },
-
-  // Error
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -395,8 +468,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
-
-  // Action button — identical shape to LoginScreen
   actionBtn: {
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.full,
@@ -412,8 +483,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
     letterSpacing: 0.2,
   },
-
-  // Terms
   terms: {
     fontSize: FontSize.xs,
     color: Colors.gray400,
@@ -425,8 +494,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-
-  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -443,8 +510,6 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     fontWeight: '500',
   },
-
-  // Social buttons — identical to LoginScreen
   socialRow: {
     flexDirection: 'row',
     gap: Spacing.md,

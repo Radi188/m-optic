@@ -1,18 +1,25 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import AppText from '../../AppText';
 
 type CurrentPrescriptionCardProps = {
   rightEye?: string;
   leftEye?: string;
   updatedAt?: string;
   onPress?: () => void;
+  title: string;
+  rightLabel: string;
+  leftLabel: string;
 };
 
 const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
   rightEye = '-4.00',
   leftEye = '-3.75',
   updatedAt = '12 May 2026',
+  title = 'Current Prescription',
+  rightLabel = 'Right Eye',
+  leftLabel = 'Left Eye',
   onPress,
 }) => {
   return (
@@ -31,25 +38,25 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
             <Ionicons name="eye-outline" size={20} color={'#5B3A26'} />
           </View>
           {/* Title wraps naturally onto two lines because of the width constraint */}
-          <Text style={styles.title} numberOfLines={2}>
-            Current Prescription
-          </Text>
+          <AppText style={styles.title} numberOfLines={2}>
+            {title}
+          </AppText>
         </View>
-        {/* <Text style={styles.updatedText}>Updated {updatedAt}</Text> */}
+        {/* <AppText style={styles.updatedText}>Updated {updatedAt}</AppText> */}
       </View>
 
       {/* Center Section: Eye Prescription Numbers */}
       <View style={styles.valueRow}>
         <View style={styles.eyeBlock}>
-          <Text style={styles.eyeLabel}>Right Eye </Text>
-          <Text style={styles.eyeValue}>{rightEye}</Text>
+          <AppText style={styles.eyeLabel}>{rightLabel} </AppText>
+          <AppText style={styles.eyeValue}>{rightEye}</AppText>
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.eyeBlock}>
-          <Text style={styles.eyeLabel}>Left Eye </Text>
-          <Text style={styles.eyeValue}>{leftEye}</Text>
+          <AppText style={styles.eyeLabel}>{leftLabel}</AppText>
+          <AppText style={styles.eyeValue}>{leftEye}</AppText>
         </View>
       </View>
 
@@ -59,7 +66,7 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
         activeOpacity={0.85}
         onPress={onPress}
       >
-        <Text style={styles.buttonText}>View Details</Text>
+        <AppText style={styles.buttonText}>View Details</AppText>
         <Ionicons name="chevron-forward" size={14} color={'#412616'} />
       </TouchableOpacity> */}
     </TouchableOpacity>

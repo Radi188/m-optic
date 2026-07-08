@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
 import Button from './Button';
+import AppText from '../AppText';
 
 interface ModalAction {
   label: string;
@@ -103,14 +104,14 @@ const AppModal: React.FC<AppModalProps> = ({
 
               {/* Header */}
               <View style={styles.header}>
-                {title && <Text style={styles.title}>{title}</Text>}
+                {title && <AppText style={styles.title}>{title}</AppText>}
                 <TouchableOpacity
                   onPress={onClose}
                   style={styles.closeBtn}
                   hitSlop={8}
                 >
                   <View style={styles.closeInner}>
-                    <Text style={styles.closeText}>✕</Text>
+                    <AppText style={styles.closeText}>✕</AppText>
                   </View>
                 </TouchableOpacity>
               </View>

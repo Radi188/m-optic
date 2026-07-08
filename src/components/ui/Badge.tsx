@@ -1,45 +1,55 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Colors, BorderRadius, FontSize } from '../../theme';
+import AppText from '../AppText';
 
-type BadgeVariant = 'primary' | 'success' | 'error' | 'warning' | 'info' | 'neutral';
+type BadgeVariant =
+  | 'primary'
+  | 'success'
+  | 'error'
+  | 'warning'
+  | 'info'
+  | 'neutral';
 
-const BADGE_COLORS: Record<BadgeVariant, { bg: string; border: string; text: string; dot: string }> = {
+const BADGE_COLORS: Record<
+  BadgeVariant,
+  { bg: string; border: string; text: string; dot: string }
+> = {
   primary: {
-    bg:     'rgba(156, 129, 120, 0.14)',
+    bg: 'rgba(156, 129, 120, 0.14)',
     border: 'rgba(156, 129, 120, 0.40)',
-    text:   Colors.primary,
-    dot:    Colors.primary,
+    text: Colors.primary,
+    dot: Colors.primary,
   },
   success: {
-    bg:     'rgba(45,  189, 126, 0.13)',
+    bg: 'rgba(45,  189, 126, 0.13)',
     border: 'rgba(45,  189, 126, 0.40)',
-    text:   Colors.success,
-    dot:    Colors.success,
+    text: Colors.success,
+    dot: Colors.success,
   },
   error: {
-    bg:     'rgba(240, 82,  82,  0.13)',
+    bg: 'rgba(240, 82,  82,  0.13)',
     border: 'rgba(240, 82,  82,  0.40)',
-    text:   Colors.error,
-    dot:    Colors.error,
+    text: Colors.error,
+    dot: Colors.error,
   },
   warning: {
-    bg:     'rgba(247, 164, 64,  0.13)',
+    bg: 'rgba(247, 164, 64,  0.13)',
     border: 'rgba(247, 164, 64,  0.40)',
-    text:   Colors.warning,
-    dot:    Colors.warning,
+    text: Colors.warning,
+    dot: Colors.warning,
   },
   info: {
-    bg:     'rgba(77,  168, 218, 0.13)',
+    bg: 'rgba(77,  168, 218, 0.13)',
     border: 'rgba(77,  168, 218, 0.40)',
-    text:   Colors.info,
-    dot:    Colors.info,
+    text: Colors.info,
+    dot: Colors.info,
   },
   neutral: {
-    bg:     'rgba(175, 160, 153, 0.14)',
+    bg: 'rgba(175, 160, 153, 0.14)',
     border: 'rgba(175, 160, 153, 0.40)',
-    text:   Colors.gray600,
-    dot:    Colors.gray400,
+    text: Colors.gray600,
+    dot: Colors.gray400,
   },
 };
 
@@ -50,7 +60,12 @@ interface BadgeProps {
   dot?: boolean;
 }
 
-const Badge: React.FC<BadgeProps> = ({ label, variant = 'primary', style, dot }) => {
+const Badge: React.FC<BadgeProps> = ({
+  label,
+  variant = 'primary',
+  style,
+  dot,
+}) => {
   const cfg = BADGE_COLORS[variant];
   return (
     <View
@@ -58,7 +73,7 @@ const Badge: React.FC<BadgeProps> = ({ label, variant = 'primary', style, dot })
         styles.badge,
         {
           backgroundColor: cfg.bg,
-          borderColor:     cfg.border,
+          borderColor: cfg.border,
         },
         style,
       ]}
@@ -67,7 +82,7 @@ const Badge: React.FC<BadgeProps> = ({ label, variant = 'primary', style, dot })
       <View style={styles.highlight} pointerEvents="none" />
 
       {dot && <View style={[styles.dot, { backgroundColor: cfg.dot }]} />}
-      <Text style={[styles.label, { color: cfg.text }]}>{label}</Text>
+      <AppText style={[styles.label, { color: cfg.text }]}>{label}</AppText>
     </View>
   );
 };

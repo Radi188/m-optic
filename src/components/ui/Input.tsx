@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
+import AppText from '../AppText';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -40,13 +41,21 @@ const Input: React.FC<InputProps> = ({
 
   const handleFocus = () => {
     setFocused(true);
-    Animated.timing(glowAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+    Animated.timing(glowAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
     rest.onFocus?.({} as any);
   };
 
   const handleBlur = () => {
     setFocused(false);
-    Animated.timing(glowAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+    Animated.timing(glowAnim, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
     rest.onBlur?.({} as any);
   };
 
@@ -56,17 +65,15 @@ const Input: React.FC<InputProps> = ({
     ? Colors.primary
     : Colors.glassBorder;
 
-  const bgColor = error
-    ? Colors.errorLight
-    : Colors.glassSurfaceHigh;
+  const bgColor = error ? Colors.errorLight : Colors.glassSurfaceHigh;
 
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
-        <Text style={styles.label}>
+        <AppText style={styles.label}>
           {label}
-          {required && <Text style={styles.required}> *</Text>}
-        </Text>
+          {required && <AppText style={styles.required}> *</AppText>}
+        </AppText>
       )}
 
       <Animated.View
@@ -98,7 +105,9 @@ const Input: React.FC<InputProps> = ({
             onPress={() => setHidden(h => !h)}
             style={styles.iconRight}
           >
-            <Text style={styles.toggleText}>{hidden ? 'Show' : 'Hide'}</Text>
+            <AppText style={styles.toggleText}>
+              {hidden ? 'Show' : 'Hide'}
+            </AppText>
           </TouchableOpacity>
         ) : rightIcon ? (
           <View style={styles.iconRight}>{rightIcon}</View>
@@ -106,9 +115,9 @@ const Input: React.FC<InputProps> = ({
       </Animated.View>
 
       {error ? (
-        <Text style={styles.error}>{error}</Text>
+        <AppText style={styles.error}>{error}</AppText>
       ) : hint ? (
-        <Text style={styles.hint}>{hint}</Text>
+        <AppText style={styles.hint}>{hint}</AppText>
       ) : null}
     </View>
   );
@@ -143,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.glassHighlight,
     zIndex: 1,
   },
-  iconLeft:  { marginRight: Spacing.sm },
+  iconLeft: { marginRight: Spacing.sm },
   iconRight: { marginLeft: Spacing.sm },
   input: {
     flex: 1,
@@ -156,8 +165,13 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
-  error: { fontSize: FontSize.xs, color: Colors.error, marginTop: Spacing.xs, fontWeight: '500' },
-  hint:  { fontSize: FontSize.xs, color: Colors.gray500, marginTop: Spacing.xs },
+  error: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    marginTop: Spacing.xs,
+    fontWeight: '500',
+  },
+  hint: { fontSize: FontSize.xs, color: Colors.gray500, marginTop: Spacing.xs },
 });
 
 export default Input;

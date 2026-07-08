@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type ErrorComponentProps = {
   message?: string;
@@ -25,8 +26,8 @@ const ErrorComponent: React.FC<ErrorComponentProps> = ({
         />
 
         {/* Text Content */}
-        <Text style={styles.header}>{headerTitle}</Text>
-        <Text style={styles.message}>{message}</Text>
+        <AppText style={styles.header}>{headerTitle}</AppText>
+        <AppText style={styles.message}>{message}</AppText>
 
         {/* Clean, Actionable Retry Button */}
         {onRetry && (
@@ -35,7 +36,7 @@ const ErrorComponent: React.FC<ErrorComponentProps> = ({
             onPress={onRetry}
             activeOpacity={0.7}
           >
-            <Text style={styles.buttonText}>Try Again</Text>
+            <AppText style={styles.buttonText}>Try Again</AppText>
           </TouchableOpacity>
         )}
       </View>

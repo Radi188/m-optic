@@ -8,6 +8,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
+import AppText from '../AppText';
 
 export type AlertType = 'success' | 'error' | 'warning' | 'info';
 
@@ -16,32 +17,32 @@ const ALERT_CONFIG: Record<
   { bg: string; border: string; text: string; icon: string; glow: string }
 > = {
   success: {
-    bg:     'rgba(45,  189, 126, 0.12)',
+    bg: 'rgba(45,  189, 126, 0.12)',
     border: 'rgba(45,  189, 126, 0.55)',
-    text:   Colors.success,
-    icon:   '✓',
-    glow:   'rgba(45,  189, 126, 0.18)',
+    text: Colors.success,
+    icon: '✓',
+    glow: 'rgba(45,  189, 126, 0.18)',
   },
   error: {
-    bg:     'rgba(240, 82,  82,  0.12)',
+    bg: 'rgba(240, 82,  82,  0.12)',
     border: 'rgba(240, 82,  82,  0.55)',
-    text:   Colors.error,
-    icon:   '✕',
-    glow:   'rgba(240, 82,  82,  0.18)',
+    text: Colors.error,
+    icon: '✕',
+    glow: 'rgba(240, 82,  82,  0.18)',
   },
   warning: {
-    bg:     'rgba(247, 164, 64,  0.12)',
+    bg: 'rgba(247, 164, 64,  0.12)',
     border: 'rgba(247, 164, 64,  0.55)',
-    text:   Colors.warning,
-    icon:   '!',
-    glow:   'rgba(247, 164, 64,  0.18)',
+    text: Colors.warning,
+    icon: '!',
+    glow: 'rgba(247, 164, 64,  0.18)',
   },
   info: {
-    bg:     'rgba(77,  168, 218, 0.12)',
+    bg: 'rgba(77,  168, 218, 0.12)',
     border: 'rgba(77,  168, 218, 0.55)',
-    text:   Colors.info,
-    icon:   'i',
-    glow:   'rgba(77,  168, 218, 0.18)',
+    text: Colors.info,
+    icon: 'i',
+    glow: 'rgba(77,  168, 218, 0.18)',
   },
 };
 
@@ -84,19 +85,38 @@ const Alert: React.FC<AlertProps> = ({
       <View style={[styles.accentBar, { backgroundColor: cfg.text }]} />
 
       {/* Icon */}
-      <View style={[styles.iconCircle, { backgroundColor: cfg.text + '25', borderColor: cfg.border }]}>
-        <Text style={[styles.iconText, { color: cfg.text }]}>{cfg.icon}</Text>
+      <View
+        style={[
+          styles.iconCircle,
+          { backgroundColor: cfg.text + '25', borderColor: cfg.border },
+        ]}
+      >
+        <AppText style={[styles.iconText, { color: cfg.text }]}>
+          {cfg.icon}
+        </AppText>
       </View>
 
       <View style={styles.alertContent}>
-        {title && <Text style={[styles.alertTitle, { color: cfg.text }]}>{title}</Text>}
-        <Text style={[styles.alertMessage, { color: cfg.text }]}>{message}</Text>
+        {title && (
+          <AppText style={[styles.alertTitle, { color: cfg.text }]}>
+            {title}
+          </AppText>
+        )}
+        <AppText style={[styles.alertMessage, { color: cfg.text }]}>
+          {message}
+        </AppText>
       </View>
 
       {dismissible && (
-        <TouchableOpacity onPress={onDismiss} hitSlop={8} style={styles.dismissBtn}>
+        <TouchableOpacity
+          onPress={onDismiss}
+          hitSlop={8}
+          style={styles.dismissBtn}
+        >
           <View style={[styles.dismissCircle, { borderColor: cfg.border }]}>
-            <Text style={[styles.dismissText, { color: cfg.text }]}>✕</Text>
+            <AppText style={[styles.dismissText, { color: cfg.text }]}>
+              ✕
+            </AppText>
           </View>
         </TouchableOpacity>
       )}
@@ -121,25 +141,42 @@ export const Toast: React.FC<ToastProps> = ({
   duration = 3000,
   onHide,
 }) => {
-  const opacity    = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
-  const cfg        = ALERT_CONFIG[type];
+  const cfg = ALERT_CONFIG[type];
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 10 }),
-        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          speed: 20,
+          bounciness: 10,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
       ]).start(() => {
         setTimeout(() => {
           Animated.parallel([
-            Animated.timing(opacity,    { toValue: 0, duration: 280, useNativeDriver: true }),
-            Animated.timing(translateY, { toValue: 12, duration: 280, useNativeDriver: true }),
+            Animated.timing(opacity, {
+              toValue: 0,
+              duration: 280,
+              useNativeDriver: true,
+            }),
+            Animated.timing(translateY, {
+              toValue: 12,
+              duration: 280,
+              useNativeDriver: true,
+            }),
           ]).start(() => onHide?.());
         }, duration);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   return (
@@ -157,12 +194,15 @@ export const Toast: React.FC<ToastProps> = ({
       ]}
     >
       {/* Glass highlight */}
-      <View style={[styles.highlight, styles.toastHighlight]} pointerEvents="none" />
+      <View
+        style={[styles.highlight, styles.toastHighlight]}
+        pointerEvents="none"
+      />
 
       <View style={[styles.toastIconBadge, { backgroundColor: cfg.text }]}>
-        <Text style={styles.toastIconText}>{cfg.icon}</Text>
+        <AppText style={styles.toastIconText}>{cfg.icon}</AppText>
       </View>
-      <Text style={styles.toastText}>{message}</Text>
+      <AppText style={styles.toastText}>{message}</AppText>
     </Animated.View>
   );
 };
@@ -211,9 +251,9 @@ const styles = StyleSheet.create({
   },
   iconText: { fontSize: 11, fontWeight: '800' },
   alertContent: { flex: 1 },
-  alertTitle:   { fontSize: FontSize.sm, fontWeight: '700', marginBottom: 2 },
+  alertTitle: { fontSize: FontSize.sm, fontWeight: '700', marginBottom: 2 },
   alertMessage: { fontSize: FontSize.sm, lineHeight: 18 },
-  dismissBtn:   { padding: 2, marginLeft: Spacing.sm },
+  dismissBtn: { padding: 2, marginLeft: Spacing.sm },
   dismissCircle: {
     width: 20,
     height: 20,
@@ -247,7 +287,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.sm,
   },
-  toastIconText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: '800' },
+  toastIconText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+  },
   toastText: {
     color: Colors.black,
     fontSize: FontSize.sm,

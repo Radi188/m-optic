@@ -19,17 +19,22 @@ import { selectUser } from '../../../store/slices/authSlice';
 import type { RootStackParamList } from '../../../types/navigation';
 import { BannerItem } from '../../../types/home';
 import { buildFileUrl } from '../../../utils/fileUrlHelper';
+import AppText from '../../AppText';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SLIDER_HEIGHT = 300;
 
 type HeroSliderProps = {
+  signinLabel: string;
   slides?: BannerItem[];
 };
 
 const DEFAULT_SLIDES: BannerItem[] = [];
 
-const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
+const HeroSlider: React.FC<HeroSliderProps> = ({
+  slides = DEFAULT_SLIDES,
+  signinLabel,
+}) => {
   const insets = useSafeAreaInsets();
   const user = useSelector(selectUser);
   const navigation =
@@ -45,16 +50,27 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
 
+    if (safeSlides.length <= 1) return;
+
     timerRef.current = setInterval(() => {
       setActiveIndex(prev => {
         const next = (prev + 1) % safeSlides.length;
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
+
+        if (Number.isFinite(next)) {
+          flatListRef.current?.scrollToIndex({
+            index: next,
+            animated: true,
+          });
+        }
+
         return next;
       });
     }, 3800);
   };
 
   useEffect(() => {
+    if (safeSlides.length <= 1) return;
+
     startTimer();
 
     return () => {
@@ -73,6 +89,10 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
   const viewabilityConfig = useRef({
     viewAreaCoveragePercentThreshold: 50,
   }).current;
+
+  if (!safeSlides.length) {
+    return null;
+  }
 
   return (
     <View style={{ height: totalHeight }}>
@@ -129,19 +149,19 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
               resizeMode="contain"
             />
           </View>
-          <Text style={styles.brandName}>M Optic</Text>
+          <AppText style={styles.brandName}>M Optic</AppText>
         </View>
 
         {user ? (
           <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>
+            <AppText style={styles.avatarText}>
               {user.name
                 .split(' ')
                 .map((w: string) => w[0])
                 .join('')
                 .toUpperCase()
                 .slice(0, 2)}
-            </Text>
+            </AppText>
           </View>
         ) : (
           <TouchableOpacity
@@ -150,7 +170,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
             onPress={() => navigation.navigate('Login')}
           >
             <Ionicons name="person-outline" size={14} color={Colors.white} />
-            <Text style={styles.signInText}>Sign In</Text>
+            <AppText style={styles.signInText}>{signinLabel}</AppText>
           </TouchableOpacity>
         )}
       </View>

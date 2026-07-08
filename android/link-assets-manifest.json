@@ -1,0 +1,21 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "src/assets/fonts/DMSans-Bold.ttf",
+      "sha1": "10e061ac7f01fd542e0c1956e89b12a272607f5d"
+    },
+    {
+      "path": "src/assets/fonts/DMSans-Regular.ttf",
+      "sha1": "76c500a4e46a2ef4252e909109926e08272ac849"
+    },
+    {
+      "path": "src/assets/fonts/Hanuman-Bold.ttf",
+      "sha1": "4d29efc208790a5ea89d5acfbd25fa7c89218845"
+    },
+    {
+      "path": "src/assets/fonts/Hanuman-Regular.ttf",
+      "sha1": "e820e10c6027845542d0d7c38c2f087dc8fe62d3"
+    }
+  ]
+}

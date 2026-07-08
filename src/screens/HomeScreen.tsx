@@ -44,6 +44,8 @@ import HeroSlider from '../components/ui/Home/HeroSlider';
 import HomeSkeleton from '../components/ui/Loading/HomeLoadingScreen';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import { useTranslation } from 'react-i18next';
+import AppText from '../components/AppText';
 
 // ─── Promo Modal ─────────────────────────────────────────────────────────────
 const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -125,20 +127,20 @@ const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
           {/* Discount pill */}
           <View style={promoStyles.discountPill}>
-            <Text style={promoStyles.discountValue}>30%</Text>
-            <Text style={promoStyles.discountLabel}>OFF</Text>
+            <AppText style={promoStyles.discountValue}>30%</AppText>
+            <AppText style={promoStyles.discountLabel}>OFF</AppText>
           </View>
         </View>
 
         {/* Body */}
         <View style={promoStyles.body}>
-          <Text style={promoStyles.tag}>🌸 Spring Sale</Text>
-          <Text style={promoStyles.title}>
+          <AppText style={promoStyles.tag}>🌸 Spring Sale</AppText>
+          <AppText style={promoStyles.title}>
             Exclusive offer{'\n'}just for you
-          </Text>
-          <Text style={promoStyles.desc}>
+          </AppText>
+          <AppText style={promoStyles.desc}>
             Get 30% off all prescription frames this season. Limited time only.
-          </Text>
+          </AppText>
 
           {/* Promo code row */}
           <View style={promoStyles.codeRow}>
@@ -148,9 +150,9 @@ const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 size={13}
                 color={Colors.primary}
               />
-              <Text style={promoStyles.codeText}>SPRING30</Text>
+              <AppText style={promoStyles.codeText}>SPRING30</AppText>
             </View>
-            <Text style={promoStyles.codeHint}>Valid until Apr 30</Text>
+            <AppText style={promoStyles.codeHint}>Valid until Apr 30</AppText>
           </View>
 
           {/* CTA */}
@@ -159,7 +161,7 @@ const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             onPress={handleClose}
             activeOpacity={0.85}
           >
-            <Text style={promoStyles.ctaText}>Shop Now</Text>
+            <AppText style={promoStyles.ctaText}>Shop Now</AppText>
             <Ionicons name="arrow-forward" size={16} color={Colors.white} />
           </TouchableOpacity>
 
@@ -168,7 +170,7 @@ const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             activeOpacity={0.7}
             style={promoStyles.skipBtn}
           >
-            <Text style={promoStyles.skipText}>Maybe later</Text>
+            <AppText style={promoStyles.skipText}>Maybe later</AppText>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -444,8 +446,7 @@ const HomeScreen: React.FC = () => {
   const [locLoading, setLocLoading] = useState(true);
   const [showPromo, setShowPromo] = useState(true);
   const navigation = useNavigation<GlassScreenNav>();
-
-  // ─── HomeScreen ──────────────────────────────────────────────────────────────
+  const { t } = useTranslation();
 
   const { data, loading, refreshing, error, onRefresh } = useHome();
 
@@ -467,13 +468,13 @@ const HomeScreen: React.FC = () => {
 
   if (error || !data) {
     return (
-      <ErrorComponent headerTitle="Something wentwrong" onRetry={onRefresh} />
+      <ErrorComponent headerTitle={t('homeErrorTitle')} onRetry={onRefresh} />
     );
   }
 
   return (
     <View style={styles.root}>
-      {showPromo && <PromoModal onClose={() => setShowPromo(false)} />}
+      {/* {showPromo && <PromoModal onClose={() => setShowPromo(false)} />} */}
 
       <ScrollView
         style={styles.scroll}
@@ -482,16 +483,15 @@ const HomeScreen: React.FC = () => {
           paddingBottom: insets.bottom + Spacing.xxl + 80,
         }}
       >
-        {/* ─── Hero Slider ─────────────────────────────────────── */}
-        <HeroSlider slides={data?.banners} />
+        <HeroSlider slides={data?.banners || []} signinLabel={t('SignIn')} />
 
-        {/* ─── Best Sellers ────────────────────────────────────── */}
         <View
           style={[styles.pad, styles.sectionRow, { marginTop: Spacing.lg }]}
         >
-          <Text style={styles.sectionTitle}>Best Sellers</Text>
+          <AppText style={styles.sectionTitle}>{t('homeBestSellers')}</AppText>
+
           <TouchableOpacity>
-            <Text style={styles.seeAll}>See All</Text>
+            <AppText style={styles.seeAll}>{t('commonSeeAll')}</AppText>
           </TouchableOpacity>
         </View>
 
@@ -515,7 +515,6 @@ const HomeScreen: React.FC = () => {
                 borderRadius={BorderRadius.lg}
                 style={{ overflow: 'hidden' }}
               >
-                {/* Image */}
                 <View style={{ height: 120, width: '100%' }}>
                   <Image
                     source={{ uri: item.image }}
@@ -524,14 +523,17 @@ const HomeScreen: React.FC = () => {
                   />
                   <View style={StyleSheet.absoluteFillObject} />
                 </View>
-                {/* Info */}
+
                 <View style={{ padding: Spacing.sm + 2, gap: 3 }}>
-                  <Text style={styles.bsBrand}>{item?.brand?.name}</Text>
-                  <Text style={styles.bsName} numberOfLines={1}>
+                  <AppText style={styles.bsBrand}>{item?.brand?.name}</AppText>
+
+                  <AppText style={styles.bsName} numberOfLines={1}>
                     {item.name}
-                  </Text>
+                  </AppText>
+
                   <View style={styles.bsFooter}>
-                    <Text style={styles.bsPrice}>${item.price}</Text>
+                    <AppText style={styles.bsPrice}>${item.price}</AppText>
+
                     <TouchableOpacity
                       style={styles.tryOnBtn}
                       activeOpacity={0.8}
@@ -541,7 +543,10 @@ const HomeScreen: React.FC = () => {
                         size={11}
                         color={Colors.white}
                       />
-                      <Text style={styles.tryOnText}>Try On</Text>
+
+                      <AppText style={styles.tryOnText}>
+                        {t('homeTryOn')}
+                      </AppText>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -550,16 +555,8 @@ const HomeScreen: React.FC = () => {
           ))}
         </ScrollView>
 
-        {/* ─── Announcements ───────────────────────────────────── */}
-        {/* <View style={[styles.pad, styles.sectionRow]}>
-          <Text style={styles.sectionTitle}>Announcements</Text>
-          <Badge label={`${ANNOUNCEMENTS.length} new`} variant="error" />
-        </View> */}
-
-        {/* Brand Section */}
-
         <BrandSection
-          title="Brands"
+          title={t('homeBrands')}
           brands={data?.brands || []}
           onPressBrand={brand => {
             navigation.navigate('GlassesList', {
@@ -570,9 +567,8 @@ const HomeScreen: React.FC = () => {
           }}
         />
 
-        {/*Frame Section  */}
         <FramesSection
-          title="Frame Types"
+          title={t('homeFrameTypes')}
           frames={data?.frame_shapes}
           onPressFrame={frame => {
             navigation.navigate('GlassesList', {
@@ -582,7 +578,6 @@ const HomeScreen: React.FC = () => {
           }}
         />
 
-        {/* Announment Section */}
         <AnnouncementSection annoucements={data?.announcements || []} />
       </ScrollView>
     </View>

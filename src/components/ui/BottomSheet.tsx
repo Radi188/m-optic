@@ -7,6 +7,7 @@ import RNBottomSheet, {
   BottomSheetModalProvider,
 } from '@gorhom/bottom-sheet';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
+import AppText from '../AppText';
 
 export { BottomSheetModalProvider };
 
@@ -32,7 +33,7 @@ const BottomSheet = forwardRef<RNBottomSheet, BottomSheetProps>(
           {...props}
           disappearsOnIndex={-1}
           appearsOnIndex={0}
-          opacity={0.50}
+          opacity={0.5}
         />
       ),
       [],
@@ -52,11 +53,15 @@ const BottomSheet = forwardRef<RNBottomSheet, BottomSheetProps>(
         <BottomSheetScrollView contentContainerStyle={styles.content}>
           {title && (
             <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
+              <AppText style={styles.title}>{title}</AppText>
               {onClose && (
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeBtn}
+                  hitSlop={8}
+                >
                   <View style={styles.closeInner}>
-                    <Text style={styles.closeText}>✕</Text>
+                    <AppText style={styles.closeText}>✕</AppText>
                   </View>
                 </TouchableOpacity>
               )}
@@ -77,62 +82,67 @@ interface BottomSheetModalProps {
   snapPoints?: (string | number)[];
 }
 
-export const AppBottomSheetModal = forwardRef<BottomSheetModal, BottomSheetModalProps>(
-  ({ children, title, snapPoints: snapPointsProp }, ref) => {
-    const snapPoints = useMemo(
-      () => snapPointsProp ?? ['50%', '85%'],
-      [snapPointsProp],
-    );
+export const AppBottomSheetModal = forwardRef<
+  BottomSheetModal,
+  BottomSheetModalProps
+>(({ children, title, snapPoints: snapPointsProp }, ref) => {
+  const snapPoints = useMemo(
+    () => snapPointsProp ?? ['50%', '85%'],
+    [snapPointsProp],
+  );
 
-    const renderBackdrop = useCallback(
-      (props: any) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={0.50}
-        />
-      ),
-      [],
-    );
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.5}
+      />
+    ),
+    [],
+  );
 
-    const handleDismiss = useCallback(() => {
-      if (ref && 'current' in ref) {
-        ref.current?.dismiss();
-      }
-    }, [ref]);
+  const handleDismiss = useCallback(() => {
+    if (ref && 'current' in ref) {
+      ref.current?.dismiss();
+    }
+  }, [ref]);
 
-    return (
-      <BottomSheetModal
-        ref={ref}
-        snapPoints={snapPoints}
-        backdropComponent={renderBackdrop}
-        handleIndicatorStyle={styles.indicator}
-        backgroundStyle={styles.background}
-        enablePanDownToClose
-      >
-        <BottomSheetScrollView contentContainerStyle={styles.content}>
-          {title && (
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <TouchableOpacity onPress={handleDismiss} style={styles.closeBtn} hitSlop={8}>
-                <View style={styles.closeInner}>
-                  <Text style={styles.closeText}>✕</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-          {children}
-        </BottomSheetScrollView>
-      </BottomSheetModal>
-    );
-  },
-);
+  return (
+    <BottomSheetModal
+      ref={ref}
+      snapPoints={snapPoints}
+      backdropComponent={renderBackdrop}
+      handleIndicatorStyle={styles.indicator}
+      backgroundStyle={styles.background}
+      enablePanDownToClose
+    >
+      <BottomSheetScrollView contentContainerStyle={styles.content}>
+        {title && (
+          <View style={styles.header}>
+            <AppText style={styles.title}>{title}</AppText>
+            <TouchableOpacity
+              onPress={handleDismiss}
+              style={styles.closeBtn}
+              hitSlop={8}
+            >
+              <View style={styles.closeInner}>
+                <AppText style={styles.closeText}>✕</AppText>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+        {children}
+      </BottomSheetScrollView>
+    </BottomSheetModal>
+  );
+});
 
 const styles = StyleSheet.create({
   background: {
     backgroundColor: Colors.glassSurfaceHigh,
-    borderTopLeftRadius:  BorderRadius.xxl,
+    borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
     borderWidth: 1,
     borderColor: Colors.glassBorderStrong,

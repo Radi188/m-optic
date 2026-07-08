@@ -4,6 +4,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import FaceIdIcon from '../../../assets/svg/face-id.svg';
 import { Colors } from '../../../theme';
 import { Product } from '../../../types/glasses';
+import AppText from '../../AppText';
 
 type Props = {
   item: Product;
@@ -43,12 +44,12 @@ const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
 
       {/* Info */}
       <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>
+        <AppText style={styles.name} numberOfLines={1}>
           {item.name}
-        </Text>
-        <Text style={styles.brand}>{item.brand?.name || ''}</Text>
+        </AppText>
+        <AppText style={styles.brand}>{item.brand?.name || ''}</AppText>
 
-        <Text style={styles.price}>${item.price}</Text>
+        <AppText style={styles.price}>${item.price}</AppText>
       </View>
     </TouchableOpacity>
   );

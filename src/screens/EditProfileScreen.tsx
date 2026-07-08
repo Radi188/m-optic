@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -20,6 +19,7 @@ import ChangePhotoModal, {
   SelectedProfileImage,
 } from '../components/ui/Modal/ChangePhotoModal';
 import { useUserProfile } from '../hook/useUserProfile';
+import AppText from '../components/AppText';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation<any>();
@@ -76,7 +76,7 @@ const EditProfileScreen = () => {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.centerStateText}>Loading profile...</Text>
+          <AppText style={styles.centerStateText}>Loading profile...</AppText>
         </View>
       </SafeAreaView>
     );
@@ -90,18 +90,18 @@ const EditProfileScreen = () => {
             <Ionicons name="alert-circle-outline" size={30} color="#D92D20" />
           </View>
 
-          <Text style={styles.errorTitle}>Unable to load profile</Text>
+          <AppText style={styles.errorTitle}>Unable to load profile</AppText>
 
-          <Text style={styles.errorText}>
+          <AppText style={styles.errorText}>
             {error || 'Something went wrong. Please try again.'}
-          </Text>
+          </AppText>
 
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.retryButton}
             onPress={refetch}
           >
-            <Text style={styles.retryButtonText}>Try Again</Text>
+            <AppText style={styles.retryButtonText}>Try Again</AppText>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -124,8 +124,8 @@ const EditProfileScreen = () => {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Profile Details</Text>
-            <Text style={styles.headerSubtitle}>Photo update only</Text>
+            <AppText style={styles.headerTitle}>Profile Details</AppText>
+            <AppText style={styles.headerSubtitle}>Photo update only</AppText>
           </View>
 
           <View style={styles.headerPlaceholder} />
@@ -173,22 +173,24 @@ const EditProfileScreen = () => {
               </View>
             </TouchableOpacity>
 
-            <Text style={styles.heroName}>
+            <AppText style={styles.heroName}>
               {formatValue(profile.customer_name)}
-            </Text>
+            </AppText>
 
             {isPremium ? (
               <View style={styles.premiumBadge}>
                 <Ionicons name="diamond" size={13} color="#9B6A3D" />
-                <Text style={styles.premiumBadgeText}>{tierName} Member</Text>
+                <AppText style={styles.premiumBadgeText}>
+                  {tierName} Member
+                </AppText>
               </View>
             ) : (
-              <Text style={styles.heroMeta}>{tierName} Member</Text>
+              <AppText style={styles.heroMeta}>{tierName} Member</AppText>
             )}
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Personal Information</Text>
+            <AppText style={styles.sectionTitle}>Personal Information</AppText>
 
             <View style={styles.lockPill}>
               <Ionicons
@@ -196,7 +198,7 @@ const EditProfileScreen = () => {
                 size={13}
                 color={Colors.gray500}
               />
-              <Text style={styles.lockPillText}>Locked</Text>
+              <AppText style={styles.lockPillText}>Locked</AppText>
             </View>
           </View>
 
@@ -255,11 +257,13 @@ const EditProfileScreen = () => {
             </View>
 
             <View style={styles.noticeContent}>
-              <Text style={styles.noticeTitle}>Protected profile details</Text>
-              <Text style={styles.noticeText}>
+              <AppText style={styles.noticeTitle}>
+                Protected profile details
+              </AppText>
+              <AppText style={styles.noticeText}>
                 Your account information is locked for security. You can update
                 only your profile photo.
-              </Text>
+              </AppText>
             </View>
           </View>
         </ScrollView>
@@ -294,8 +298,8 @@ const ReadonlyProfileItem: React.FC<ReadonlyProfileItemProps> = ({
       </View>
 
       <View style={styles.profileInfo}>
-        <Text style={styles.profileLabel}>{label}</Text>
-        <Text style={styles.profileValue}>{value}</Text>
+        <AppText style={styles.profileLabel}>{label}</AppText>
+        <AppText style={styles.profileValue}>{value}</AppText>
       </View>
 
       <View style={styles.readOnlyBadge}>

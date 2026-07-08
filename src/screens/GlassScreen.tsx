@@ -44,6 +44,8 @@ import { useProductList } from '../hook/useProductList';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import { useTranslation } from 'react-i18next';
+import AppText from '../components/AppText';
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -82,6 +84,7 @@ const EMPTY_FORM: AddFrameForm = { name: '', brand: '', price: '', stock: '' };
 const GlassScreen: React.FC = () => {
   const navigation = useNavigation<GlassScreenNav>();
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
 
   // ── Redux state ────────────────────────────────────────────────────────────
   const filtered = useAppSelector(selectFilteredGlasses);
@@ -247,7 +250,7 @@ const GlassScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Glass Frames</Text>
+            <AppText style={styles.title}>{t('glassFramesTitle')}</AppText>
           </View>
           <TouchableOpacity
             style={styles.filterBtn}
@@ -255,7 +258,7 @@ const GlassScreen: React.FC = () => {
             onPress={openFilterModal}
           >
             <Ionicons name="options-outline" size={20} color={Colors.primary} />
-            <Text style={styles.filterBtnText}>Filter</Text>
+            <AppText style={styles.filterBtnText}>{t('commonFilter')}</AppText>
           </TouchableOpacity>
         </View>
         {/* Search */}
@@ -275,7 +278,10 @@ const GlassScreen: React.FC = () => {
           />
         </View> */}
         <View style={styles.searchContainer}>
-          <SearchTrigger onPress={() => navigation.navigate('SearchScreen')} />
+          <SearchTrigger
+            onPress={() => navigation.navigate('SearchScreen')}
+            placeholder={t('glassSearchPlaceholder')}
+          />
         </View>
 
         {/* Brand Tabs */}
@@ -309,11 +315,11 @@ const GlassScreen: React.FC = () => {
                     )}
 
                     {b.name === 'All' || !b.logo ? (
-                      <Text
+                      <AppText
                         style={[styles.tabText, active && styles.tabTextActive]}
                       >
-                        {b.name}
-                      </Text>
+                        {t(b.name)}
+                      </AppText>
                     ) : (
                       <Image
                         source={{ uri: b.logo }}
@@ -326,10 +332,10 @@ const GlassScreen: React.FC = () => {
               })}
         </ScrollView>
         {/* Count */}
-        <Text style={styles.countLine}>
+        <AppText style={styles.countLine}>
           {filtered.length} frame{filtered.length !== 1 ? 's' : ''}
           {selectedBrand !== 'All' ? ` · ${selectedBrand}` : ''}
-        </Text>
+        </AppText>
         {/* Grid */}
         {loading && products.length === 0 ? (
           <GlassScreenSkeleton />
@@ -362,7 +368,7 @@ const GlassScreen: React.FC = () => {
                   size={40}
                   color={Colors.gray300}
                 />
-                <Text style={styles.emptyText}>No frames found</Text>
+                <AppText style={styles.emptyText}>No frames found</AppText>
               </View>
             }
           />

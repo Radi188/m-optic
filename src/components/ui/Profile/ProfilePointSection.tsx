@@ -7,7 +7,9 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type ProfilePointSectionProps = {
   tierName?: string;
@@ -31,9 +33,38 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
   remainingPoints = 750,
   progress = 70,
 }) => {
+  const { t, i18n } = useTranslation();
+
   const normalizedTier = tierName.toLowerCase();
+  const normalizedNextTier = nextTier.toLowerCase();
 
   const isSilver = normalizedTier.includes('silver');
+
+  const getTranslatedTier = (tier: string): string => {
+    const normalizedValue = tier.toLowerCase();
+
+    if (normalizedValue.includes('silver')) {
+      return t('MembershipTiers.Silver');
+    }
+
+    if (normalizedValue.includes('gold')) {
+      return t('MembershipTiers.Gold');
+    }
+
+    if (normalizedValue.includes('platinum')) {
+      return t('MembershipTiers.Platinum');
+    }
+
+    return tier;
+  };
+
+  const translatedTierName = normalizedTier.includes('m optic')
+    ? t('MOpticTier', {
+        tier: getTranslatedTier(tierName),
+      })
+    : getTranslatedTier(tierName);
+
+  const translatedNextTier = getTranslatedTier(normalizedNextTier);
 
   const tierTheme: TierTheme = isSilver
     ? {
@@ -48,6 +79,8 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
         progressTrack: 'rgba(50,30,18,0.35)',
         cardImage: require('../../../assets/images/gold_member.png'),
       };
+
+  const safeProgress = Math.min(Math.max(progress, 0), 100);
 
   return (
     <View
@@ -65,14 +98,22 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
             size={23}
             color={tierTheme.accentColor}
           />
-          <Text style={styles.title}>{tierName}</Text>
+
+          <AppText style={styles.title}>{translatedTierName}</AppText>
         </View>
 
-        <Text style={styles.points}>{points.toLocaleString()} Points</Text>
+        <AppText style={styles.points}>
+          {t('PointsAmount', {
+            points: points.toLocaleString(i18n.language),
+          })}
+        </AppText>
 
-        <Text style={styles.description}>
-          You’re {remainingPoints} points away from {nextTier}
-        </Text>
+        <AppText style={styles.description}>
+          {t('PointsAwayFromTier', {
+            points: remainingPoints.toLocaleString(i18n.language),
+            tier: translatedNextTier,
+          })}
+        </AppText>
 
         <View style={styles.progressRow}>
           <View
@@ -87,14 +128,14 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
               style={[
                 styles.progressFill,
                 {
-                  width: `${Math.min(progress, 100)}%`,
+                  width: `${safeProgress}%`,
                   backgroundColor: tierTheme.accentColor,
                 },
               ]}
             />
           </View>
 
-          <Text style={styles.progressText}>{progress}%</Text>
+          <AppText style={styles.progressText}>{safeProgress}%</AppText>
         </View>
       </View>
 

@@ -15,12 +15,15 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { GlassBackground } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
+import AppText from '../components/AppText';
+import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const popularSearches = ['Round', 'Square', 'Rimless', 'Boston', 'Oval'];
 
 const SearchScreen = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
   const [query, setQuery] = useState('');
 
@@ -54,7 +57,7 @@ const SearchScreen = () => {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search frames..."
+              placeholder={t('SearchFrames')}
               placeholderTextColor={Colors.gray400}
               style={styles.input}
               autoFocus
@@ -75,7 +78,7 @@ const SearchScreen = () => {
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.sectionTitle}>Popular searches</Text>
+          <AppText style={styles.sectionTitle}> {t('PopularSearches')}</AppText>
 
           <View style={styles.chipWrap}>
             {popularSearches.map(item => (
@@ -85,7 +88,7 @@ const SearchScreen = () => {
                 activeOpacity={0.8}
                 onPress={() => handleSearch(item)}
               >
-                <Text style={styles.chipText}>{item}</Text>
+                <AppText style={styles.chipText}>{item}</AppText>
               </TouchableOpacity>
             ))}
           </View>

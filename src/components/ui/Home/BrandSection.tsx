@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Colors, FontSize, Spacing } from '../../../theme';
 import { BrandResponse } from '../../../types/brand';
+import AppText from '../../AppText';
 
 type BrandSectionProps = {
   title?: string;
@@ -30,14 +31,14 @@ const BrandSection: React.FC<BrandSectionProps> = ({
       {item.logo ? (
         <Image source={{ uri: item.logo }} style={styles.logo} />
       ) : (
-        <Text style={styles.brandText}>{item.name}</Text>
+        <AppText style={styles.brandText}>{item.name}</AppText>
       )}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
+      <AppText style={styles.title}>{title}</AppText>
 
       <FlatList
         data={brands}

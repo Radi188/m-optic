@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSize } from '../../theme';
 import GlassView from './GlassView';
+import AppText from '../AppText';
 
 interface CardProps {
   children: React.ReactNode;
@@ -27,9 +28,17 @@ const Card: React.FC<CardProps> = ({
   const scale = new Animated.Value(1);
 
   const onPressIn = () =>
-    Animated.spring(scale, { toValue: 0.975, useNativeDriver: true, speed: 30 }).start();
+    Animated.spring(scale, {
+      toValue: 0.975,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
   const onPressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+    }).start();
 
   if (onPress) {
     return (
@@ -92,13 +101,16 @@ export const StatCard: React.FC<StatCardProps> = ({
       borderRadius={BorderRadius.md}
       shadow={false}
       highlight={false}
-      style={[styles.statIconBg, { backgroundColor: color + '25', borderColor: color + '40' }]}
+      style={[
+        styles.statIconBg,
+        { backgroundColor: color + '25', borderColor: color + '40' },
+      ]}
     >
       {icon}
     </GlassView>
     <Animated.View style={styles.statInfo}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <AppText style={styles.statValue}>{value}</AppText>
+      <AppText style={styles.statLabel}>{label}</AppText>
     </Animated.View>
 
     {/* Right accent dot */}
@@ -107,7 +119,10 @@ export const StatCard: React.FC<StatCardProps> = ({
       borderRadius={BorderRadius.full}
       shadow={false}
       highlight={false}
-      style={[styles.accentDot, { backgroundColor: color + '30', borderColor: color + '50' }]}
+      style={[
+        styles.accentDot,
+        { backgroundColor: color + '30', borderColor: color + '50' },
+      ]}
     />
   </GlassView>
 );

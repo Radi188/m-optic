@@ -10,77 +10,48 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../theme';
+import AppText from '../components/AppText';
 
 type SupportOption = {
   id: string;
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
   icon: string;
   onPress: () => void;
 };
 
-type FAQItem = {
-  id: string;
-  question: string;
-  answer: string;
-};
-
-const faqItems: FAQItem[] = [
-  {
-    id: 'order',
-    question: 'How can I check my order status?',
-    answer:
-      'You can check your latest order status from your profile or order history section.',
-  },
-  {
-    id: 'appointment',
-    question: 'Can I book an eye test appointment?',
-    answer:
-      'Yes, you can book an appointment from the app and visit the nearest store.',
-  },
-  {
-    id: 'glassesReady',
-    question: 'How do I know when my glasses are ready?',
-    answer:
-      'You will receive a notification when your glasses are ready for pickup.',
-  },
-  {
-    id: 'support',
-    question: 'How can I contact support?',
-    answer: 'You can contact us by phone, Telegram, email, or visit our store.',
-  },
-];
-
 const SupportScreen = () => {
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   const supportOptions: SupportOption[] = [
     {
       id: 'call',
-      title: 'Call Support',
-      subtitle: 'Speak directly with our team',
+      titleKey: 'CallSupport',
+      subtitleKey: 'CallSupportSubtitle',
       icon: 'call-outline',
       onPress: () => Linking.openURL('tel:+85512345678'),
     },
     {
       id: 'telegram',
-      title: 'Telegram',
-      subtitle: 'Chat with us on Telegram',
+      titleKey: 'Telegram',
+      subtitleKey: 'TelegramSubtitle',
       icon: 'paper-plane-outline',
       onPress: () => Linking.openURL('https://t.me/yourtelegram'),
     },
     {
       id: 'email',
-      title: 'Email Support',
-      subtitle: 'Send us your question by email',
+      titleKey: 'EmailSupport',
+      subtitleKey: 'EmailSupportSubtitle',
       icon: 'mail-outline',
       onPress: () => Linking.openURL('mailto:support@example.com'),
     },
     {
       id: 'location',
-      title: 'Store Location',
-      subtitle: 'Find our nearest store',
+      titleKey: 'StoreLocation',
+      subtitleKey: 'StoreLocationSubtitle',
       icon: 'location-outline',
       onPress: () => Linking.openURL('https://maps.google.com'),
     },
@@ -98,7 +69,7 @@ const SupportScreen = () => {
             <Ionicons name="chevron-back" size={24} color={Colors.black} />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Support</Text>
+          <AppText style={styles.headerTitle}>{t('Support')}</AppText>
 
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -116,14 +87,13 @@ const SupportScreen = () => {
               />
             </View>
 
-            <Text style={styles.heroTitle}>How can we help you?</Text>
-            <Text style={styles.heroSubtitle}>
-              Get help with orders, appointments, glasses pickup, and app
-              support.
-            </Text>
+            <AppText style={styles.heroTitle}>{t('HowCanWeHelpYou')}</AppText>
+            <AppText style={styles.heroSubtitle}>
+              {t('SupportHeroSubtitle')}
+            </AppText>
           </View>
 
-          <Text style={styles.sectionTitle}>Contact Support</Text>
+          <AppText style={styles.sectionTitle}>{t('ContactSupport')}</AppText>
 
           <View style={styles.card}>
             {supportOptions.map((item, index) => {
@@ -145,8 +115,10 @@ const SupportScreen = () => {
                   </View>
 
                   <View style={styles.textWrap}>
-                    <Text style={styles.title}>{item.title}</Text>
-                    <Text style={styles.subtitle}>{item.subtitle}</Text>
+                    <AppText style={styles.title}>{t(item.titleKey)}</AppText>
+                    <AppText style={styles.subtitle}>
+                      {t(item.subtitleKey)}
+                    </AppText>
                   </View>
 
                   <Ionicons
@@ -158,24 +130,6 @@ const SupportScreen = () => {
               );
             })}
           </View>
-
-          {/* <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-
-          <View style={styles.faqCard}>
-            {faqItems.map((item, index) => {
-              const isLast = index === faqItems.length - 1;
-
-              return (
-                <View
-                  key={item.id}
-                  style={[styles.faqItem, isLast && styles.lastItem]}
-                >
-                  <Text style={styles.question}>{item.question}</Text>
-                  <Text style={styles.answer}>{item.answer}</Text>
-                </View>
-              );
-            })}
-          </View> */}
         </ScrollView>
       </View>
     </SafeAreaView>

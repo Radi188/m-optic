@@ -19,6 +19,7 @@ import {
 } from 'react-native-safe-area-context';
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import AppText from '../components/AppText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const THUMB_SIZE = 70;
@@ -143,14 +144,14 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle} numberOfLines={1}>
+              <AppText style={styles.headerTitle} numberOfLines={1}>
                 {productName}
-              </Text>
-              <Text style={styles.headerCount}>
+              </AppText>
+              <AppText style={styles.headerCount}>
                 {validImages.length
                   ? `${activeIndex + 1}/${validImages.length}`
                   : '0/0'}
-              </Text>
+              </AppText>
             </View>
 
             <View style={styles.headerRight}>

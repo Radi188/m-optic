@@ -8,6 +8,7 @@ import {
   BorderRadius,
   Shadow,
 } from '../../../theme';
+import AppText from '../../AppText';
 
 type Props = {
   onRetry?: () => void;
@@ -24,12 +25,12 @@ const ProfileErrorState: React.FC<Props> = ({ onRetry }) => {
         />
       </View>
 
-      <Text style={styles.title}>Unable to load profile</Text>
+      <AppText style={styles.title}>Unable to load profile</AppText>
 
-      <Text style={styles.subtitle}>
+      <AppText style={styles.subtitle}>
         Something went wrong while loading your profile. Please check your
         connection and try again.
-      </Text>
+      </AppText>
 
       <TouchableOpacity
         activeOpacity={0.85}
@@ -37,7 +38,7 @@ const ProfileErrorState: React.FC<Props> = ({ onRetry }) => {
         onPress={onRetry}
       >
         <Ionicons name="refresh-outline" size={18} color={Colors.white} />
-        <Text style={styles.retryText}>Try Again</Text>
+        <AppText style={styles.retryText}>Try Again</AppText>
       </TouchableOpacity>
     </View>
   );

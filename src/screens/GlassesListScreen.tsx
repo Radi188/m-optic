@@ -31,6 +31,7 @@ import { useProductList } from '../hook/useProductList';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import AppText from '../components/AppText';
 
 type GlassesListNav = NativeStackNavigationProp<RootStackParamList>;
 type GlassesListRoute = NativeStackScreenProps<
@@ -317,11 +318,11 @@ const GlassesListScreen: React.FC = () => {
           </TouchableOpacity>
 
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.title}>
+            <AppText style={styles.title}>
               {from === 'brand'
                 ? initialBrandName || 'Brands'
                 : initialFrameShape || 'Frames'}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -343,13 +344,13 @@ const GlassesListScreen: React.FC = () => {
           </TouchableOpacity>
 
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.title}>
+            <AppText style={styles.title}>
               {from === 'brand'
                 ? initialBrandName || 'Brands'
                 : initialFrameShape || 'Frames'}
-            </Text>
+            </AppText>
 
-            <Text style={styles.subtitle}>
+            <AppText style={styles.subtitle}>
               {from === 'brand'
                 ? initialBrandName
                   ? `${initialBrandName} frames`
@@ -357,7 +358,7 @@ const GlassesListScreen: React.FC = () => {
                 : initialFrameShape
                 ? `${initialFrameShape} frame shape`
                 : 'Choose frame shape'}
-            </Text>
+            </AppText>
           </View>
 
           <TouchableOpacity
@@ -411,14 +412,14 @@ const GlassesListScreen: React.FC = () => {
                       style={[styles.tab, active && styles.tabActive]}
                     >
                       {b.name === 'All' || !b.logo ? (
-                        <Text
+                        <AppText
                           style={[
                             styles.tabText,
                             active && styles.tabTextActive,
                           ]}
                         >
                           {b.name}
-                        </Text>
+                        </AppText>
                       ) : (
                         <Image
                           source={{ uri: b.logo }}
@@ -449,20 +450,20 @@ const GlassesListScreen: React.FC = () => {
                     activeOpacity={0.75}
                     style={[styles.tab, active && styles.tabActive]}
                   >
-                    <Text
+                    <AppText
                       style={[styles.tabText, active && styles.tabTextActive]}
                     >
                       {frame.name}
-                    </Text>
+                    </AppText>
                   </TouchableOpacity>
                 );
               })}
         </ScrollView>
 
         {!loading && !error && (
-          <Text style={styles.countLine}>
+          <AppText style={styles.countLine}>
             {products.length} frame{products.length !== 1 ? 's' : ''}
-          </Text>
+          </AppText>
         )}
 
         {loading && products.length === 0 ? (
@@ -493,11 +494,11 @@ const GlassesListScreen: React.FC = () => {
                   color={Colors.gray300}
                 />
 
-                <Text style={styles.emptyTitle}>No frames found</Text>
+                <AppText style={styles.emptyTitle}>No frames found</AppText>
 
-                <Text style={styles.emptyText}>
+                <AppText style={styles.emptyText}>
                   Try another brand, frame shape, or filter.
-                </Text>
+                </AppText>
               </View>
             }
           />

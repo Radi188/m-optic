@@ -10,12 +10,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../theme';
+import AppText from '../components/AppText';
 
 const PRIVACY_POLICY_URL = 'https://crosscambodia.com/en/privacy-policy';
 
 const PrivacyPolicyScreen = () => {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   return (
@@ -31,8 +34,10 @@ const PrivacyPolicyScreen = () => {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Privacy Policy</Text>
-            <Text style={styles.headerSubtitle}>Data and security</Text>
+            <AppText style={styles.headerTitle}>{t('PrivacyPolicy')}</AppText>
+            <AppText style={styles.headerSubtitle}>
+              {t('DataAndSecurity')}
+            </AppText>
           </View>
 
           <View style={styles.headerPlaceholder} />
@@ -42,7 +47,7 @@ const PrivacyPolicyScreen = () => {
           {isLoading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.loadingText}>Loading policy...</Text>
+              <AppText style={styles.loadingText}>{t('LoadingPolicy')}</AppText>
             </View>
           ) : null}
 

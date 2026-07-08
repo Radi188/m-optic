@@ -1,35 +1,50 @@
-import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
+
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+
 import { Provider, useDispatch } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
 
 import { store, persistor } from './src/store';
 import type { AppDispatch } from './src/store';
-import { PersistGate } from 'redux-persist/integration/react';
+
 import RootStackNavigator from './src/navigation/RootStackNavigator';
 import { Colors } from './src/theme';
-import { bootstrapFirebaseMessaging, setupForegroundNotificationListener } from './src/services/firebase/messaging';
 
-// ─── Inner app: has access to the Redux store ─────────────────────────────────
+import {
+  bootstrapFirebaseMessaging,
+  setupForegroundNotificationListener,
+} from './src/services/firebase/messaging';
+
+import { initializeLanguage } from './src/localizations/i18n';
 
 const AppInner: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
     let unsubscribeForeground: () => void = () => {};
+    let isMounted = true;
 
-    // Bootstrap must finish before we attach the foreground listener so that
-    // the native Firebase module is guaranteed to be ready.
-    bootstrapFirebaseMessaging(dispatch).then(() => {
-      unsubscribeForeground = setupForegroundNotificationListener(dispatch);
-    }).catch(err => {
-      console.warn('[App] Firebase setup error:', err);
-    });
+    const initializeFirebase = async () => {
+      try {
+        await bootstrapFirebaseMessaging(dispatch);
+
+        if (isMounted) {
+          unsubscribeForeground = setupForegroundNotificationListener(dispatch);
+        }
+      } catch (error) {
+        console.warn('[App] Firebase setup error:', error);
+      }
+    };
+
+    initializeFirebase();
 
     return () => {
+      isMounted = false;
       unsubscribeForeground();
     };
   }, [dispatch]);
@@ -39,20 +54,57 @@ const AppInner: React.FC = () => {
       <StatusBar
         barStyle="dark-content"
         backgroundColor="transparent"
-        translucent={true}
+        translucent
       />
+
       <RootStackNavigator />
     </NavigationContainer>
   );
 };
 
-// ─── Root: provides the Redux store ──────────────────────────────────────────
+// ─── Root app ────────────────────────────────────────────────
 
 function App(): React.JSX.Element {
+  const [languageReady, setLanguageReady] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const prepareLocalization = async () => {
+      try {
+        await initializeLanguage();
+      } finally {
+        if (isMounted) {
+          setLanguageReady(true);
+        }
+      }
+    };
+
+    prepareLocalization();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!languageReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="transparent"
+          translucent
+        />
+
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.primary }}>
+        <GestureHandlerRootView style={styles.root}>
           <SafeAreaProvider>
             <BottomSheetModalProvider>
               <AppInner />
@@ -63,5 +115,19 @@ function App(): React.JSX.Element {
     </Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
+});
 
 export default App;

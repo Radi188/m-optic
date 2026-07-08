@@ -1,9 +1,16 @@
 import React from 'react';
-import {  Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { BorderRadius, Colors } from '../../../theme';
+import AppText from '../../AppText';
 
-const SearchTrigger = ({ onPress }: { onPress?: () => void }) => {
+const SearchTrigger = ({
+  onPress,
+  placeholder,
+}: {
+  onPress?: () => void;
+  placeholder: string;
+}) => {
   return (
     <TouchableOpacity
       style={styles.container}
@@ -12,7 +19,7 @@ const SearchTrigger = ({ onPress }: { onPress?: () => void }) => {
     >
       <Ionicons name="search-outline" size={16} color="#888" />
 
-      <Text style={styles.placeholder}>Search glasses</Text>
+      <AppText style={styles.placeholder}>{placeholder}</AppText>
     </TouchableOpacity>
   );
 };

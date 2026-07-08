@@ -10,8 +10,14 @@ import {
   Animated,
 } from 'react-native';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
+import AppText from '../AppText';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'ghost'
+  | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
@@ -64,14 +70,21 @@ const Button: React.FC<ButtonProps> = ({
 
   const variantStyle = VARIANT_STYLES[variant];
   const sizeStyle = SIZE_STYLES[size];
-  const shadowStyle = variant === 'primary' ? Shadow.glow : variant === 'danger' ? undefined : undefined;
+  const shadowStyle =
+    variant === 'primary'
+      ? Shadow.glow
+      : variant === 'danger'
+      ? undefined
+      : undefined;
 
   return (
-    <Animated.View style={[
-      fullWidth && styles.fullWidth,
-      { transform: [{ scale }] },
-      isDisabled && styles.disabled,
-    ]}>
+    <Animated.View
+      style={[
+        fullWidth && styles.fullWidth,
+        { transform: [{ scale }] },
+        isDisabled && styles.disabled,
+      ]}
+    >
       <TouchableOpacity
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -87,7 +100,9 @@ const Button: React.FC<ButtonProps> = ({
         ]}
       >
         {/* Specular top highlight for glass variants */}
-        {(variant === 'secondary' || variant === 'outline' || variant === 'ghost') && (
+        {(variant === 'secondary' ||
+          variant === 'outline' ||
+          variant === 'ghost') && (
           <View style={styles.glassHighlight} pointerEvents="none" />
         )}
 
@@ -97,14 +112,11 @@ const Button: React.FC<ButtonProps> = ({
         )}
 
         {loading ? (
-          <ActivityIndicator
-            color={variantStyle.spinnerColor}
-            size="small"
-          />
+          <ActivityIndicator color={variantStyle.spinnerColor} size="small" />
         ) : (
           <View style={styles.row}>
             {leftIcon && <View style={styles.iconLeft}>{leftIcon}</View>}
-            <Text
+            <AppText
               style={[
                 styles.text,
                 variantStyle.text,
@@ -113,7 +125,7 @@ const Button: React.FC<ButtonProps> = ({
               ]}
             >
               {title}
-            </Text>
+            </AppText>
             {rightIcon && <View style={styles.iconRight}>{rightIcon}</View>}
           </View>
         )}
@@ -124,11 +136,14 @@ const Button: React.FC<ButtonProps> = ({
 
 // ─── Variant definitions ───────────────────────────────────────────────────
 
-const VARIANT_STYLES: Record<ButtonVariant, {
-  container: ViewStyle;
-  text: TextStyle;
-  spinnerColor: string;
-}> = {
+const VARIANT_STYLES: Record<
+  ButtonVariant,
+  {
+    container: ViewStyle;
+    text: TextStyle;
+    spinnerColor: string;
+  }
+> = {
   primary: {
     container: {
       backgroundColor: Colors.primary,
@@ -176,7 +191,7 @@ const VARIANT_STYLES: Record<ButtonVariant, {
 };
 
 const SIZE_STYLES: Record<ButtonSize, ViewStyle> = {
-  sm: { paddingHorizontal: Spacing.md, paddingVertical: 9,  minHeight: 38 },
+  sm: { paddingHorizontal: Spacing.md, paddingVertical: 9, minHeight: 38 },
   md: { paddingHorizontal: Spacing.lg, paddingVertical: 13, minHeight: 48 },
   lg: { paddingHorizontal: Spacing.xl, paddingVertical: 17, minHeight: 56 },
 };
@@ -199,10 +214,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconLeft:  { marginRight: Spacing.xs },
+  iconLeft: { marginRight: Spacing.xs },
   iconRight: { marginLeft: Spacing.xs },
   fullWidth: { width: '100%' },
-  disabled:  { opacity: 0.46 },
+  disabled: { opacity: 0.46 },
 
   text: {
     fontWeight: '600',

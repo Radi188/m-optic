@@ -7,17 +7,30 @@
  *     overlaid on the mirrored front-camera video.
  *  3. MediaPipe FaceMesh drives position / rotation / scale every frame.
  */
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from 'react';
 import {
-  View, Text, StyleSheet, Alert, Linking,
-  ActivityIndicator, Image,
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Linking,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { GlassItem } from '../types/navigation';
 
-interface Props { glass: GlassItem; }
+interface Props {
+  glass: GlassItem;
+}
 
 const OBJ_URI = Image.resolveAssetSource(
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -27,13 +40,13 @@ const OBJ_URI = Image.resolveAssetSource(
 function escapeObj(raw: string): string {
   return raw
     .replace(/\\/g, '\\\\')
-    .replace(/`/g,  '\\`')
+    .replace(/`/g, '\\`')
     .replace(/\${/g, '\\${');
 }
 
 function buildHtml(glass: GlassItem, objText: string): string {
   const accentHex = Colors.primary;
-  const safeObj   = escapeObj(objText);
+  const safeObj = escapeObj(objText);
 
   return `<!DOCTYPE html>
 <html>
@@ -354,16 +367,22 @@ else window.addEventListener('load', initFaceMesh);
 
 const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const webviewRef = useRef<WebView>(null);
-  const [objText,   setObjText]   = useState<string | null>(null);
+  const [objText, setObjText] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     setObjText(null);
     setLoadError(false);
     fetch(OBJ_URI)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
       .then(setObjText)
-      .catch(e => { console.warn('[TryOn] OBJ fetch failed:', e); setLoadError(true); });
+      .catch(e => {
+        console.warn('[TryOn] OBJ fetch failed:', e);
+        setLoadError(true);
+      });
   }, []);
 
   const html = useMemo(
@@ -376,27 +395,30 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     Linking.openSettings().catch(() => {});
   }, []);
 
-  const onMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === 'cameraError') {
-        Alert.alert(
-          'Camera Access Required',
-          'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: openSettings },
-          ],
-        );
-      }
-    } catch {}
-  }, [openSettings]);
+  const onMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === 'cameraError') {
+          Alert.alert(
+            'Camera Access Required',
+            'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: openSettings },
+            ],
+          );
+        }
+      } catch {}
+    },
+    [openSettings],
+  );
 
   if (!html && !loadError) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>Loading glasses model…</Text>
+        <AppText style={styles.loadingText}>Loading glasses model…</AppText>
       </View>
     );
   }
@@ -404,11 +426,12 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   if (loadError || !html) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorIcon}>⚠</Text>
-        <Text style={styles.errorTitle}>Could not load model</Text>
-        <Text style={styles.errorSub}>
-          Make sure Metro bundler is running{'\n'}and the device is on the same network.
-        </Text>
+        <AppText style={styles.errorIcon}>⚠</AppText>
+        <AppText style={styles.errorTitle}>Could not load model</AppText>
+        <AppText style={styles.errorSub}>
+          Make sure Metro bundler is running{'\n'}and the device is on the same
+          network.
+        </AppText>
       </View>
     );
   }
@@ -433,11 +456,13 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
 
       <View style={styles.bottomBar}>
         <View style={styles.glassInfo}>
-          <Text style={styles.glassName}>{glass.name}</Text>
-          <Text style={styles.glassBrand}>{glass.brand} · ${glass.price}</Text>
+          <AppText style={styles.glassName}>{glass.name}</AppText>
+          <AppText style={styles.glassBrand}>
+            {glass.brand} · ${glass.price}
+          </AppText>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>3D LIVE</Text>
+          <AppText style={styles.badgeText}>3D LIVE</AppText>
         </View>
       </View>
     </View>
@@ -448,30 +473,54 @@ export default GlassTryOnScene;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  webview:   { flex: 1, backgroundColor: '#000' },
+  webview: { flex: 1, backgroundColor: '#000' },
 
   center: {
-    flex: 1, backgroundColor: '#000',
-    alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, paddingHorizontal: Spacing.xl,
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
   },
-  loadingText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
-  errorIcon:   { fontSize: 36, color: '#F7A440' },
-  errorTitle:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
-  errorSub:    { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 20 },
+  loadingText: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.45)',
+    fontWeight: '500',
+  },
+  errorIcon: { fontSize: 36, color: '#F7A440' },
+  errorTitle: { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  errorSub: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.82)',
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
   },
-  glassInfo:  { flex: 1 },
-  glassName:  { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
-  glassBrand: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  glassInfo: { flex: 1 },
+  glassName: { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  glassBrand: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
   badge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
     borderRadius: BorderRadius.sm,
   },
-  badgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 1 },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 1,
+  },
 });

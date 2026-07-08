@@ -31,6 +31,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { useProductList } from '../hook/useProductList';
 import type { Product } from '../types/glasses';
+import AppText from '../components/AppText';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -288,8 +289,22 @@ type CvPlate = {
 // Pool of numbers an Ishihara-style plate can hide. Each run picks fresh ones
 // with random distractor options so the test isn't memorisable.
 const CV_NUMBERS = [
-  '2', '3', '5', '6', '7', '8', '12', '15', '16',
-  '26', '29', '42', '45', '57', '73', '74',
+  '2',
+  '3',
+  '5',
+  '6',
+  '7',
+  '8',
+  '12',
+  '15',
+  '16',
+  '26',
+  '29',
+  '42',
+  '45',
+  '57',
+  '73',
+  '74',
 ];
 const genCvPlates = (n = 3): CvPlate[] => {
   const targets = pick(CV_NUMBERS, n);
@@ -764,7 +779,7 @@ const ScanCountdown: React.FC<{ onComplete: () => void }> = ({
 
   return (
     <Animated.View style={[cdStyles.root, { opacity: scrim }]}>
-      <Text style={cdStyles.heading}>Get ready</Text>
+      <AppText style={cdStyles.heading}>Get ready</AppText>
       <Animated.View
         style={[
           cdStyles.ring,
@@ -772,13 +787,13 @@ const ScanCountdown: React.FC<{ onComplete: () => void }> = ({
           !isNumber && cdStyles.ringText,
         ]}
       >
-        <Text style={isNumber ? cdStyles.number : cdStyles.readyText}>
+        <AppText style={isNumber ? cdStyles.number : cdStyles.readyText}>
           {value}
-        </Text>
+        </AppText>
       </Animated.View>
-      <Text style={cdStyles.sub}>
+      <AppText style={cdStyles.sub}>
         Hold your phone at eye level and look straight ahead.
-      </Text>
+      </AppText>
     </Animated.View>
   );
 };
@@ -861,7 +876,9 @@ const FaceScanCamera: React.FC<{
   // Start detection only once the countdown is done (camera already warm).
   useEffect(() => {
     if (armed) {
-      webViewRef.current?.injectJavaScript('window.armScan&&window.armScan();true;');
+      webViewRef.current?.injectJavaScript(
+        'window.armScan&&window.armScan();true;',
+      );
     }
   }, [armed]);
 
@@ -913,8 +930,8 @@ const FaceShapeSelector: React.FC<{
       <View style={styles.heroIconRing}>
         <Ionicons name="scan-outline" size={48} color={Colors.primary} />
       </View>
-      <Text style={styles.heroTitle}>{title}</Text>
-      <Text style={styles.heroSub}>{subtitle}</Text>
+      <AppText style={styles.heroTitle}>{title}</AppText>
+      <AppText style={styles.heroSub}>{subtitle}</AppText>
     </View>
 
     {(
@@ -933,10 +950,10 @@ const FaceShapeSelector: React.FC<{
           <Ionicons name={info.icon as any} size={26} color={Colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={scanStyles.shapeName}>{shape}</Text>
-          <Text style={scanStyles.shapeDesc} numberOfLines={2}>
+          <AppText style={scanStyles.shapeName}>{shape}</AppText>
+          <AppText style={scanStyles.shapeDesc} numberOfLines={2}>
             {info.description}
-          </Text>
+          </AppText>
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
       </TouchableOpacity>
@@ -948,7 +965,7 @@ const FaceShapeSelector: React.FC<{
       activeOpacity={0.8}
     >
       <Ionicons name="arrow-back-outline" size={17} color={Colors.primary} />
-      <Text style={styles.outlineBtnText}>Go Back</Text>
+      <AppText style={styles.outlineBtnText}>Go Back</AppText>
     </TouchableOpacity>
   </ScrollView>
 );
@@ -979,9 +996,9 @@ const TabBar: React.FC<{ active: Tab; onChange: (t: Tab) => void }> = ({
             size={17}
             color={isActive ? Colors.primary : Colors.gray400}
           />
-          <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+          <AppText style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
             {tab.label}
-          </Text>
+          </AppText>
         </TouchableOpacity>
       );
     })}
@@ -999,11 +1016,11 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       <View style={styles.heroIconRing}>
         <Ionicons name="scan-circle-outline" size={64} color={Colors.primary} />
       </View>
-      <Text style={styles.heroTitle}>Face Shape Scan</Text>
-      <Text style={styles.heroSub}>
+      <AppText style={styles.heroTitle}>Face Shape Scan</AppText>
+      <AppText style={styles.heroSub}>
         We'll analyse your face shape using your front camera and recommend the
         perfect frames for you.
-      </Text>
+      </AppText>
     </View>
 
     {[
@@ -1019,9 +1036,9 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
     ].map(step => (
       <View key={step.n} style={styles.stepRow}>
         <View style={styles.stepBadge}>
-          <Text style={styles.stepNum}>{step.n}</Text>
+          <AppText style={styles.stepNum}>{step.n}</AppText>
         </View>
-        <Text style={styles.stepText}>{step.text}</Text>
+        <AppText style={styles.stepText}>{step.text}</AppText>
       </View>
     ))}
 
@@ -1031,7 +1048,7 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       activeOpacity={0.82}
     >
       <Ionicons name="scan-outline" size={20} color={Colors.white} />
-      <Text style={styles.primaryBtnText}>Start Scan</Text>
+      <AppText style={styles.primaryBtnText}>Start Scan</AppText>
     </TouchableOpacity>
   </ScrollView>
 );
@@ -1092,9 +1109,9 @@ const ProductRecommendations: React.FC<{
     return (
       <View style={prStyles.empty}>
         <Ionicons name="glasses-outline" size={28} color={Colors.gray300} />
-        <Text style={prStyles.emptyText}>
+        <AppText style={prStyles.emptyText}>
           No matching frames available right now.
-        </Text>
+        </AppText>
       </View>
     );
   }
@@ -1114,11 +1131,11 @@ const ProductRecommendations: React.FC<{
             resizeMode="contain"
           />
           <View style={prStyles.info}>
-            <Text style={prStyles.name} numberOfLines={1}>
+            <AppText style={prStyles.name} numberOfLines={1}>
               {p.name}
-            </Text>
+            </AppText>
             {p.brand?.name ? (
-              <Text style={prStyles.brand}>{p.brand.name}</Text>
+              <AppText style={prStyles.brand}>{p.brand.name}</AppText>
             ) : null}
             <View style={prStyles.reasonRow}>
               <Ionicons
@@ -1126,11 +1143,11 @@ const ProductRecommendations: React.FC<{
                 size={12}
                 color={Colors.primary}
               />
-              <Text style={prStyles.reason} numberOfLines={2}>
+              <AppText style={prStyles.reason} numberOfLines={2}>
                 {reasonFor(p)}
-              </Text>
+              </AppText>
             </View>
-            <Text style={prStyles.price}>${p.price}</Text>
+            <AppText style={prStyles.price}>${p.price}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
         </TouchableOpacity>
@@ -1222,8 +1239,8 @@ const GlassesBottomSheet: React.FC<{
               />
             </View>
             <View>
-              <Text style={gsStyles.headerOverline}>Your face shape</Text>
-              <Text style={gsStyles.headerShape}>{shape}</Text>
+              <AppText style={gsStyles.headerOverline}>Your face shape</AppText>
+              <AppText style={gsStyles.headerShape}>{shape}</AppText>
             </View>
           </View>
           <TouchableOpacity
@@ -1242,11 +1259,11 @@ const GlassesBottomSheet: React.FC<{
         >
           {/* Face insight — description + frame tip combined */}
           <View style={gsStyles.insightCard}>
-            <Text style={gsStyles.insightDesc}>{info.description}</Text>
+            <AppText style={gsStyles.insightDesc}>{info.description}</AppText>
             <View style={gsStyles.insightDivider} />
             <View style={gsStyles.insightTipRow}>
               <Ionicons name="bulb" size={15} color={Colors.primary} />
-              <Text style={gsStyles.insightTip}>{info.tip}</Text>
+              <AppText style={gsStyles.insightTip}>{info.tip}</AppText>
             </View>
           </View>
 
@@ -1256,10 +1273,10 @@ const GlassesBottomSheet: React.FC<{
               <Ionicons name="sparkles" size={14} color={Colors.white} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={gsStyles.recTitle}>Picked For You</Text>
-              <Text style={gsStyles.recSub}>
+              <AppText style={gsStyles.recTitle}>Picked For You</AppText>
+              <AppText style={gsStyles.recSub}>
                 Frames that flatter your {shape.toLowerCase()} face
-              </Text>
+              </AppText>
             </View>
           </View>
           <ProductRecommendations
@@ -1280,7 +1297,7 @@ const GlassesBottomSheet: React.FC<{
             activeOpacity={0.82}
           >
             <Ionicons name="refresh-outline" size={19} color={Colors.white} />
-            <Text style={styles.primaryBtnText}>Scan Again</Text>
+            <AppText style={styles.primaryBtnText}>Scan Again</AppText>
           </TouchableOpacity>
 
           <View style={gsStyles.footerNote}>
@@ -1289,11 +1306,11 @@ const GlassesBottomSheet: React.FC<{
               size={13}
               color={Colors.gray400}
             />
-            <Text style={gsStyles.footerNoteText}>
+            <AppText style={gsStyles.footerNoteText}>
               Frame recommendations are based on your face shape analysis and
               are indicative only. Visit an M Optic store to try on frames in
               person.
-            </Text>
+            </AppText>
           </View>
         </ScrollView>
       </Animated.View>
@@ -1312,11 +1329,11 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       <View style={styles.heroIconRing}>
         <Ionicons name="eye-outline" size={56} color={Colors.primary} />
       </View>
-      <Text style={styles.heroTitle}>Eye Refraction Test</Text>
-      <Text style={styles.heroSub}>
+      <AppText style={styles.heroTitle}>Eye Refraction Test</AppText>
+      <AppText style={styles.heroSub}>
         A comprehensive 5-step screening to help identify potential refractive
         errors, contrast issues, and colour vision deficiencies.
-      </Text>
+      </AppText>
       <TouchableOpacity
         style={[
           styles.primaryBtn,
@@ -1326,11 +1343,11 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         activeOpacity={0.82}
       >
         <Ionicons name="play-outline" size={20} color={Colors.white} />
-        <Text style={styles.primaryBtnText}>Begin Test</Text>
+        <AppText style={styles.primaryBtnText}>Begin Test</AppText>
       </TouchableOpacity>
     </View>
 
-    <Text style={styles.sectionLabel}>What we'll test</Text>
+    <AppText style={styles.sectionLabel}>What we'll test</AppText>
     {[
       {
         icon: 'text-outline',
@@ -1363,8 +1380,8 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
           <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.featureTitle}>{item.title}</Text>
-          <Text style={styles.featureDesc}>{item.desc}</Text>
+          <AppText style={styles.featureTitle}>{item.title}</AppText>
+          <AppText style={styles.featureDesc}>{item.desc}</AppText>
         </View>
       </View>
     ))}
@@ -1375,10 +1392,10 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         size={16}
         color={Colors.gray400}
       />
-      <Text style={styles.disclaimerText}>
+      <AppText style={styles.disclaimerText}>
         This is a preliminary screening only and does not replace a professional
         eye examination by a qualified optometrist.
-      </Text>
+      </AppText>
     </View>
   </ScrollView>
 );
@@ -1412,28 +1429,30 @@ const AcuityStep: React.FC<{
     >
       {/* Progress */}
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 1 of 5 — Distance Vision</Text>
-        <Text style={styles.stepCounterRight}>
+        <AppText style={styles.stepCounter}>
+          Step 1 of 5 — Distance Vision
+        </AppText>
+        <AppText style={styles.stepCounterRight}>
           Row {rowIndex + 1}/{rows.length}
-        </Text>
+        </AppText>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
       <View style={styles.acuityCard}>
-        <Text style={styles.acuityInstruction}>
+        <AppText style={styles.acuityInstruction}>
           Look at the letters below from normal reading distance.
-        </Text>
+        </AppText>
         <View style={styles.acuityLetterBox}>
-          <Text style={[styles.acuityLetters, { fontSize: row.size }]}>
+          <AppText style={[styles.acuityLetters, { fontSize: row.size }]}>
             {row.letters}
-          </Text>
-          <Text style={styles.acuityLabel}>{row.label} line</Text>
+          </AppText>
+          <AppText style={styles.acuityLabel}>{row.label} line</AppText>
         </View>
-        <Text style={styles.acuityQuestion}>
+        <AppText style={styles.acuityQuestion}>
           Can you read these letters clearly without squinting?
-        </Text>
+        </AppText>
       </View>
 
       <TouchableOpacity
@@ -1446,7 +1465,7 @@ const AcuityStep: React.FC<{
           size={20}
           color={Colors.white}
         />
-        <Text style={styles.primaryBtnText}>Yes, clearly</Text>
+        <AppText style={styles.primaryBtnText}>Yes, clearly</AppText>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1459,9 +1478,9 @@ const AcuityStep: React.FC<{
           size={18}
           color={Colors.gray600}
         />
-        <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+        <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
           Blurry / Hard to read
-        </Text>
+        </AppText>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -1477,16 +1496,18 @@ const AstigmatismStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 3 of 5 — Astigmatism Check</Text>
+      <AppText style={styles.stepCounter}>
+        Step 3 of 5 — Astigmatism Check
+      </AppText>
     </View>
     <View style={styles.progressTrack}>
       <View style={[styles.progressFill, { width: '40%' }]} />
     </View>
 
     <View style={styles.acuityCard}>
-      <Text style={styles.acuityInstruction}>
+      <AppText style={styles.acuityInstruction}>
         Look at the center dot of the pattern below. Keep your eyes relaxed.
-      </Text>
+      </AppText>
 
       {/* Radial fan rendered with rotated views */}
       <View style={rfStyles.wheelContainer}>
@@ -1502,9 +1523,9 @@ const AstigmatismStep: React.FC<{
         <View style={rfStyles.wheelDot} />
       </View>
 
-      <Text style={styles.acuityQuestion}>
+      <AppText style={styles.acuityQuestion}>
         Do all the lines appear equally dark and the same thickness?
-      </Text>
+      </AppText>
     </View>
 
     <TouchableOpacity
@@ -1517,7 +1538,7 @@ const AstigmatismStep: React.FC<{
         size={20}
         color={Colors.white}
       />
-      <Text style={styles.primaryBtnText}>Yes, all lines look equal</Text>
+      <AppText style={styles.primaryBtnText}>Yes, all lines look equal</AppText>
     </TouchableOpacity>
 
     <TouchableOpacity
@@ -1526,9 +1547,9 @@ const AstigmatismStep: React.FC<{
       activeOpacity={0.8}
     >
       <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
-      <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+      <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
         Some lines look darker / thicker
-      </Text>
+      </AppText>
     </TouchableOpacity>
   </ScrollView>
 );
@@ -1544,23 +1565,23 @@ const NearVisionStep: React.FC<{
     showsVerticalScrollIndicator={false}
   >
     <View style={styles.stepHeader}>
-      <Text style={styles.stepCounter}>Step 5 of 5 — Near Vision</Text>
+      <AppText style={styles.stepCounter}>Step 5 of 5 — Near Vision</AppText>
     </View>
     <View style={styles.progressTrack}>
       <View style={[styles.progressFill, { width: '80%' }]} />
     </View>
 
     <View style={styles.acuityCard}>
-      <Text style={styles.acuityInstruction}>
+      <AppText style={styles.acuityInstruction}>
         Hold your phone at a comfortable reading distance (~30 cm). Do not move
         the phone closer.
-      </Text>
+      </AppText>
       <View style={rfStyles.nearTextBox}>
-        <Text style={rfStyles.nearText}>{text}</Text>
+        <AppText style={rfStyles.nearText}>{text}</AppText>
       </View>
-      <Text style={styles.acuityQuestion}>
+      <AppText style={styles.acuityQuestion}>
         Can you read the paragraph above clearly without straining?
-      </Text>
+      </AppText>
     </View>
 
     <TouchableOpacity
@@ -1573,7 +1594,7 @@ const NearVisionStep: React.FC<{
         size={20}
         color={Colors.white}
       />
-      <Text style={styles.primaryBtnText}>Yes, clearly</Text>
+      <AppText style={styles.primaryBtnText}>Yes, clearly</AppText>
     </TouchableOpacity>
 
     <TouchableOpacity
@@ -1582,9 +1603,9 @@ const NearVisionStep: React.FC<{
       activeOpacity={0.8}
     >
       <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
-      <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+      <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
         Blurry / I had to bring it closer
-      </Text>
+      </AppText>
     </TouchableOpacity>
   </ScrollView>
 );
@@ -1620,38 +1641,38 @@ const ContrastStep: React.FC<{
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>
+        <AppText style={styles.stepCounter}>
           Step 2 of 5 — Contrast Sensitivity
-        </Text>
-        <Text style={styles.stepCounterRight}>
+        </AppText>
+        <AppText style={styles.stepCounterRight}>
           Level {levelIndex + 1}/{levels.length}
-        </Text>
+        </AppText>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
       <View style={styles.acuityCard}>
-        <Text style={styles.acuityInstruction}>
+        <AppText style={styles.acuityInstruction}>
           Letters will progressively fade. Read them at arm's length without
           squinting or adjusting the screen brightness.
-        </Text>
+        </AppText>
         <View style={styles.acuityLetterBox}>
-          <Text
+          <AppText
             style={[
               styles.acuityLetters,
               { fontSize: level.size, opacity: level.opacity },
             ]}
           >
             {level.letters}
-          </Text>
-          <Text style={styles.acuityLabel}>
+          </AppText>
+          <AppText style={styles.acuityLabel}>
             Contrast level {levelIndex + 1}
-          </Text>
+          </AppText>
         </View>
-        <Text style={styles.acuityQuestion}>
+        <AppText style={styles.acuityQuestion}>
           Can you clearly read all the letters above?
-        </Text>
+        </AppText>
       </View>
 
       <TouchableOpacity
@@ -1664,7 +1685,7 @@ const ContrastStep: React.FC<{
           size={20}
           color={Colors.white}
         />
-        <Text style={styles.primaryBtnText}>Yes, I can read them</Text>
+        <AppText style={styles.primaryBtnText}>Yes, I can read them</AppText>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -1677,9 +1698,9 @@ const ContrastStep: React.FC<{
           size={18}
           color={Colors.gray600}
         />
-        <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
+        <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
           Too faint / Hard to see
-        </Text>
+        </AppText>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -1718,17 +1739,19 @@ const ColorVisionStep: React.FC<{
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 4 of 5 — Colour Vision</Text>
-        <Text style={styles.stepCounterRight}>
+        <AppText style={styles.stepCounter}>
+          Step 4 of 5 — Colour Vision
+        </AppText>
+        <AppText style={styles.stepCounterRight}>
           Plate {plateIndex + 1}/{plates.length}
-        </Text>
+        </AppText>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
       <View style={[styles.acuityCard, { paddingBottom: Spacing.md }]}>
-        <Text style={styles.acuityInstruction}>{plate.hint}</Text>
+        <AppText style={styles.acuityInstruction}>{plate.hint}</AppText>
 
         <View style={rfStyles.plateContainer}>
           <WebView
@@ -1740,7 +1763,7 @@ const ColorVisionStep: React.FC<{
           />
         </View>
 
-        <Text style={styles.acuityQuestion}>{plate.question}</Text>
+        <AppText style={styles.acuityQuestion}>{plate.question}</AppText>
       </View>
 
       {plate.options.map(opt => {
@@ -1759,14 +1782,14 @@ const ColorVisionStep: React.FC<{
             onPress={() => handleAnswer(opt)}
             activeOpacity={0.8}
           >
-            <Text
+            <AppText
               style={[
                 styles.outlineBtnText,
                 isNone && { color: Colors.gray500 },
               ]}
             >
               {opt}
-            </Text>
+            </AppText>
           </TouchableOpacity>
         );
       })}
@@ -1777,10 +1800,10 @@ const ColorVisionStep: React.FC<{
           size={13}
           color={Colors.gray400}
         />
-        <Text style={rfStyles.footerNoteText}>
+        <AppText style={rfStyles.footerNoteText}>
           This is a self-reported screening. Results may vary with screen
           brightness and ambient lighting.
-        </Text>
+        </AppText>
       </View>
     </ScrollView>
   );
@@ -1828,9 +1851,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
 
         {/* Header */}
         <View style={bkStyles.header}>
-          <Text style={bkStyles.headerTitle}>
+          <AppText style={bkStyles.headerTitle}>
             {confirmed ? 'Booking Summary' : 'Book Appointment'}
-          </Text>
+          </AppText>
           <TouchableOpacity
             onPress={handleClose}
             style={bkStyles.closeBtn}
@@ -1849,11 +1872,13 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
             <View style={bkStyles.successIcon}>
               <Ionicons name="checkmark-circle" size={56} color="#2DBD7E" />
             </View>
-            <Text style={bkStyles.successTitle}>Appointment Requested</Text>
-            <Text style={bkStyles.successSub}>
+            <AppText style={bkStyles.successTitle}>
+              Appointment Requested
+            </AppText>
+            <AppText style={bkStyles.successSub}>
               Call the store to confirm your slot. Our team will be happy to
               assist you.
-            </Text>
+            </AppText>
 
             <View style={bkStyles.summaryCard}>
               {[
@@ -1873,7 +1898,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                     size={16}
                     color={Colors.primary}
                   />
-                  <Text style={bkStyles.summaryText}>{row.text}</Text>
+                  <AppText style={bkStyles.summaryText}>{row.text}</AppText>
                 </View>
               ))}
             </View>
@@ -1884,7 +1909,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               activeOpacity={0.82}
             >
               <Ionicons name="call-outline" size={18} color={Colors.white} />
-              <Text style={styles.primaryBtnText}>Call to Confirm</Text>
+              <AppText style={styles.primaryBtnText}>Call to Confirm</AppText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1892,7 +1917,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               onPress={handleClose}
               activeOpacity={0.8}
             >
-              <Text style={styles.outlineBtnText}>Done</Text>
+              <AppText style={styles.outlineBtnText}>Done</AppText>
             </TouchableOpacity>
           </ScrollView>
         ) : (
@@ -1903,7 +1928,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               showsVerticalScrollIndicator={false}
             >
               {/* Branch */}
-              <Text style={bkStyles.sectionTitle}>Select Branch</Text>
+              <AppText style={bkStyles.sectionTitle}>Select Branch</AppText>
               {BRANCHES.map(b => {
                 const selected = branchId === b.id;
                 return (
@@ -1924,15 +1949,17 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text
+                      <AppText
                         style={[
                           bkStyles.branchName,
                           selected && { color: Colors.primary },
                         ]}
                       >
                         {b.name}
-                      </Text>
-                      <Text style={bkStyles.branchAddress}>{b.address}</Text>
+                      </AppText>
+                      <AppText style={bkStyles.branchAddress}>
+                        {b.address}
+                      </AppText>
                     </View>
                     <View
                       style={[bkStyles.radio, selected && bkStyles.radioActive]}
@@ -1944,9 +1971,11 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               })}
 
               {/* Date */}
-              <Text style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}>
+              <AppText
+                style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}
+              >
                 Select Date
-              </Text>
+              </AppText>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1964,39 +1993,41 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                       onPress={() => setDate(d)}
                       activeOpacity={0.8}
                     >
-                      <Text
+                      <AppText
                         style={[
                           bkStyles.dateDay,
                           selected && bkStyles.dateTextActive,
                         ]}
                       >
                         {DAY_SHORT[d.getDay()]}
-                      </Text>
-                      <Text
+                      </AppText>
+                      <AppText
                         style={[
                           bkStyles.dateNum,
                           selected && bkStyles.dateTextActive,
                         ]}
                       >
                         {d.getDate()}
-                      </Text>
-                      <Text
+                      </AppText>
+                      <AppText
                         style={[
                           bkStyles.dateMon,
                           selected && bkStyles.dateTextActive,
                         ]}
                       >
                         {MONTH_SHORT[d.getMonth()]}
-                      </Text>
+                      </AppText>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
 
               {/* Time */}
-              <Text style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}>
+              <AppText
+                style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}
+              >
                 Select Time
-              </Text>
+              </AppText>
               <View style={bkStyles.timeGrid}>
                 {TIME_SLOTS.map(slot => {
                   const selected = timeSlot === slot;
@@ -2010,14 +2041,14 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                       onPress={() => setTimeSlot(slot)}
                       activeOpacity={0.8}
                     >
-                      <Text
+                      <AppText
                         style={[
                           bkStyles.timeText,
                           selected && bkStyles.timeTextActive,
                         ]}
                       >
                         {slot}
-                      </Text>
+                      </AppText>
                     </TouchableOpacity>
                   );
                 })}
@@ -2036,7 +2067,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                   size={19}
                   color={Colors.white}
                 />
-                <Text style={styles.primaryBtnText}>Confirm Appointment</Text>
+                <AppText style={styles.primaryBtnText}>
+                  Confirm Appointment
+                </AppText>
               </TouchableOpacity>
             </View>
           </>
@@ -2132,14 +2165,14 @@ const RefractionResult: React.FC<{
         ]}
       >
         <Ionicons name={cfg.icon as any} size={40} color={cfg.color} />
-        <Text style={[rfStyles.riskLabel, { color: cfg.color }]}>
+        <AppText style={[rfStyles.riskLabel, { color: cfg.color }]}>
           {cfg.label}
-        </Text>
-        <Text style={rfStyles.riskSummary}>{cfg.summary}</Text>
+        </AppText>
+        <AppText style={rfStyles.riskSummary}>{cfg.summary}</AppText>
       </View>
 
       {/* Per-test breakdown */}
-      <Text style={styles.sectionLabel}>Test Results</Text>
+      <AppText style={styles.sectionLabel}>Test Results</AppText>
       {checks.map(c => (
         <View key={c.label} style={rfStyles.checkRow}>
           <View
@@ -2159,16 +2192,16 @@ const RefractionResult: React.FC<{
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={rfStyles.checkLabel}>{c.label}</Text>
-            <Text style={rfStyles.checkDetail}>{c.detail}</Text>
+            <AppText style={rfStyles.checkLabel}>{c.label}</AppText>
+            <AppText style={rfStyles.checkDetail}>{c.detail}</AppText>
           </View>
         </View>
       ))}
 
       {/* Advice card */}
       <View style={[rfStyles.adviceCard, { borderLeftColor: cfg.color }]}>
-        <Text style={rfStyles.adviceTitle}>Our Recommendation</Text>
-        <Text style={rfStyles.adviceText}>{cfg.advice}</Text>
+        <AppText style={rfStyles.adviceTitle}>Our Recommendation</AppText>
+        <AppText style={rfStyles.adviceText}>{cfg.advice}</AppText>
       </View>
 
       <BookingModal
@@ -2184,7 +2217,7 @@ const RefractionResult: React.FC<{
           activeOpacity={0.82}
         >
           <Ionicons name="calendar-outline" size={19} color={Colors.white} />
-          <Text style={styles.primaryBtnText}>Book Appointment</Text>
+          <AppText style={styles.primaryBtnText}>Book Appointment</AppText>
         </TouchableOpacity>
       )}
 
@@ -2197,7 +2230,7 @@ const RefractionResult: React.FC<{
         activeOpacity={0.8}
       >
         <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
-        <Text style={styles.outlineBtnText}>Retake Test</Text>
+        <AppText style={styles.outlineBtnText}>Retake Test</AppText>
       </TouchableOpacity>
 
       <View style={rfStyles.footerNote}>
@@ -2206,10 +2239,10 @@ const RefractionResult: React.FC<{
           size={13}
           color={Colors.gray400}
         />
-        <Text style={rfStyles.footerNoteText}>
+        <AppText style={rfStyles.footerNoteText}>
           Results are indicative only. A full clinical refraction by a licensed
           optometrist is required for a prescription.
-        </Text>
+        </AppText>
       </View>
     </ScrollView>
   );
@@ -2275,7 +2308,9 @@ const RefractionFlow: React.FC = () => {
   if (stage === 'intro')
     return <RefractionIntro onStart={() => setStage('acuity')} />;
   if (stage === 'acuity')
-    return <AcuityStep rows={testSet.acuityRows} onComplete={handleAcuityDone} />;
+    return (
+      <AcuityStep rows={testSet.acuityRows} onComplete={handleAcuityDone} />
+    );
   if (stage === 'contrast')
     return (
       <ContrastStep
@@ -2294,7 +2329,10 @@ const RefractionFlow: React.FC = () => {
     );
   if (stage === 'nearVision')
     return (
-      <NearVisionStep text={testSet.nearText} onComplete={handleNearVisionDone} />
+      <NearVisionStep
+        text={testSet.nearText}
+        onComplete={handleNearVisionDone}
+      />
     );
 
   return (
@@ -2382,9 +2420,7 @@ const ScanScreen: React.FC = () => {
       {tab === 'face' ? (
         <>
           {/* Idle — always shown unless camera is active or manual selector is open */}
-          {faceScanStage === 'idle' && (
-            <FaceScanIdle onStart={startFaceScan} />
-          )}
+          {faceScanStage === 'idle' && <FaceScanIdle onStart={startFaceScan} />}
 
           {/* Camera mounts during the countdown so it's already warmed up;
               the countdown overlay then fades away to reveal the live feed. */}

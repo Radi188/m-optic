@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors } from '../../../theme';
+import { useTranslation } from 'react-i18next';
+import AppText from '../../AppText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,6 +32,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
 }) => {
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { t } = useTranslation();
 
   const validImages = useMemo(
     () => images?.filter(item => typeof item === 'string' && item.trim()) || [],
@@ -68,7 +71,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   if (!validImages.length) {
     return (
       <View style={[styles.container, styles.emptyContainer]}>
-        <Text style={styles.emptyText}>No image available</Text>
+        <AppText style={styles.emptyText}>{t('NoImageAvailable')}</AppText>
       </View>
     );
   }
@@ -118,7 +121,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
           <View style={styles.iconWrap}>
             <Ionicons name="scan-outline" size={16} color={Colors.black} />
           </View>
-          <Text style={styles.floatingButtonText}>AR Try On</Text>
+          <AppText style={styles.floatingButtonText}>{t('ArTryOn')}</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -129,7 +132,9 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
           <View style={styles.iconWrap}>
             <Ionicons name="cube-outline" size={16} color={Colors.black} />
           </View>
-          <Text style={styles.floatingButtonText}>3D Model</Text>
+          <AppText style={styles.floatingButtonText}>
+            {t('ThreeDModel')}
+          </AppText>
         </TouchableOpacity>
       </View>
     </View>
