@@ -5,12 +5,34 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+# Build React Native's third-party C++ dependencies (folly, glog, double-conversion,
+# fmt, boost) from source instead of the prebuilt ReactNativeDependencies.xcframework.
+# The prebuilt dynamic framework is not linked/embedded into the app target by
+# CocoaPods, which causes "Undefined symbol: folly::… / google::LogMessage /
+# double_conversion::…" linker errors when archiving. Building from source produces
+# static libs that link cleanly via -l"RCT-Folly" / -l"glog" / -l"DoubleConversion".
+# The prebuilt React core (React-Core-prebuilt / React.xcframework) depends on the
+# prebuilt deps, so the two are coupled — build React core from source as well.
+ENV['RCT_USE_RN_DEP'] = '0'
+ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# Required by @react-native-firebase: FirebaseCoreInternal (Swift) depends on
-# GoogleUtilities and needs module maps to import it as a static library.
-use_modular_headers!
+# Required by @react-native-firebase: the Swift Firebase pods (e.g.
+# FirebaseCoreInternal) depend on GoogleUtilities and need module maps to import
+# it as a static library. Do NOT enable this globally with `use_modular_headers!`:
+# that force-modularizes React Native's source pods too, which makes clang load
+# both React-RuntimeCore and React-jsitooling modulemaps (both declare
+# `module react_runtime`) and fail with "Redefinition of module 'react_runtime'".
+# Enable modular headers only for the Firebase/Google pods that actually need it.
+$firebase_modular_header_pods = %w[
+  FirebaseCore FirebaseCoreInternal FirebaseCoreExtension FirebaseInstallations
+  FirebaseMessaging GoogleUtilities GoogleDataTransport PromisesObjC nanopb
+]
+$firebase_modular_header_pods.each do |pod_name|
+  pod pod_name, :modular_headers => true
+end
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -90,11 +112,19 @@ target 'MOptic' do
         # Disable treat-warnings-as-errors globally for pods (Xcode 26 beta compatibility)
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-        # Suppress specific warnings at compiler level as well
-        existing_flags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
-        config.build_settings['OTHER_CFLAGS'] = "#{existing_flags} -Wno-error=non-modular-include-in-framework-module -Wno-return-type"
-        existing_cxx_flags = config.build_settings['OTHER_CPLUSPLUSFLAGS'] || '$(inherited)'
-        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = "#{existing_cxx_flags} -Wno-error=non-modular-include-in-framework-module -Wno-return-type"
+        # Suppress specific warnings at compiler level as well.
+        # NOTE: OTHER_CFLAGS may already be an Array (set by react_native_post_install).
+        # Appending via string interpolation would stringify the array and corrupt
+        # the build setting, so normalize to an Array and concatenate.
+        extra_flags = ['-Wno-error=non-modular-include-in-framework-module', '-Wno-return-type']
+
+        cflags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
+        cflags = [cflags] unless cflags.is_a?(Array)
+        config.build_settings['OTHER_CFLAGS'] = cflags + extra_flags
+
+        cxx_flags = config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)']
+        cxx_flags = [cxx_flags] unless cxx_flags.is_a?(Array)
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cxx_flags + extra_flags
       end
     end
   end
