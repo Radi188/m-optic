@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import type { AppLanguage } from '../../../localizations/i18n';
+import AppText from '../../AppText';
 
 type Language = {
   code: string;
@@ -22,9 +24,11 @@ type Language = {
 
 type LanguagePickerModalProps = {
   visible: boolean;
-  selectedLanguage: string;
+  selectedLanguage: AppLanguage;
   onClose: () => void;
-  onSelectLanguage: (languageCode: string) => void;
+  onSelectLanguage: (languageCode: AppLanguage) => Promise<void> | void;
+  title: string;
+  subtitle: string;
 };
 
 const languages: Language[] = [
@@ -47,6 +51,8 @@ const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
   selectedLanguage,
   onClose,
   onSelectLanguage,
+  title,
+  subtitle,
 }) => {
   const [shouldRender, setShouldRender] = useState(visible);
   const slideAnim = useRef(new Animated.Value(350)).current;
@@ -72,14 +78,14 @@ const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
     }
   }, [visible, slideAnim]);
 
-  const handleSelectLanguage = (languageCode: string) => {
-    onSelectLanguage(languageCode);
-    onClose();
+  const handleSelectLanguage = async (languageCode: AppLanguage) => {
+    try {
+      await onSelectLanguage(languageCode);
+      onClose();
+    } catch (error) {
+      console.warn('[LanguagePicker] Could not change language:', error);
+    }
   };
-
-  if (!shouldRender) {
-    return null;
-  }
 
   return (
     <Modal
@@ -101,8 +107,8 @@ const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
           <Pressable>
             <View style={styles.header}>
               <View>
-                <Text style={styles.title}>Choose Language</Text>
-                <Text style={styles.subtitle}>Select your app language</Text>
+                <AppText style={styles.title}>{title}</AppText>
+                <AppText style={styles.subtitle}>{subtitle}</AppText>
               </View>
 
               <TouchableOpacity
@@ -137,10 +143,12 @@ const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
                     </View>
 
                     <View style={styles.languageTextWrap}>
-                      <Text style={styles.languageLabel}>{language.label}</Text>
-                      <Text style={styles.languageNativeLabel}>
+                      <AppText style={styles.languageLabel}>
+                        {language.label}
+                      </AppText>
+                      <AppText style={styles.languageNativeLabel}>
                         {language.nativeLabel}
-                      </Text>
+                      </AppText>
                     </View>
 
                     {isSelected ? (

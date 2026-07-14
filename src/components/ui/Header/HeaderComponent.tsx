@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type HeaderProps = {
   title: string;
@@ -34,7 +35,7 @@ const Header: React.FC<HeaderProps> = ({
         <Ionicons name="chevron-back" size={24} color={Colors.black} />
       </TouchableOpacity>
 
-      <Text style={styles.title}>{title}</Text>
+      <AppText style={styles.title}>{title}</AppText>
 
       {rightIconName ? (
         <TouchableOpacity

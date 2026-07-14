@@ -11,7 +11,9 @@ import WebView from 'react-native-webview';
 import type { GlassItem } from '../types/navigation';
 import { Colors, FontSize, Spacing } from '../theme';
 
-interface Props { glass: GlassItem; }
+interface Props {
+  glass: GlassItem;
+}
 
 // Metro gives us a server URL for the .obj asset
 const OBJ_URI = Image.resolveAssetSource(
@@ -20,8 +22,8 @@ const OBJ_URI = Image.resolveAssetSource(
 ).uri;
 
 const STATUS_HEX: Record<string, string> = {
-  'In Stock':     '#2DBD7E',
-  'Low Stock':    '#F7A440',
+  'In Stock': '#2DBD7E',
+  'Low Stock': '#F7A440',
   'Out of Stock': '#F05252',
 };
 
@@ -29,12 +31,12 @@ const STATUS_HEX: Record<string, string> = {
 function escapeObj(raw: string): string {
   return raw
     .replace(/\\/g, '\\\\')
-    .replace(/`/g,  '\\`')
+    .replace(/`/g, '\\`')
     .replace(/\${/g, '\\${');
 }
 
 function buildHtml(glass: GlassItem, objText: string): string {
-  const accent  = STATUS_HEX[glass.status] ?? Colors.primary;
+  const accent = STATUS_HEX[glass.status] ?? Colors.primary;
   const safeObj = escapeObj(objText);
   const accentNum = accent.replace('#', '');
 
@@ -267,15 +269,21 @@ function buildErrorHtml(): string {
 
 const GlassModelScene: React.FC<Props> = ({ glass }) => {
   const [objText, setObjText] = useState<string | null>(null);
-  const [error,   setError]   = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setObjText(null);
     setError(false);
     fetch(OBJ_URI)
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
       .then(setObjText)
-      .catch(e => { console.warn('[3DModel] OBJ fetch failed:', e); setError(true); });
+      .catch(e => {
+        console.warn('[3DModel] OBJ fetch failed:', e);
+        setError(true);
+      });
   }, []);
 
   const html = useMemo(
@@ -289,7 +297,7 @@ const GlassModelScene: React.FC<Props> = ({ glass }) => {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>Loading 3D model…</Text>
+        <AppText style={styles.loadingText}>Loading 3D model…</AppText>
       </View>
     );
   }
@@ -314,11 +322,18 @@ export default GlassModelScene;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0E0B09' },
-  webview:   { flex: 1, backgroundColor: '#0E0B09' },
+  webview: { flex: 1, backgroundColor: '#0E0B09' },
   center: {
-    flex: 1, backgroundColor: '#0E0B09',
-    alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, paddingHorizontal: Spacing.xl,
+    flex: 1,
+    backgroundColor: '#0E0B09',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
   },
-  loadingText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
+  loadingText: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.45)',
+    fontWeight: '500',
+  },
 });

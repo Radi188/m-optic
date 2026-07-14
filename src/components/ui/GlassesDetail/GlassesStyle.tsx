@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import RenderHTML from 'react-native-render-html';
 
@@ -10,6 +11,7 @@ import {
   BorderRadius,
   Shadow,
 } from '../../../theme';
+import AppText from '../../AppText';
 
 interface Props {
   brand: string;
@@ -31,21 +33,24 @@ const GlassesStyleSection: React.FC<Props> = ({
   descriptionHtml,
 }) => {
   const { width } = useWindowDimensions();
+  const { t } = useTranslation();
 
   return (
     <View style={styles.section}>
       <View
         style={{ ...styles.block, flexDirection: 'row', alignItems: 'center' }}
       >
-        <Text style={styles.sectionTitleColor}>Color</Text>
+        <AppText style={styles.sectionTitleColor}>{t('glassColor')}</AppText>
 
         <View style={styles.singleColorCard}>
           <View style={[styles.colorCircle, { backgroundColor: colorHex }]} />
-          <Text style={styles.colorText}>{colorName}</Text>
+          <AppText style={styles.colorText}>
+            {colorName || t('commonDefault')}
+          </AppText>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Frame Details</Text>
+      <AppText style={styles.sectionTitle}>{t('glassFrameDetails')}</AppText>
 
       <View style={styles.infoGrid}>
         <View style={styles.infoCard}>
@@ -53,8 +58,8 @@ const GlassesStyleSection: React.FC<Props> = ({
             <Ionicons name="glasses-outline" size={18} color={Colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Frame Type</Text>
-            <Text style={styles.infoValue}>{frameTypeName}</Text>
+            <AppText style={styles.infoLabel}>{t('glassFrameType')}</AppText>
+            <AppText style={styles.infoValue}>{frameTypeName}</AppText>
           </View>
         </View>
 
@@ -67,8 +72,8 @@ const GlassesStyleSection: React.FC<Props> = ({
             />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Brand</Text>
-            <Text style={styles.infoValue}>{brand}</Text>
+            <AppText style={styles.infoLabel}>{t('glassBrand')}</AppText>
+            <AppText style={styles.infoValue}>{brand}</AppText>
           </View>
         </View>
 
@@ -77,8 +82,8 @@ const GlassesStyleSection: React.FC<Props> = ({
             <Ionicons name="resize-outline" size={18} color={Colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Size</Text>
-            <Text style={styles.infoValue}>{size}</Text>
+            <AppText style={styles.infoLabel}>{t('glassSize')}</AppText>
+            <AppText style={styles.infoValue}>{size}</AppText>
           </View>
         </View>
 
@@ -87,14 +92,15 @@ const GlassesStyleSection: React.FC<Props> = ({
             <Ionicons name="person-outline" size={18} color={Colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Gender</Text>
-            <Text style={styles.infoValue}>{gender}</Text>
+            <AppText style={styles.infoLabel}>{t('glassGender')}</AppText>
+            <AppText style={styles.infoValue}>{gender}</AppText>
           </View>
         </View>
       </View>
 
       <View style={styles.descriptionWrap}>
-        <Text style={styles.blockTitle}>Description</Text>
+        <AppText style={styles.blockTitle}>{t('commonDescription')}</AppText>
+
         <RenderHTML
           contentWidth={width - Spacing.md * 2}
           source={{ html: descriptionHtml }}

@@ -32,25 +32,22 @@ import RNBottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { GlassView } from '../components/ui';
+import { useTranslation } from 'react-i18next';
+
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { searchMOpticLocations, groupHours } from '../services/placesService';
 import type { PlaceLocation } from '../services/placesService';
+import AppText from '../components/AppText';
 
 const MARKER_LOGO = require('../assets/logo_icon_transparent.png');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Google Places weekdayText is Mon=index 0, matching (getDay()+6)%7
 const todayIndex = () => (new Date().getDay() + 6) % 7;
 
-// ─── Location Info Sheet ──────────────────────────────────────────────────────
-
 const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
+  const { t } = useTranslation();
   const today = todayIndex();
   const hours = groupHours(location.weekdayText);
 
-  // Staggered entrance animations
   const headerOpacity = useSharedValue(0);
   const headerOffset = useSharedValue(10);
   const detailsOpacity = useSharedValue(0);
@@ -60,8 +57,10 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
 
   useEffect(() => {
     const ease = Easing.out(Easing.cubic);
+
     headerOpacity.value = withTiming(1, { duration: 320, easing: ease });
     headerOffset.value = withTiming(0, { duration: 320, easing: ease });
+
     detailsOpacity.value = withDelay(
       80,
       withTiming(1, { duration: 300, easing: ease }),
@@ -70,6 +69,7 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
       80,
       withTiming(0, { duration: 300, easing: ease }),
     );
+
     ctaOpacity.value = withDelay(
       160,
       withTiming(1, { duration: 280, easing: ease }),
@@ -78,17 +78,18 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
       160,
       withTiming(0, { duration: 280, easing: ease }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.placeId]);
 
   const headerStyle = useAnimatedStyle(() => ({
     opacity: headerOpacity.value,
     transform: [{ translateY: headerOffset.value }],
   }));
+
   const detailsStyle = useAnimatedStyle(() => ({
     opacity: detailsOpacity.value,
     transform: [{ translateY: detailsOffset.value }],
   }));
+
   const ctaStyle = useAnimatedStyle(() => ({
     opacity: ctaOpacity.value,
     transform: [{ translateY: ctaOffset.value }],
@@ -100,17 +101,18 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
       Platform.OS === 'ios'
         ? `maps://maps.apple.com/?q=${q}`
         : `https://www.google.com/maps/search/?api=1&query=${q}`;
+
     Linking.openURL(url);
   };
 
-  const callStore = () =>
+  const callStore = () => {
+    if (!location.phone) return;
     Linking.openURL(`tel:${location.phone.replace(/[\s-]/g, '')}`);
+  };
 
   return (
     <View style={s.sheetInner}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <Animated.View style={[s.headerRow, headerStyle]}>
-        {/* Logo badge */}
         <View style={s.logoBadge}>
           <LinearGradient
             colors={['#E8DAD2', '#CDB4A8']}
@@ -125,23 +127,27 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
           />
         </View>
 
-        {/* Name + meta */}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
+          <AppText
             style={s.locationName}
             numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.75}
           >
             {location.name}
-          </Text>
+          </AppText>
 
           <View style={s.metaRow}>
             {location.rating > 0 && (
               <View style={s.ratingPill}>
-                <Text style={s.ratingStar}>★</Text>
-                <Text style={s.ratingNum}>{location.rating.toFixed(1)}</Text>
-                <Text style={s.reviewCount}> ({location.userRatingCount})</Text>
+                <AppText style={s.ratingStar}>★</AppText>
+                <AppText style={s.ratingNum}>
+                  {location.rating.toFixed(1)}
+                </AppText>
+                <AppText style={s.reviewCount}>
+                  {' '}
+                  ({location.userRatingCount})
+                </AppText>
               </View>
             )}
 
@@ -161,24 +167,22 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
                   },
                 ]}
               />
-              <Text
+              <AppText
                 style={[
                   s.statusText,
                   { color: location.isOpen ? Colors.success : Colors.error },
                 ]}
               >
-                {location.isOpen ? 'Open now' : 'Closed'}
-              </Text>
+                {location.isOpen ? t('OpenNow') : t('Closed')}
+              </AppText>
             </View>
           </View>
         </View>
       </Animated.View>
 
-      {/* ── Details ────────────────────────────────────────────────────── */}
       <Animated.View style={detailsStyle}>
         <View style={s.sep} />
 
-        {/* Address & phone info rows */}
         {[
           { icon: 'location-outline', text: location.address },
           ...(location.phone
@@ -193,36 +197,37 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
                 color={Colors.primary}
               />
             </View>
-            <Text style={s.detailText}>{row.text}</Text>
+            <AppText style={s.detailText}>{row.text}</AppText>
           </View>
         ))}
 
-        {/* Hours */}
         {hours.length > 0 && (
           <>
             <View style={s.sep} />
+
             <View style={s.sectionHeader}>
               <Ionicons name="time-outline" size={13} color={Colors.gray400} />
-              <Text style={s.sectionLabel}>HOURS</Text>
+              <AppText style={s.sectionLabel}>{t('Hours')}</AppText>
             </View>
 
             <View style={s.hoursCard}>
               {location.weekdayText.map((raw, i) => {
                 const sep = raw.indexOf(': ');
-                const day = raw.slice(0, sep);
-                const time = raw.slice(sep + 2);
+                const day = sep >= 0 ? raw.slice(0, sep) : raw;
+                const time = sep >= 0 ? raw.slice(sep + 2) : '';
                 const isToday = i === today;
+
                 return (
                   <View
                     key={i}
                     style={[s.hoursRow, isToday && s.hoursRowToday]}
                   >
-                    <Text style={[s.hoursDay, isToday && s.hoursDayToday]}>
+                    <AppText style={[s.hoursDay, isToday && s.hoursDayToday]}>
                       {day}
-                    </Text>
-                    <Text style={[s.hoursTime, isToday && s.hoursTimeToday]}>
+                    </AppText>
+                    <AppText style={[s.hoursTime, isToday && s.hoursTimeToday]}>
                       {time}
-                    </Text>
+                    </AppText>
                   </View>
                 );
               })}
@@ -233,7 +238,6 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
         <View style={s.sep} />
       </Animated.View>
 
-      {/* ── CTA Buttons ────────────────────────────────────────────────── */}
       <Animated.View style={[s.ctaRow, ctaStyle]}>
         <TouchableOpacity
           style={s.ctaOutline}
@@ -243,7 +247,7 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
           <View style={s.ctaIconCircle}>
             <Ionicons name="navigate" size={15} color={Colors.primary} />
           </View>
-          <Text style={s.ctaOutlineText}>Directions</Text>
+          <AppText style={s.ctaOutlineText}>{t('Directions')}</AppText>
         </TouchableOpacity>
 
         {location.phone ? (
@@ -261,7 +265,7 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
             <View style={s.ctaIconCircleWhite}>
               <Ionicons name="call" size={15} color="#fff" />
             </View>
-            <Text style={s.ctaFillText}>Call Store</Text>
+            <AppText style={s.ctaFillText}>{t('CallStore')}</AppText>
           </TouchableOpacity>
         ) : null}
       </Animated.View>
@@ -269,37 +273,28 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
   );
 };
 
-// ─── Custom Map Marker ────────────────────────────────────────────────────────
-
 const StoreMarker: React.FC<{
   location: PlaceLocation;
   active: boolean;
   onPress: () => void;
 }> = ({ location, active, onPress }) => {
-  // Keep the native marker tracking view changes until the logo image has
-  // actually painted (it loads async), otherwise the marker snapshots an empty
-  // circle. Re-enable whenever the active state flips the appearance.
   const [loaded, setLoaded] = useState(false);
   const [settled, setSettled] = useState(false);
 
   useEffect(() => {
-    // Re-snapshot when active styling changes.
     setSettled(false);
     if (!loaded) return;
-    const t = setTimeout(() => setSettled(true), 600);
-    return () => clearTimeout(t);
+
+    const timer = setTimeout(() => setSettled(true), 600);
+    return () => clearTimeout(timer);
   }, [active, loaded]);
-
-  const handleLogoLoad = () => setLoaded(true);
-
-  const tracks = !loaded || !settled;
 
   return (
     <Marker
       coordinate={{ latitude: location.lat, longitude: location.lng }}
       onPress={onPress}
       anchor={{ x: 0.5, y: 1 }}
-      tracksViewChanges={tracks}
+      tracksViewChanges={!loaded || !settled}
     >
       <View style={mk.wrap}>
         <View style={[mk.head, active ? mk.headActive : mk.headInactive]}>
@@ -307,7 +302,7 @@ const StoreMarker: React.FC<{
             source={MARKER_LOGO}
             style={mk.logo}
             resizeMode="contain"
-            onLoad={handleLogoLoad}
+            onLoad={() => setLoaded(true)}
           />
         </View>
         <View style={[mk.tail, active ? mk.tailActive : mk.tailInactive]} />
@@ -316,13 +311,12 @@ const StoreMarker: React.FC<{
   );
 };
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
-
 const StoreScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState('');
+
   const mapRef = useRef<MapView>(null);
   const sheetRef = useRef<RNBottomSheet>(null);
   const tabsScrollRef = useRef<ScrollView>(null);
@@ -340,27 +334,31 @@ const StoreScreen: React.FC = () => {
 
   useEffect(() => {
     if (!locations.length) return;
-    const t = setTimeout(() => sheetRef.current?.snapToIndex(0), 350);
-    return () => clearTimeout(t);
+
+    const timer = setTimeout(() => sheetRef.current?.snapToIndex(0), 350);
+    return () => clearTimeout(timer);
   }, [locations.length]);
 
-  // Fluid spring — slight natural bounce, no hard clamping
   const animationConfigs = useBottomSheetSpringConfigs({
     duration: 460,
     dampingRatio: 0.76,
     overshootClamping: false,
   });
 
-  // First snap: peek with header + address visible. Second: full content.
   const snapPoints = useMemo(() => ['42%', '88%'], []);
-  const activeLocation = locations.find(l => l.placeId === activeId);
+
+  const activeLocation = locations.find(
+    location => location.placeId === activeId,
+  );
 
   const initialRegion = useMemo(() => {
     if (!locations.length) return undefined;
-    const c = locations[0];
+
+    const firstLocation = locations[0];
+
     return {
-      latitude: c.lat,
-      longitude: c.lng,
+      latitude: firstLocation.lat,
+      longitude: firstLocation.lng,
       latitudeDelta: 0.4,
       longitudeDelta: 0.4,
     };
@@ -368,8 +366,12 @@ const StoreScreen: React.FC = () => {
 
   const fitToAll = useCallback(() => {
     if (locations.length < 2) return;
+
     mapRef.current?.fitToCoordinates(
-      locations.map(l => ({ latitude: l.lat, longitude: l.lng })),
+      locations.map(location => ({
+        latitude: location.lat,
+        longitude: location.lng,
+      })),
       {
         edgePadding: { top: 120, right: 60, bottom: 360, left: 60 },
         animated: false,
@@ -380,23 +382,30 @@ const StoreScreen: React.FC = () => {
   const selectLocation = useCallback(
     (id: string) => {
       setActiveId(id);
-      const loc = locations.find(l => l.placeId === id);
-      if (loc) {
+
+      const selectedLocation = locations.find(
+        location => location.placeId === id,
+      );
+
+      if (selectedLocation) {
         mapRef.current?.animateToRegion(
           {
-            latitude: loc.lat,
-            longitude: loc.lng,
+            latitude: selectedLocation.lat,
+            longitude: selectedLocation.lng,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           },
           600,
         );
       }
+
       sheetRef.current?.snapToIndex(0);
 
       const layout = tabLayouts.current[id];
+
       if (layout && tabsContainerW.current > 0) {
         const scrollX = layout.x - (tabsContainerW.current - layout.width) / 2;
+
         tabsScrollRef.current?.scrollTo({
           x: Math.max(0, scrollX),
           animated: true,
@@ -429,7 +438,6 @@ const StoreScreen: React.FC = () => {
 
   return (
     <View style={s.root}>
-      {/* Full-screen map */}
       <MapView
         ref={mapRef}
         style={s.map}
@@ -438,17 +446,16 @@ const StoreScreen: React.FC = () => {
         showsMyLocationButton={false}
         toolbarEnabled={false}
       >
-        {locations.map(loc => (
+        {locations.map(location => (
           <StoreMarker
-            key={loc.placeId}
-            location={loc}
-            active={loc.placeId === activeId}
-            onPress={() => selectLocation(loc.placeId)}
+            key={location.placeId}
+            location={location}
+            active={location.placeId === activeId}
+            onPress={() => selectLocation(location.placeId)}
           />
         ))}
       </MapView>
 
-      {/* Floating store tabs */}
       <View
         style={[s.tabsArea, { paddingTop: insets.top }]}
         pointerEvents="box-none"
@@ -459,32 +466,34 @@ const StoreScreen: React.FC = () => {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.tabsRow}
-            onLayout={e => {
-              tabsContainerW.current = e.nativeEvent.layout.width;
+            onLayout={event => {
+              tabsContainerW.current = event.nativeEvent.layout.width;
             }}
           >
-            {locations.map(loc => {
-              const active = loc.placeId === activeId;
+            {locations.map(location => {
+              const active = location.placeId === activeId;
+
               return (
                 <TouchableOpacity
-                  key={loc.placeId}
-                  onPress={() => selectLocation(loc.placeId)}
+                  key={location.placeId}
+                  onPress={() => selectLocation(location.placeId)}
                   activeOpacity={0.75}
                   style={[s.tab, active && s.tabActive]}
-                  onLayout={e => {
-                    tabLayouts.current[loc.placeId] = {
-                      x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
+                  onLayout={event => {
+                    tabLayouts.current[location.placeId] = {
+                      x: event.nativeEvent.layout.x,
+                      width: event.nativeEvent.layout.width,
                     };
                   }}
                 >
                   {active && <View style={s.tabDot} />}
-                  <Text
+
+                  <AppText
                     style={[s.tabLabel, active && s.tabLabelActive]}
                     numberOfLines={1}
                   >
-                    {loc.branch || loc.name}
-                  </Text>
+                    {location.branch || location.name}
+                  </AppText>
                 </TouchableOpacity>
               );
             })}
@@ -492,7 +501,6 @@ const StoreScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Location info bottom sheet — full width, sits above tab bar */}
       {activeLocation && (
         <RNBottomSheet
           ref={sheetRef}
@@ -518,14 +526,11 @@ const StoreScreen: React.FC = () => {
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   root: { flex: 1 },
   map: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
 
-  // ── Tabs overlay ──────────────────────────────────────────────────────────
   tabsArea: {
     position: 'absolute',
     top: 0,
@@ -533,7 +538,6 @@ const s = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
-  // Single dark-glass pill that contains all tabs
   tabsContainer: {
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
@@ -548,7 +552,6 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap: 2,
   },
-  // Each tab — no background by default, gets white pill when active
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -575,9 +578,7 @@ const s = StyleSheet.create({
   },
   tabLabelActive: { color: Colors.primary, fontWeight: '800' },
 
-  // ── Bottom sheet chrome ───────────────────────────────────────────────────
   sheetBg: {
-    // Warm parchment tint — matches app background, looks glassy not modal-white
     backgroundColor: 'rgba(245, 238, 232, 0.97)',
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
@@ -593,14 +594,10 @@ const s = StyleSheet.create({
   sheetScroll: {
     paddingBottom: 8,
   },
-
-  // ── Sheet inner layout ────────────────────────────────────────────────────
   sheetInner: {
     paddingTop: 4,
     paddingBottom: 36,
   },
-
-  // ── Header ────────────────────────────────────────────────────────────────
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -609,7 +606,6 @@ const s = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
-
   logoBadge: {
     width: 52,
     height: 52,
@@ -625,7 +621,6 @@ const s = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-
   locationName: {
     fontSize: FontSize.lg,
     fontWeight: '800',
@@ -639,7 +634,6 @@ const s = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
   },
-
   ratingPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -656,7 +650,6 @@ const s = StyleSheet.create({
     marginLeft: 3,
   },
   reviewCount: { fontSize: FontSize.xs, color: Colors.gray400 },
-
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -676,16 +669,12 @@ const s = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: '700',
   },
-
-  // ── Separator ─────────────────────────────────────────────────────────────
   sep: {
     height: 1,
     backgroundColor: 'rgba(156,129,120,0.14)',
     marginVertical: Spacing.md,
     marginHorizontal: Spacing.lg,
   },
-
-  // ── Detail rows ───────────────────────────────────────────────────────────
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -712,8 +701,6 @@ const s = StyleSheet.create({
     lineHeight: 20,
     paddingTop: 5,
   },
-
-  // ── Hours ─────────────────────────────────────────────────────────────────
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -748,14 +735,11 @@ const s = StyleSheet.create({
   hoursDayToday: { fontWeight: '700', color: Colors.primary },
   hoursTime: { fontSize: FontSize.sm, color: Colors.gray400 },
   hoursTimeToday: { fontWeight: '600', color: Colors.primary },
-
-  // ── CTA buttons ───────────────────────────────────────────────────────────
   ctaRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
   },
-
   ctaOutline: {
     flex: 1,
     height: 50,
@@ -782,7 +766,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
-
   ctaFill: {
     flex: 1,
     height: 50,
@@ -809,13 +792,10 @@ const s = StyleSheet.create({
   },
 });
 
-// ─── Marker styles ────────────────────────────────────────────────────────────
-
 const mk = StyleSheet.create({
   wrap: {
     alignItems: 'center',
   },
-  // Circular "balloon" head holding the logo
   head: {
     borderRadius: 999,
     overflow: 'hidden',
@@ -841,7 +821,6 @@ const mk = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  // Downward triangle tail forming the pin point
   tail: {
     width: 0,
     height: 0,

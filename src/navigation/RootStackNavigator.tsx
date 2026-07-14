@@ -18,6 +18,9 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import PointsMemberScreen from '../screens/PointsMemberScreen';
 import RewardScreen from '../screens/RewardScreen';
 import PrescriptionDetailScreen from '../screens/PrescriptionDetailScreen';
+import GlassesListScreen from '../screens/GlassesListScreen';
+import SearchResultScreen from '../screens/SearchResultScreen';
+import SearchScreen from '../screens/SearchScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -109,6 +112,30 @@ const RootStackNavigator: React.FC = () => {
               animation: 'slide_from_right',
             }}
           />
+          <Stack.Screen
+            name="GlassesList"
+            component={GlassesListScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="SearchScreen"
+            component={SearchScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="SearchResult"
+            component={SearchResultScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
         </>
       ) : (
         // ── Unauthenticated stack — Splash → Main, Login reachable from Profile
@@ -140,6 +167,14 @@ const RootStackNavigator: React.FC = () => {
             component={NotificationSettingsScreen}
             options={{
               title: 'Notifications',
+            }}
+          />
+          <Stack.Screen
+            name="GlassesList"
+            component={GlassesListScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
             }}
           />
         </>

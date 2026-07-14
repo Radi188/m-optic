@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type ProfileHeaderProps = {
   name?: string;
@@ -9,21 +10,16 @@ type ProfileHeaderProps = {
   avatarUrl?: string;
   notificationCount?: number;
   onEditPress?: () => void;
-  onCameraPress?: () => void;
-  onNotificationPress?: () => void;
+  editLabel: string;
 };
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   name = 'Antar Adil',
   subtitle = 'Premium Member',
   avatarUrl,
-  notificationCount = 0,
   onEditPress,
-  onCameraPress,
-  onNotificationPress,
+  editLabel = 'Edit',
 }) => {
-  const hasUnreadNotification = notificationCount > 0;
-
   return (
     <View>
       <View style={styles.card}>
@@ -36,23 +32,23 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
           </View>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.cameraBtn}
             activeOpacity={0.85}
             onPress={onCameraPress}
           >
             <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={1}>
+          <AppText style={styles.name} numberOfLines={1}>
             {name}
-          </Text>
+          </AppText>
 
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <AppText style={styles.subtitle} numberOfLines={1}>
             {subtitle}
-          </Text>
+          </AppText>
         </View>
 
         <TouchableOpacity
@@ -61,7 +57,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           onPress={onEditPress}
         >
           <Ionicons name="pencil-outline" size={14} color={Colors.primary} />
-          <Text style={styles.editText}>Edit</Text>
+          <AppText style={styles.editText}>{editLabel}</AppText>
         </TouchableOpacity>
       </View>
     </View>

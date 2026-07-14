@@ -3,21 +3,24 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Colors, Spacing } from '../../../theme';
 import { Text } from 'react-native-gesture-handler';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import AppText from '../../AppText';
 
 type ProfileTitleHeaderProps = {
   hasUnreadNotification: boolean;
   notificationCount: number;
   notificationPress: () => void;
+  label: string;
 };
 
 const ProfileTitleHeader = ({
   hasUnreadNotification,
   notificationCount,
   notificationPress,
+  label,
 }: ProfileTitleHeaderProps) => {
   return (
     <View style={styles.topSection}>
-      <Text style={styles.screenTitle}>My Profile</Text>
+      <AppText style={styles.screenTitle}>{label}</AppText>
 
       <TouchableOpacity
         style={styles.notificationBtn}
@@ -28,9 +31,9 @@ const ProfileTitleHeader = ({
 
         {hasUnreadNotification ? (
           <View style={styles.notificationBadge}>
-            <Text style={styles.notificationBadgeText}>
+            <AppText style={styles.notificationBadgeText}>
               {notificationCount > 9 ? '9+' : notificationCount}
-            </Text>
+            </AppText>
           </View>
         ) : null}
       </TouchableOpacity>

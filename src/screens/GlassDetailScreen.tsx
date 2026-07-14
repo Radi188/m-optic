@@ -12,7 +12,10 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,6 +31,9 @@ import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
 import { useProductDetail } from '../hook/useProductDetail';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
+import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import { useTranslation } from 'react-i18next';
+import AppText from '../components/AppText';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -261,12 +267,12 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
             <Ionicons name="arrow-back" size={20} color={Colors.white} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={viewer.title} numberOfLines={1}>
+            <AppText style={viewer.title} numberOfLines={1}>
               {mode === '3d' ? '3D Model' : 'Try On'} — {glass.name}
-            </Text>
-            <Text style={viewer.subtitle}>
+            </AppText>
+            <AppText style={viewer.subtitle}>
               {glass.brand} · ${glass.price}
-            </Text>
+            </AppText>
           </View>
           <View
             style={[
@@ -282,14 +288,14 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
               size={12}
               color={mode === '3d' ? Colors.primary : Colors.info}
             />
-            <Text
+            <AppText
               style={[
                 viewer.modeLabel,
                 { color: mode === '3d' ? Colors.primary : Colors.info },
               ]}
             >
               {mode === '3d' ? '3D' : 'AR'}
-            </Text>
+            </AppText>
           </View>
         </View>
 
@@ -311,11 +317,11 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
             size={12}
             color="rgba(255,255,255,0.4)"
           />
-          <Text style={viewer.hintText}>
+          <AppText style={viewer.hintText}>
             {mode === '3d'
               ? 'Drag to rotate · Pinch to zoom'
               : 'AR try-on simulation'}
-          </Text>
+          </AppText>
         </View>
       </View>
     </Modal>
@@ -339,6 +345,8 @@ const GlassDetailScreen: React.FC = () => {
 
   const { product, related, loading, error, refetch, inquiryLink } =
     useProductDetail(id);
+
+  const { t } = useTranslation();
 
   const images =
     product?.assets && product?.assets?.length > 0
@@ -366,32 +374,70 @@ const GlassDetailScreen: React.FC = () => {
     }
   };
   if (loading) {
-    return <GlassesDetailSkeleton />;
+    return (
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={20} color={Colors.black} />
+          </TouchableOpacity>
+          <AppText style={styles.headerTitle} numberOfLines={1}>
+            {product?.name}
+          </AppText>
+          <View
+            style={[
+              styles.stockBadge,
+              {
+                backgroundColor: accentColor + '20',
+                borderColor: accentColor + '50',
+              },
+            ]}
+          >
+            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
+            {/* <AppText style={[styles.stockText, { color: accentColor }]}>
+            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
+          </AppText> */}
+          </View>
+        </View>
+        <GlassesDetailSkeleton />
+      </SafeAreaView>
+    );
   }
 
   if (error) {
     return (
-      <View style={styles.loadingContainer}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="transparent"
-          translucent
-        />
-
-        <View style={styles.loadingCard}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={42}
-            color={Colors.error}
-          />
-          <Text style={styles.loadingTitle}>Failed to load product</Text>
-          <Text style={styles.loadingSubtitle}>{error}</Text>
-
-          <TouchableOpacity style={styles.retryBtn} onPress={refetch}>
-            <Text style={styles.retryBtnText}>Try Again</Text>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={20} color={Colors.black} />
           </TouchableOpacity>
+          <AppText style={styles.headerTitle} numberOfLines={1}>
+            {product?.name}
+          </AppText>
+          <View
+            style={[
+              styles.stockBadge,
+              {
+                backgroundColor: accentColor + '20',
+                borderColor: accentColor + '50',
+              },
+            ]}
+          >
+            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
+            {/* <AppText style={[styles.stockText, { color: accentColor }]}>
+            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
+          </AppText> */}
+          </View>
         </View>
-      </View>
+        <ErrorComponent onRetry={refetch} />
+      </SafeAreaView>
     );
   }
 
@@ -412,9 +458,9 @@ const GlassDetailScreen: React.FC = () => {
         >
           <Ionicons name="arrow-back" size={20} color={Colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <AppText style={styles.headerTitle} numberOfLines={1}>
           {product?.name}
-        </Text>
+        </AppText>
         <View
           style={[
             styles.stockBadge,
@@ -425,9 +471,9 @@ const GlassDetailScreen: React.FC = () => {
           ]}
         >
           <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
-          {/* <Text style={[styles.stockText, { color: accentColor }]}>
+          {/* <AppText style={[styles.stockText, { color: accentColor }]}>
             {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
-          </Text> */}
+          </AppText> */}
         </View>
       </View>
 
@@ -451,25 +497,25 @@ const GlassDetailScreen: React.FC = () => {
             }
           />
           {/* <View style={styles.brandPill}>
-            <Text style={styles.brandPillText}>{glass.brand}</Text>
+            <AppText style={styles.brandPillText}>{glass.brand}</AppText>
           </View> */}
         </View>
 
         {/* ── Name + Price ─────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.nameRow}>
-            <Text style={styles.frameName}>{product?.name}</Text>
-            <Text style={styles.framePrice}>${product?.price}</Text>
+            <AppText style={styles.frameName}>{product?.name}</AppText>
+            <AppText style={styles.framePrice}>${product?.price}</AppText>
           </View>
           {/* {glass.description ? (
-            <Text style={styles.description}>{glass.description}</Text>
+            <AppText style={styles.description}>{glass.description}</AppText>
           ) : null} */}
         </View>
 
         {/* ── Specs ────────────────────────────────────────────────────────── */}
         {/* {spec && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Specifications</Text>
+            <AppText style={styles.sectionTitle}>Specifications</AppText>
             <View style={styles.specsCard}>
               <View style={styles.specsHighlight} pointerEvents="none" />
               {[
@@ -509,8 +555,8 @@ const GlassDetailScreen: React.FC = () => {
                         color={Colors.primary}
                       />
                     </View>
-                    <Text style={styles.specLabel}>{row.label}</Text>
-                    <Text style={styles.specValue}>{row.value}</Text>
+                    <AppText style={styles.specLabel}>{row.label}</AppText>
+                    <AppText style={styles.specValue}>{row.value}</AppText>
                   </View>
                   {i < arr.length - 1 && <View style={styles.specDiv} />}
                 </React.Fragment>
@@ -552,7 +598,9 @@ const GlassDetailScreen: React.FC = () => {
               size={18}
               color={Colors.white}
             />
-            <Text style={styles.floatBtn3dLabel}>Contact Telegram</Text>
+            <AppText style={styles.floatBtn3dLabel}>
+              {t('ContactTelegram')}
+            </AppText>
           </TouchableOpacity>
 
           {/* Try On button */}
@@ -563,7 +611,9 @@ const GlassDetailScreen: React.FC = () => {
           >
             <View style={styles.floatBtnTryonHighlight} pointerEvents="none" />
             <Ionicons name="heart-outline" size={18} color={Colors.primary} />
-            <Text style={styles.floatBtnTryonLabel}>Add to Favorite</Text>
+            <AppText style={styles.floatBtnTryonLabel}>
+              {t('AddToFavorite')}
+            </AppText>
           </TouchableOpacity>
         </View>
       </View>

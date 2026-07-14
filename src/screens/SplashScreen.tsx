@@ -13,24 +13,42 @@ const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors, FontSize } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
+import AppText from '../components/AppText';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 const SplashScreen: React.FC<Props> = ({ navigation }) => {
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.82)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
-  const exitAnim  = useRef(new Animated.Value(1)).current;
+  const exitAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 520, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 520, useNativeDriver: true }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 8,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 520,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 520,
+        useNativeDriver: true,
+      }),
     ]).start();
 
     const timer = setTimeout(() => {
-      Animated.timing(exitAnim, { toValue: 0, duration: 420, useNativeDriver: true }).start(() => {
+      Animated.timing(exitAnim, {
+        toValue: 0,
+        duration: 420,
+        useNativeDriver: true,
+      }).start(() => {
         navigation.replace('Main');
       });
     }, 2600);
@@ -44,7 +62,11 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
       locations={[0, 0.42, 1]}
       style={[styles.root, { opacity: exitAnim }]}
     >
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* Center content */}
       <View style={styles.center}>
@@ -64,8 +86,8 @@ const SplashScreen: React.FC<Props> = ({ navigation }) => {
         <Animated.View
           style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
         >
-          <Text style={styles.brand}>M·OPTIC</Text>
-          <Text style={styles.tagline}>See the world differently</Text>
+          <AppText style={styles.brand}>M·OPTIC</AppText>
+          <AppText style={styles.tagline}>See the world differently</AppText>
         </Animated.View>
       </View>
 

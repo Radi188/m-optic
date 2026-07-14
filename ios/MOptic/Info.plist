@@ -42,7 +42,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>MOptic uses face tracking to place glasses on your face during AR try-on.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string/>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
@@ -65,6 +65,10 @@
 		<string>Octicons.ttf</string>
 		<string>SimpleLineIcons.ttf</string>
 		<string>Zocial.ttf</string>
+		<string>Hanuman-Regular.ttf</string>
+		<string>Hanuman-Bold.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

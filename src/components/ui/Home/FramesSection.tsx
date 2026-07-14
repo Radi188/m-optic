@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Colors, FontSize, Spacing } from '../../../theme';
 import { FrameShapeItem } from '../../../types/home';
+import AppText from '../../AppText';
 
 type FramesSectionProps = {
   title?: string;
@@ -31,16 +32,16 @@ const FramesSection: React.FC<FramesSectionProps> = ({
         <Image source={{ uri: item.icon_url }} style={styles.image} />
       ) : (
         <View style={styles.imagePlaceholder}>
-          <Text style={styles.placeholderText}>{item.name}</Text>
+          <AppText style={styles.placeholderText}>{item.name}</AppText>
         </View>
       )}
-      <Text style={styles.name}>{item.name}</Text>
+      <AppText style={styles.name}>{item.name}</AppText>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
+      <AppText style={styles.title}>{title}</AppText>
 
       <FlatList
         data={frames}

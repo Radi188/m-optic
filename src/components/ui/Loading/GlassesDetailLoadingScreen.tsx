@@ -12,11 +12,7 @@ const GlassesDetailSkeleton = () => {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.xs }]}>
-        <SkeletonBox style={styles.backBtn} />
-        <SkeletonBox style={styles.headerTitle} />
-        <SkeletonBox style={styles.stockBadge} />
-      </View>
+     
 
       <View style={styles.hero}>
         <SkeletonBox style={styles.heroImage} />

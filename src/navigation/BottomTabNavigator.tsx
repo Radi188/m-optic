@@ -11,13 +11,15 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
-import HomeScreen    from '../screens/HomeScreen';
-import GlassScreen   from '../screens/GlassScreen';
-import ScanScreen    from '../screens/ScanScreen';
-import StoreScreen   from '../screens/StoreScreen';
+import HomeScreen from '../screens/HomeScreen';
+import GlassScreen from '../screens/GlassScreen';
+import ScanScreen from '../screens/ScanScreen';
+import StoreScreen from '../screens/StoreScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { Colors, FontSize } from '../theme';
 import type { BottomTabParamList } from '../types/navigation';
+import { useTranslation } from 'react-i18next';
+import AppText from '../components/AppText';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
@@ -27,22 +29,36 @@ const TAB_CONFIG: Record<
   keyof BottomTabParamList,
   { icon: IoniconsName; iconActive: IoniconsName; label: string }
 > = {
-  Home:    { icon: 'home-outline',          iconActive: 'home',          label: 'Home' },
-  Glass:   { icon: 'glasses-outline',       iconActive: 'glasses',       label: 'Glass' },
-  Scan:    { icon: 'scan-outline',           iconActive: 'scan-circle',   label: 'Scan' },
-  Store:   { icon: 'storefront-outline',    iconActive: 'storefront',    label: 'Store' },
-  Profile: { icon: 'person-circle-outline', iconActive: 'person-circle', label: 'Profile' },
+  Home: { icon: 'home-outline', iconActive: 'home', label: 'Home' },
+  Glass: { icon: 'glasses-outline', iconActive: 'glasses', label: 'Glass' },
+
+  Store: {
+    icon: 'storefront-outline',
+    iconActive: 'storefront',
+    label: 'Store',
+  },
+  Profile: {
+    icon: 'person-circle-outline',
+    iconActive: 'person-circle',
+    label: 'Profile',
+  },
 };
 
 // ─── Tab Item ─────────────────────────────────────────────────────────────────
 
 interface TabItemProps {
   isFocused: boolean;
-  cfg: typeof TAB_CONFIG[keyof typeof TAB_CONFIG];
+  cfg: (typeof TAB_CONFIG)[keyof typeof TAB_CONFIG];
   onPress: () => void;
+  label: string;
 }
 
-const TabItem: React.FC<TabItemProps> = ({ isFocused, cfg, onPress }) => {
+const TabItem: React.FC<TabItemProps> = ({
+  isFocused,
+  cfg,
+  onPress,
+  label,
+}) => {
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () =>
@@ -72,20 +88,23 @@ const TabItem: React.FC<TabItemProps> = ({ isFocused, cfg, onPress }) => {
       style={styles.tabItem}
     >
       <Animated.View style={[styles.tabContent, { transform: [{ scale }] }]}>
+        xqx
         {/* Top indicator line */}
         <View style={[styles.indicator, isFocused && styles.indicatorActive]} />
-
         <Ionicons
           name={isFocused ? cfg.iconActive : cfg.icon}
           size={22}
           color={isFocused ? Colors.primary : Colors.tabBarInactive}
         />
-        <Text
-          style={[styles.label, isFocused ? styles.labelActive : styles.labelInactive]}
+        <AppText
+          style={[
+            styles.label,
+            isFocused ? styles.labelActive : styles.labelInactive,
+          ]}
           numberOfLines={1}
         >
-          {cfg.label}
-        </Text>
+          {label}
+        </AppText>
       </Animated.View>
     </TouchableOpacity>
   );
@@ -94,12 +113,15 @@ const TabItem: React.FC<TabItemProps> = ({ isFocused, cfg, onPress }) => {
 // ─── Custom Tab Bar ───────────────────────────────────────────────────────────
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   // A screen can request a full-screen experience (e.g. the face scanner) by
   // setting a `hideTabBar` route param. Hide the bar entirely in that case.
   const focusedRoute = state.routes[state.index];
-  if ((focusedRoute.params as { hideTabBar?: boolean } | undefined)?.hideTabBar) {
+  if (
+    (focusedRoute.params as { hideTabBar?: boolean } | undefined)?.hideTabBar
+  ) {
     return null;
   }
 
@@ -126,7 +148,13 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
           };
 
           return (
-            <TabItem key={route.key} isFocused={isFocused} cfg={cfg} onPress={onPress} />
+            <TabItem
+              key={route.key}
+              isFocused={isFocused}
+              cfg={cfg}
+              onPress={onPress}
+              label={t(cfg.label)}
+            />
           );
         })}
       </View>
@@ -143,10 +171,9 @@ const BottomTabNavigator: React.FC = () => (
     tabBar={props => <CustomTabBar {...props} />}
     screenOptions={{ headerShown: false }}
   >
-    <Tab.Screen name="Home"    component={HomeScreen} />
-    <Tab.Screen name="Glass"   component={GlassScreen} />
-    <Tab.Screen name="Scan"    component={ScanScreen} />
-    <Tab.Screen name="Store"   component={StoreScreen} />
+    <Tab.Screen name="Home" component={HomeScreen} />
+    <Tab.Screen name="Glass" component={GlassScreen} />
+    <Tab.Screen name="Store" component={StoreScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
   </Tab.Navigator>
 );
@@ -195,7 +222,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.1,
   },
-  labelActive:   { color: Colors.primary },
+  labelActive: { color: Colors.primary },
   labelInactive: { color: Colors.tabBarInactive },
 });
 

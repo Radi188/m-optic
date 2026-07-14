@@ -8,6 +8,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type RewardButtonProps = {
   title?: string;
@@ -36,10 +37,10 @@ const RewardButton: React.FC<RewardButtonProps> = ({
         </View>
 
         <View style={styles.rewardTextBox}>
-          <Text style={styles.rewardPreviewTitle}>{title}</Text>
-          <Text style={styles.rewardPreviewSubtitle} numberOfLines={2}>
+          <AppText style={styles.rewardPreviewTitle}>{title}</AppText>
+          <AppText style={styles.rewardPreviewSubtitle} numberOfLines={2}>
             {subtitle}
-          </Text>
+          </AppText>
         </View>
       </View>
 

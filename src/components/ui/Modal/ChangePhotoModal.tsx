@@ -11,11 +11,18 @@ import {
 import ImagePicker from 'react-native-image-crop-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
+
+export type SelectedProfileImage = {
+  uri: string;
+  type: string;
+  name: string;
+};
 
 type ChangePhotoModalProps = {
   visible: boolean;
   onClose: () => void;
-  onImageSelected: (imagePath: string) => void;
+  onImageSelected: (image: SelectedProfileImage) => void;
   onRemovePhoto?: () => void;
 };
 
@@ -25,6 +32,17 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
   onImageSelected,
   onRemovePhoto,
 }) => {
+  const handleSelectedImage = (image: any) => {
+    const selectedImage: SelectedProfileImage = {
+      uri: image.path,
+      type: image.mime || 'image/jpeg',
+      name: image.filename || `profile-${Date.now()}.jpg`,
+    };
+
+    onImageSelected(selectedImage);
+    onClose();
+  };
+
   const openCamera = async () => {
     try {
       const image = await ImagePicker.openCamera({
@@ -36,8 +54,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
         mediaType: 'photo',
       });
 
-      onImageSelected(image.path);
-      onClose();
+      handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
         Alert.alert('Camera Error', 'Unable to open camera.');
@@ -56,8 +73,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
         mediaType: 'photo',
       });
 
-      onImageSelected(image.path);
-      onClose();
+      handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
         Alert.alert('Gallery Error', 'Unable to open gallery.');
@@ -96,11 +112,12 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
               />
             </View>
 
-            <Text style={styles.title}>Change Photo</Text>
-            <Text style={styles.subtitle}>
+            <AppText style={styles.title}>Change Photo</AppText>
+
+            <AppText style={styles.subtitle}>
               Take a new photo or choose one from your gallery. You can crop it
               before saving.
-            </Text>
+            </AppText>
           </View>
 
           <View style={styles.actionList}>
@@ -118,13 +135,15 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
               onPress={openGallery}
             />
 
-            {/* <PhotoAction
-              icon="trash-outline"
-              title="Remove Photo"
-              subtitle="Use default profile icon"
-              danger
-              onPress={handleRemovePhoto}
-            /> */}
+            {onRemovePhoto && (
+              <PhotoAction
+                icon="trash-outline"
+                title="Remove Photo"
+                subtitle="Use default profile icon"
+                danger
+                onPress={handleRemovePhoto}
+              />
+            )}
           </View>
 
           <TouchableOpacity
@@ -132,7 +151,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
             activeOpacity={0.88}
             onPress={onClose}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <AppText style={styles.cancelText}>Cancel</AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -170,10 +189,12 @@ const PhotoAction: React.FC<PhotoActionProps> = ({
       </View>
 
       <View style={styles.actionContent}>
-        <Text style={[styles.actionTitle, danger && styles.actionTitleDanger]}>
+        <AppText
+          style={[styles.actionTitle, danger && styles.actionTitleDanger]}
+        >
           {title}
-        </Text>
-        <Text style={styles.actionSubtitle}>{subtitle}</Text>
+        </AppText>
+        <AppText style={styles.actionSubtitle}>{subtitle}</AppText>
       </View>
 
       <Ionicons
@@ -207,7 +228,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
     borderWidth: 1,
     borderColor: '#EFE5E0',
-
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -215,7 +235,6 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.18,
     shadowRadius: 24,
-
     elevation: 12,
   },
   modalHandle: {

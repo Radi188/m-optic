@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 const availableLensesAndCoatings = [
   'UV Protection',
@@ -38,14 +39,16 @@ const GlassesSpecSection = () => {
     <ScrollView style={styles.container}>
       {/* Available Lenses & Coatings Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Available Lenses & Coatings</Text>
+        <AppText style={styles.sectionTitle}>
+          Available Lenses & Coatings
+        </AppText>
         <View style={styles.list}>
           {availableLensesAndCoatings.map((item, index) => (
             <View key={index} style={styles.listItem}>
               <View style={styles.tickCircle}>
                 <Ionicons name="checkmark" size={14} color="black" />
               </View>
-              <Text style={styles.listText}>{item}</Text>
+              <AppText style={styles.listText}>{item}</AppText>
             </View>
           ))}
         </View>
@@ -53,12 +56,12 @@ const GlassesSpecSection = () => {
 
       {/* Services & Guarantees Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Services & Guarantees</Text>
+        <AppText style={styles.sectionTitle}>Services & Guarantees</AppText>
         <View style={styles.servicesList}>
           {servicesAndGuarantees.map((item, index) => (
             <View key={index} style={styles.bulletPointItem}>
-              <Text style={styles.bulletPoint}>•</Text>
-              <Text style={styles.listText}>{item}</Text>
+              <AppText style={styles.bulletPoint}>•</AppText>
+              <AppText style={styles.listText}>{item}</AppText>
             </View>
           ))}
         </View>
@@ -66,16 +69,16 @@ const GlassesSpecSection = () => {
 
       {/* Product Details Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Product Details</Text>
-        <Text style={styles.detailsText}>
+        <AppText style={styles.sectionTitle}>Product Details</AppText>
+        <AppText style={styles.detailsText}>
           Frame size: {productDetails.frameSize}
-        </Text>
-        <Text style={styles.detailsText}>
+        </AppText>
+        <AppText style={styles.detailsText}>
           Lens width: {productDetails.lensWidth}
-        </Text>
-        <Text style={styles.detailsText}>
+        </AppText>
+        <AppText style={styles.detailsText}>
           Lens height: {productDetails.lensHeight}
-        </Text>
+        </AppText>
       </View>
     </ScrollView>
   );

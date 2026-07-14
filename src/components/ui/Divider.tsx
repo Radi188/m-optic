@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Colors, Spacing, FontSize } from '../../theme';
+import AppText from '../AppText';
 
 interface DividerProps {
   label?: string;
@@ -18,7 +19,7 @@ const Divider: React.FC<DividerProps> = ({
       <View style={[styles.row, style]}>
         <View style={[styles.line, { backgroundColor: color }]} />
         <View style={styles.labelWrap}>
-          <Text style={styles.label}>{label}</Text>
+          <AppText style={styles.label}>{label}</AppText>
         </View>
         <View style={[styles.line, { backgroundColor: color }]} />
       </View>

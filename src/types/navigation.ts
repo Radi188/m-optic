@@ -41,12 +41,22 @@ export type RootStackParamList = {
   PointMember: undefined;
   Reward: undefined;
   PrescriptionDetail: undefined;
+  GlassesList: {
+  from?: 'brand' | 'frame';
+  brandId?: number | 'all';
+  brandName?: string;
+  frameShape?: string;
+  };
+  SearchScreen: undefined;
+  SearchResult: {
+    query: string;
+  };
 };
 
 export type BottomTabParamList = {
   Home: undefined;
   Glass: undefined;
-  Scan: undefined;
+ 
   Store: undefined;
   Profile: undefined;
 };

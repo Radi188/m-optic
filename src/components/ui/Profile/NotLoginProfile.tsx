@@ -1,13 +1,20 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
+
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
+
 import { Colors, FontSize, Spacing } from '../../../theme';
+
+import AppText from '../../AppText';
 
 type NotLoginProfileProps = {
   onLoginPress?: () => void;
 };
 
 const NotLoginProfile: React.FC<NotLoginProfileProps> = ({ onLoginPress }) => {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.container}>
       <View style={styles.heroCard}>
@@ -21,19 +28,19 @@ const NotLoginProfile: React.FC<NotLoginProfileProps> = ({ onLoginPress }) => {
           </View>
         </View>
 
-        <Text style={styles.title}>Welcome to{'\n'}M Optic</Text>
+        <AppText style={styles.title}>{t('WelcomeToMOptic')}</AppText>
 
-        <Text style={styles.subtitle}>
-          Sign in to access your prescriptions, saved frames, appointments, and
-          exclusive member rewards.
-        </Text>
+        <AppText style={styles.subtitle}>
+          {t('NotLoginProfileSubtitle')}
+        </AppText>
 
         <TouchableOpacity
           style={styles.loginBtn}
           activeOpacity={0.9}
           onPress={onLoginPress}
         >
-          <Text style={styles.loginText}>Sign In</Text>
+          <AppText style={styles.loginText}>{t('SignIn')}</AppText>
+
           <Ionicons name="arrow-forward" size={20} color={Colors.white} />
         </TouchableOpacity>
       </View>
@@ -45,10 +52,7 @@ export default NotLoginProfile;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl * 2,
+    paddingTop: Spacing.xl,
   },
 
   heroCard: {
@@ -56,7 +60,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: 36,
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xl * 1.5,
+    paddingVertical: Spacing.xl,
     borderWidth: 1,
     borderColor: '#F0E7E3',
   },
@@ -91,7 +95,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 38,
-    lineHeight: 44,
+    lineHeight: 56,
     fontWeight: '900',
     color: Colors.black,
     textAlign: 'center',

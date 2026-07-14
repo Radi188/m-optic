@@ -10,68 +10,59 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../theme';
+import AppText from '../components/AppText';
 
 type NotificationSetting = {
   id: string;
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
   icon: string;
 };
 
 const notificationSettings: NotificationSetting[] = [
   {
     id: 'push',
-    title: 'Push Notifications',
-    subtitle: 'Receive notifications on your device',
+    titleKey: 'PushNotifications',
+    subtitleKey: 'PushNotificationsSubtitle',
     icon: 'notifications-outline',
   },
-  //   {
-  //     id: 'order',
-  //     title: 'Order Updates',
-  //     subtitle: 'Get updates about your orders and purchases',
-  //     icon: 'bag-check-outline',
-  //   },
-  //   {
-  //     id: 'appointment',
-  //     title: 'Appointment Reminders',
-  //     subtitle: 'Reminders for eye test and store appointments',
-  //     icon: 'calendar-outline',
-  //   },
   {
     id: 'ready',
-    title: 'Glasses Ready',
-    subtitle: 'Notify me when your glasses are ready',
+    titleKey: 'GlassesReady',
+    subtitleKey: 'GlassesReadySubtitle',
     icon: 'glasses-outline',
   },
   {
     id: 'promotion',
-    title: 'Promotions',
-    subtitle: 'Special offers, discounts, and campaigns',
+    titleKey: 'Promotions',
+    subtitleKey: 'PromotionsSubtitle',
     icon: 'pricetag-outline',
   },
   {
     id: 'newProduct',
-    title: 'New Products',
-    subtitle: 'New frames, lenses, and collections',
+    titleKey: 'NewProducts',
+    subtitleKey: 'NewProductsSubtitle',
     icon: 'sparkles-outline',
   },
   {
     id: 'tips',
-    title: 'Eye Care Tips',
-    subtitle: 'Useful tips for eye health and lens care',
+    titleKey: 'EyeCareTips',
+    subtitleKey: 'EyeCareTipsSubtitle',
     icon: 'bulb-outline',
   },
   {
     id: 'app',
-    title: 'App Updates',
-    subtitle: 'New features and important app updates',
+    titleKey: 'AppUpdates',
+    subtitleKey: 'AppUpdatesSubtitle',
     icon: 'phone-portrait-outline',
   },
 ];
 
 const NotificationSettingsScreen = () => {
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   const [settings, setSettings] = useState<Record<string, boolean>>({
     push: true,
@@ -103,7 +94,7 @@ const NotificationSettingsScreen = () => {
             <Ionicons name="chevron-back" size={24} color={Colors.black} />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <AppText style={styles.headerTitle}>{t('Notifications')}</AppText>
 
           <View style={styles.headerRightPlaceholder} />
         </View>
@@ -133,8 +124,10 @@ const NotificationSettingsScreen = () => {
                   </View>
 
                   <View style={styles.textWrap}>
-                    <Text style={styles.title}>{item.title}</Text>
-                    <Text style={styles.subtitle}>{item.subtitle}</Text>
+                    <AppText style={styles.title}>{t(item.titleKey)}</AppText>
+                    <AppText style={styles.subtitle}>
+                      {t(item.subtitleKey)}
+                    </AppText>
                   </View>
 
                   <View style={styles.switchWrap}>
@@ -164,11 +157,12 @@ const NotificationSettingsScreen = () => {
             </View>
 
             <View style={styles.infoTextWrap}>
-              <Text style={styles.infoTitle}>About Notifications</Text>
-              <Text style={styles.infoText}>
-                Some important updates, such as order status or appointment
-                changes, may still be shown inside the app.
-              </Text>
+              <AppText style={styles.infoTitle}>
+                {t('AboutNotifications')}
+              </AppText>
+              <AppText style={styles.infoText}>
+                {t('AboutNotificationsText')}
+              </AppText>
             </View>
           </View>
         </ScrollView>

@@ -29,6 +29,7 @@ import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { GlassItem } from '../types/navigation';
+import AppText from '../components/AppText';
 
 interface Props {
   glass: GlassItem;
@@ -606,7 +607,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>Loading glasses model…</Text>
+        <AppText style={styles.loadingText}>Loading glasses model…</AppText>
       </View>
     );
   }
@@ -614,12 +615,12 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   if (loadError || !html) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorIcon}>⚠</Text>
-        <Text style={styles.errorTitle}>Could not load model</Text>
-        <Text style={styles.errorSub}>
+        <AppText style={styles.errorIcon}>⚠</AppText>
+        <AppText style={styles.errorTitle}>Could not load model</AppText>
+        <AppText style={styles.errorSub}>
           Make sure Metro bundler is running{'\n'}and the device is on the same
           network.
-        </Text>
+        </AppText>
       </View>
     );
   }
@@ -644,13 +645,13 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
 
       <View style={styles.bottomBar}>
         <View style={styles.glassInfo}>
-          <Text style={styles.glassName}>{glass.name}</Text>
-          <Text style={styles.glassBrand}>
+          <AppText style={styles.glassName}>{glass.name}</AppText>
+          <AppText style={styles.glassBrand}>
             {glass.brand} · ${glass.price}
-          </Text>
+          </AppText>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>3D LIVE</Text>
+          <AppText style={styles.badgeText}>3D LIVE</AppText>
         </View>
       </View>
     </View>

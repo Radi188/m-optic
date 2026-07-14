@@ -9,7 +9,9 @@ import {
   Animated,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 type LogoutModalProps = {
   visible: boolean;
@@ -22,6 +24,8 @@ const LogoutModal: React.FC<LogoutModalProps> = ({
   onClose,
   onConfirmLogout,
 }) => {
+  const { t } = useTranslation();
+
   const [shouldRender, setShouldRender] = useState(visible);
   const scaleAnim = useRef(new Animated.Value(0.94)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -113,12 +117,9 @@ const LogoutModal: React.FC<LogoutModalProps> = ({
                 </View>
               </View>
 
-              <Text style={styles.title}>Sign out?</Text>
+              <AppText style={styles.title}>{t('SignOutQuestion')}</AppText>
 
-              <Text style={styles.message}>
-                You will need to sign in again to access your account and saved
-                information.
-              </Text>
+              <AppText style={styles.message}>{t('SignOutMessage')}</AppText>
 
               <View style={styles.warningBox}>
                 <Ionicons
@@ -127,9 +128,9 @@ const LogoutModal: React.FC<LogoutModalProps> = ({
                   color="#C2410C"
                 />
 
-                <Text style={styles.warningText}>
-                  Make sure your latest changes are saved before signing out.
-                </Text>
+                <AppText style={styles.warningText}>
+                  {t('SignOutWarning')}
+                </AppText>
               </View>
 
               <View style={styles.buttonRow}>
@@ -138,7 +139,9 @@ const LogoutModal: React.FC<LogoutModalProps> = ({
                   activeOpacity={0.85}
                   onPress={onClose}
                 >
-                  <Text style={styles.cancelText}>Stay Logged In</Text>
+                  <AppText style={styles.cancelText}>
+                    {t('StayLoggedIn')}
+                  </AppText>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -146,7 +149,7 @@ const LogoutModal: React.FC<LogoutModalProps> = ({
                   activeOpacity={0.85}
                   onPress={handleLogout}
                 >
-                  <Text style={styles.logoutText}>Sign Out</Text>
+                  <AppText style={styles.logoutText}>{t('SignOut')}</AppText>
                 </TouchableOpacity>
               </View>
             </Pressable>

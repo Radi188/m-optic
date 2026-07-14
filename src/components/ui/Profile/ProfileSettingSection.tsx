@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../../../theme';
+import AppText from '../../AppText';
 
 export type SettingItem = {
   id: string;
@@ -16,49 +18,56 @@ type ProfileSettingSectionProps = {
   items?: SettingItem[];
 };
 
-const defaultItems: SettingItem[] = [
-  {
-    id: 'language',
-    title: 'Language',
-    subtitle: 'English',
-    icon: 'language-outline',
-  },
-  {
-    id: 'notifications',
-    title: 'Notifications',
-    subtitle: 'Manage alerts',
-    icon: 'notifications-outline',
-  },
-  {
-    id: 'support',
-    title: 'Support',
-    subtitle: 'Help center',
-    icon: 'headset-outline',
-  },
-  {
-    id: 'privacy',
-    title: 'Privacy Policy',
-    subtitle: 'Data and security',
-    icon: 'shield-checkmark-outline',
-  },
-  {
-    id: 'logout',
-    title: 'Logout',
-    subtitle: 'Sign out from account',
-    icon: 'log-out-outline',
-  },
-];
-
 const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
-  title = 'Account Settings',
-  items = defaultItems,
+  title,
+  items,
 }) => {
+  const { t } = useTranslation();
+
+  const defaultItems: SettingItem[] = [
+    {
+      id: 'language',
+      title: 'Language',
+      subtitle: 'English',
+      icon: 'language-outline',
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      subtitle: 'ManageAlerts',
+      icon: 'notifications-outline',
+    },
+    {
+      id: 'support',
+      title: 'Support',
+      subtitle: 'HelpCenter',
+      icon: 'headset-outline',
+    },
+    {
+      id: 'privacy',
+      title: 'PrivacyPolicy',
+      subtitle: 'DataAndSecurity',
+      icon: 'shield-checkmark-outline',
+    },
+    {
+      id: 'logout',
+      title: 'Logout',
+      subtitle: 'SignOutFromAccount',
+      icon: 'log-out-outline',
+    },
+  ];
+
+  const sectionTitle = title ?? t('AccountSettings');
+  const settingItems = items ?? defaultItems;
+
   return (
     <View style={styles.section}>
-      {title ? <Text style={styles.sectionTitle}>{title}</Text> : null}
+      {sectionTitle ? (
+        <AppText style={styles.sectionTitle}>{sectionTitle}</AppText>
+      ) : null}
 
       <View style={styles.card}>
-        {items.map((item, index) => {
+        {settingItems.map((item, index) => {
           const isLogout = item.id === 'logout';
 
           return (
@@ -67,7 +76,7 @@ const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
               style={[
                 styles.item,
                 isLogout && styles.logoutItem,
-                index === items.length - 1 && styles.lastItem,
+                index === settingItems.length - 1 && styles.lastItem,
               ]}
               activeOpacity={0.85}
               onPress={item.onPress}
@@ -81,16 +90,16 @@ const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
               </View>
 
               <View style={styles.textWrap}>
-                <Text style={[styles.title, isLogout && styles.logoutTitle]}>
-                  {item.title}
-                </Text>
+                <AppText style={[styles.title, isLogout && styles.logoutTitle]}>
+                  {t(item.title)}
+                </AppText>
 
                 {item.subtitle ? (
-                  <Text
+                  <AppText
                     style={[styles.subtitle, isLogout && styles.logoutSubtitle]}
                   >
-                    {item.subtitle}
-                  </Text>
+                    {t(item.subtitle)}
+                  </AppText>
                 ) : null}
               </View>
 
@@ -170,7 +179,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: FontSize.md,
-    fontWeight: '800',
+    fontWeight: '300',
     color: Colors.black,
   },
 
