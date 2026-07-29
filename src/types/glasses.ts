@@ -36,6 +36,11 @@ export interface Product {
   name: string;
   description: string | null;
   price: number;
+  // ── List endpoint (GET /products) uses lighter field names ──
+  item_name?: string;
+  item_name_kh?: string | null;
+  item_price?: string;
+  category_name?: string | null;
   slug: string;
   product_type: string | null;
   gender: string | null;

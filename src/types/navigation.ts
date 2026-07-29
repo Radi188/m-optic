@@ -51,6 +51,7 @@ export type RootStackParamList = {
   SearchResult: {
     query: string;
   };
+  Scan: undefined;
 };
 
 export type BottomTabParamList = {

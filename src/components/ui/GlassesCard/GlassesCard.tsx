@@ -16,6 +16,12 @@ const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
   // State to track whether the heart is filled or not
   const [isLiked, setIsLiked] = useState(false);
 
+  // The list endpoint (GET /products) returns lighter field names than the
+  // detail endpoint, so fall back across both shapes.
+  const name = item.item_name || item.name;
+  const price = item.item_price ?? item.price;
+  const brand = item.category_name || item.brand?.name || '';
+
   // Toggle the heart state when the icon is clicked
   const toggleHeart = () => {
     setIsLiked(!isLiked);
@@ -45,11 +51,11 @@ const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
       {/* Info */}
       <View style={styles.content}>
         <AppText style={styles.name} numberOfLines={1}>
-          {item.name}
+          {name?.trim()}
         </AppText>
-        <AppText style={styles.brand}>{item.brand?.name || ''}</AppText>
+        <AppText style={styles.brand}>{brand}</AppText>
 
-        <AppText style={styles.price}>${item.price}</AppText>
+        <AppText style={styles.price}>${price}</AppText>
       </View>
     </TouchableOpacity>
   );

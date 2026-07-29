@@ -485,6 +485,24 @@ const HomeScreen: React.FC = () => {
       >
         <HeroSlider slides={data?.banners || []} signinLabel={t('SignIn')} />
 
+        {/* Scan CTA */}
+        <TouchableOpacity
+          style={styles.scanBtn}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Scan')}
+        >
+          <View style={styles.scanIconWrap}>
+            <Ionicons name="scan-outline" size={22} color={Colors.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText style={styles.scanTitle}>{t('homeScanTitle')}</AppText>
+            <AppText style={styles.scanSubtitle}>
+              {t('homeScanSubtitle')}
+            </AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+        </TouchableOpacity>
+
         <View
           style={[styles.pad, styles.sectionRow, { marginTop: Spacing.lg }]}
         >
@@ -593,6 +611,41 @@ const styles = StyleSheet.create({
 
   scroll: { flex: 1 },
   pad: { paddingHorizontal: Spacing.lg },
+
+  // Scan CTA
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginTop: Spacing.lg,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    marginHorizontal: Spacing.md,
+  },
+  scanIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: Colors.black,
+    letterSpacing: -0.1,
+  },
+  scanSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    fontWeight: '500',
+    marginTop: 2,
+  },
 
   // Section headers
   sectionRow: {

@@ -1,18 +1,15 @@
 {
   "Welcome": "Welcome",
- 
   "MyProfile": "My Profile",
   "Edit": "Edit",
   "CurrentPrescription": "Current Prescription",
   "RightEye": "Right Eye",
   "LeftEye": "Left Eye",
 
-  
   "Languages": "Languages",
   "ChooseYourLanguage": "Choose your language",
 
-
-   "MOpticTier": "M Optic {{tier}}",
+  "MOpticTier": "M Optic {{tier}}",
   "PointsAmount": "{{points}} Points",
   "PointsAwayFromTier": "You’re {{points}} points away from {{tier}}",
   "MembershipTiers": {
@@ -20,9 +17,9 @@
     "Gold": "Gold",
     "Platinum": "Platinum"
   },
-   "Rewards": "Rewards",
+  "Rewards": "Rewards",
   "RewardSubtitle": "Redeem your points for exclusive discounts and gifts",
-  
+
   "AccountSettings": "Account Settings",
   "Language": "Language",
   "English": "English",
@@ -34,7 +31,7 @@
   "DataAndSecurity": "Data and security",
   "Logout": "Logout",
   "SignOutFromAccount": "Sign out from account",
-   "Home": "Home",
+  "Home": "Home",
   "Glass": "Glasses",
   "Scan": "Scan",
   "Store": "Store",
@@ -42,6 +39,8 @@
   "commonSeeAll": "See All",
   "homeErrorTitle": "Something went wrong",
   "homeBestSellers": "Best Sellers",
+  "homeScanTitle": "Scan & Try On",
+  "homeScanSubtitle": "Measure your face or refraction",
   "homeTryOn": "Try On",
   "homeBrands": "Brands",
   "homeFrameTypes": "Frame Types",
@@ -66,7 +65,7 @@
   "stockIn": "In Stock",
   "stockLow": "Low Stock",
   "stockOut": "Out of Stock",
-   "filterProductsTitle": "Filter Products",
+  "filterProductsTitle": "Filter Products",
   "commonApply": "Apply",
   "commonReset": "Reset",
   "filterBrand": "Brand",
@@ -75,7 +74,7 @@
   "filterMinPrice": "Min Price",
   "filterMaxPrice": "Max Price",
   "All": "All",
-   "glassColor": "Color",
+  "glassColor": "Color",
   "commonDefault": "Default",
   "glassFrameDetails": "Frame Details",
   "glassFrameType": "Frame Type",
@@ -88,7 +87,7 @@
   "NoImageAvailable": "No image available",
   "ArTryOn": "AR Try On",
   "ThreeDModel": "3D Model",
-   "OpenNow": "Open now",
+  "OpenNow": "Open now",
   "Closed": "Closed",
   "Hours": "HOURS",
   "Directions": "Directions",
@@ -167,12 +166,12 @@
   "ViewAll": "View all",
   "NoRewardsRedeemedYet": "No rewards redeemed yet",
   "RedeemedRewardsAppearHere": "Your redeemed rewards will appear here.",
-    "SignOutQuestion": "Sign out?",
+  "SignOutQuestion": "Sign out?",
   "SignOutMessage": "You will need to sign in again to access your account and saved information.",
   "SignOutWarning": "Make sure your latest changes are saved before signing out.",
   "StayLoggedIn": "Stay Logged In",
   "SignOut": "Sign Out",
-   "GoAheadSignIn": "Go ahead and\nsign in",
+  "GoAheadSignIn": "Go ahead and\nsign in",
   "LoginSubtitle": "Sign in to enjoy the best eyewear experience",
   "Login": "Login",
   "Register": "Register",
@@ -181,7 +180,7 @@
   "RememberMe": "Remember me",
   "ForgotPassword": "Forgot Password?",
   "SigningIn": "Signing in…",
-    "GoAheadSetupAccount": "Go ahead and\nset up your account",
+  "GoAheadSetupAccount": "Go ahead and\nset up your account",
   "RegisterSubtitle": "Sign up to enjoy the best eyewear experience",
   "Password": "Password",
   "ConfirmPassword": "Confirm Password",
@@ -200,11 +199,11 @@
   "ErrorPhoneInvalid": "Please enter a valid phone number.",
   "ErrorPasswordMin": "Password must be at least 6 characters.",
   "ErrorPasswordMismatch": "Passwords do not match.",
-   "WelcomeToMOptic": "Welcome to\nM Optic",
+  "WelcomeToMOptic": "Welcome to\nM Optic",
   "NotLoginProfileSubtitle": "Sign in to access your prescriptions, saved frames, appointments, and exclusive member rewards.",
   "SignIn": "Sign In",
   "Back": "Back",
-   "SearchFrames": "Search frames...",
+  "SearchFrames": "Search frames...",
   "PopularSearches": "Popular searches",
 
   "Round": "Round",
@@ -212,7 +211,7 @@
   "Rimless": "Rimless",
   "Boston": "Boston",
   "Oval": "Oval",
-    "FramesFound": "{{count}} frame found for “{{query}}”",
+  "FramesFound": "{{count}} frame found for “{{query}}”",
   "FramesFound_plural": "{{count}} frames found for “{{query}}”",
 
   "SomethingWentWrong": "Something went wrong",
@@ -221,5 +220,4 @@
   "NoFramesFound": "No frames found",
   "TryAnotherKeyword": "Try another keyword or search by brand name.",
   "SearchAgain": "Search Again"
-  
 }

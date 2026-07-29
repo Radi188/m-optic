@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
@@ -25,7 +24,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const SCREEN_WIDTH = Dimensions.get('window').width;
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -40,22 +38,42 @@ type Tab = 'face' | 'refraction';
 type FaceScanStage = 'idle' | 'countdown' | 'scanning' | 'selecting';
 type RefractionStage =
   | 'intro'
-  | 'acuity'
-  | 'contrast'
-  | 'astigmatism'
+  | 'acuityLeftReady'
+  | 'acuityLeft'
+  | 'acuityRightReady'
+  | 'acuityRight'
   | 'colorVision'
-  | 'nearVision'
-  | 'visualField'
-  | 'eyeMuscle'
-  | 'pupil'
-  | 'eyeHealth'
+  | 'astigmatismLeftReady'
+  | 'astigmatismLeft'
+  | 'astigmatismRightReady'
+  | 'astigmatismRight'
   | 'result';
-type ContrastResult = 'good' | 'reduced' | 'poor';
 type ColorResult = 'normal' | 'mild' | 'deficient';
-type VisualFieldResult = 'full' | 'mild' | 'reduced';
-type EyeMuscleResult = 'aligned' | 'misaligned';
-type PupilResult = 'normal' | 'sensitive';
-type FaceShape = 'Oval' | 'Round' | 'Square' | 'Heart' | 'Oblong';
+type FaceShape =
+  | 'Oval'
+  | 'Round'
+  | 'Square'
+  | 'Heart'
+  | 'Oblong'
+  | 'Diamond'
+  | 'Triangle';
+
+// Normalized 0..100 measurement readouts posted from the scanner.
+type FaceMetrics = {
+  pFaceWidth: number;
+  pFaceLength: number;
+  pJawAngle: number;
+  pForehead: number;
+  pCheekbone: number;
+  pJawline: number;
+};
+// TEMPORARY — raw classifier features surfaced on-screen for debugging.
+// Safe to remove; classification no longer depends on tuning against these.
+type FaceDebug = {
+  raw: { aspect: number; fVc: number; jVc: number; jawDeg: number } | null;
+  scores: Record<string, number> | null;
+  samples: number;
+};
 type RiskLevel = 'low' | 'medium' | 'high';
 type HairStyle = 'Short' | 'Medium' | 'Long' | 'Curly' | 'Wavy' | 'Bald';
 type ResultTab = 'face' | 'hair';
@@ -96,9 +114,23 @@ const FACE_SHAPE_INFO: Record<
   Oblong: {
     icon: 'ellipse-outline',
     description:
-      'Face is longer than it is wide, with a long straight cheek line.',
+      'Face is notably longer than it is wide, with a long straight cheek line and a narrow chin.',
     frames: ['Wayfarer', 'Round', 'Oversized', 'Decorative'],
     tip: "Wider frames with depth add width and shorten the face's appearance.",
+  },
+  Diamond: {
+    icon: 'diamond-outline',
+    description:
+      'Narrow forehead and jawline with wide, prominent cheekbones as the widest point.',
+    frames: ['Cat-Eye', 'Oval', 'Rimless', 'Browline'],
+    tip: 'Frames with detailing on the top edge or rimless styles highlight the eyes and soften the cheekbones.',
+  },
+  Triangle: {
+    icon: 'triangle-outline',
+    description:
+      'Narrow forehead widening to a strong, broad jawline — the jaw is the widest point.',
+    frames: ['Browline', 'Cat-Eye', 'Aviator', 'Round'],
+    tip: 'Frames wider on top, like browline or cat-eye, balance a strong jaw.',
   },
 };
 
@@ -117,68 +149,50 @@ function shuffle<T>(arr: T[]): T[] {
 // Pick `n` distinct items at random.
 const pick = <T,>(arr: T[], n: number): T[] => shuffle(arr).slice(0, n);
 
-// Sloan optotypes — the standard letter set used on real acuity charts.
-const SLOAN = ['C', 'D', 'H', 'K', 'N', 'O', 'R', 'S', 'V', 'Z'];
-const randLetters = (count: number) => pick(SLOAN, count).join('  ');
+// Landolt C — a ring with a gap; the gap direction is the thing being tested.
+// 16 directions around the clock, spaced 22.5° apart, 0 = gap pointing up —
+// a fine enough step that guessing is unreliable.
+const LANDOLT_ANGLES = Array.from({ length: 16 }, (_, i) => i * 22.5);
+const LANDOLT_DIRECTIONS: { angle: number; label: string }[] =
+  LANDOLT_ANGLES.map(angle => ({ angle, label: `${angle}°` }));
 
-type AcuityRow = { size: number; letters: string; label: string };
+type AcuityRow = { size: number; angle: number; label: string };
 
-// Sizes/labels are fixed (they define the acuity line); only letters vary.
+// Sizes/labels are fixed (they define the acuity line); only the gap angle
+// varies. Eight shrinking levels — reaching the bottom requires seven
+// consecutive correct reads under the timer.
 const ACUITY_SPEC = [
-  { size: 36, count: 3, label: '20/200' },
-  { size: 28, count: 4, label: '20/100' },
-  { size: 22, count: 4, label: '20/70' },
-  { size: 17, count: 5, label: '20/50' },
-  { size: 13, count: 6, label: '20/40' },
+  { size: 64, label: '20/200' },
+  { size: 50, label: '20/100' },
+  { size: 40, label: '20/70' },
+  { size: 32, label: '20/50' },
+  { size: 26, label: '20/40' },
+  { size: 21, label: '20/30' },
+  { size: 17, label: '20/20' },
+  { size: 14, label: '20/15' },
 ];
 const genAcuityRows = (): AcuityRow[] =>
   ACUITY_SPEC.map(s => ({
     size: s.size,
     label: s.label,
-    letters: randLetters(s.count),
+    angle: LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)],
   }));
 
-const NEAR_TEXTS = [
-  'The quick brown fox jumps over the lazy dog while the bright autumn sun ' +
-    'sets slowly behind the distant rolling hills near the quiet village.',
-  'A journey of a thousand miles begins with a single step, and every small ' +
-    'effort you make today gently shapes the person you become tomorrow.',
-  'Reading clearly at a close distance is an everyday skill we rarely notice ' +
-    'until a favourite book or a short message becomes harder to focus on.',
-  'The five boxing wizards jump quickly over the lazy brown dog as the calm ' +
-    'evening breeze carries the faint scent of fresh rain across the meadow.',
-];
-const genNearText = () => NEAR_TEXTS[randInt(NEAR_TEXTS.length)];
+// Seconds allowed to answer each ring before it's auto-marked wrong.
+const ACUITY_TIME_LIMIT = 4;
 
 function computeRisk(
   acuityPassCount: number,
   astigmatism: 'equal' | 'unequal',
-  nearVision: 'clear' | 'blurry',
-  contrast: ContrastResult,
   colorVision: ColorResult,
-  visualField: VisualFieldResult,
-  eyeMuscle: EyeMuscleResult,
-  pupil: PupilResult,
-  healthRiskFactors: number,
 ): RiskLevel {
   let score = 0;
   if (acuityPassCount <= 1) score += 4;
   else if (acuityPassCount <= 3) score += 2;
   else if (acuityPassCount === 4) score += 1;
   if (astigmatism === 'unequal') score += 2;
-  if (nearVision === 'blurry') score += 2;
-  if (contrast === 'poor') score += 3;
-  else if (contrast === 'reduced') score += 1;
   if (colorVision === 'deficient') score += 3;
   else if (colorVision === 'mild') score += 1;
-  // ── Eye-health screening tests ──
-  if (visualField === 'reduced') score += 3;
-  else if (visualField === 'mild') score += 1;
-  if (eyeMuscle === 'misaligned') score += 2;
-  if (pupil === 'sensitive') score += 1;
-  // Self-reported risk factors (family history, diabetes, etc.) nudge the
-  // recommendation but are capped so they can't dominate the measured tests.
-  score += Math.min(healthRiskFactors, 3);
   if (score >= 7) return 'high';
   if (score >= 2) return 'medium';
   return 'low';
@@ -283,21 +297,9 @@ function getAvailableDays(count = 10): Date[] {
 
 const AVAILABLE_DAYS = getAvailableDays(10);
 
-// ─── Contrast Sensitivity Data ────────────────────────────────────────────────
-
-type ContrastLevel = { opacity: number; letters: string; size: number };
-
-const CONTRAST_OPACITIES = [1.0, 0.55, 0.28, 0.12];
-const genContrastLevels = (): ContrastLevel[] =>
-  CONTRAST_OPACITIES.map(opacity => ({
-    opacity,
-    size: 22,
-    letters: randLetters(5),
-  }));
-
 // ─── Ishihara-style Plate Data & HTML Generator ───────────────────────────────
 
-const CANT_SEE = "I can't see a number";
+const CANT_SEE = 'Nothing';
 type CvPlate = {
   number: string;
   hint: string;
@@ -350,7 +352,7 @@ function makeIshiharaHtml(number: string): string {
   return `<!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100vh;background:#f5f0eb;display:flex;justify-content:center;align-items:center;overflow:hidden}
@@ -448,95 +450,141 @@ ctx.stroke();
 const SCAN_HTML = `<!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#snapCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
 #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 
-/* Top brand chip */
-.topbar{position:absolute;top:max(22px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;z-index:6}
-.topchip{display:flex;align-items:center;gap:7px;padding:8px 16px;border-radius:30px;background:rgba(20,16,14,0.45);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.14)}
-.topchip .pulse{width:7px;height:7px;border-radius:50%;background:#6FE3AE;box-shadow:0 0 8px #2DBD7E;animation:blink 1.4s ease-in-out infinite}
-.topchip span{color:rgba(255,255,255,0.92);font-size:12px;font-weight:600;letter-spacing:0.4px}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+/* Top HUD chip — sits below the notch / status bar */
+.topbar{position:absolute;top:max(30px,calc(env(safe-area-inset-top) + 16px));left:0;right:0;display:flex;justify-content:center;z-index:8}
+.topchip{display:flex;align-items:center;gap:9px;padding:9px 18px;border-radius:100px;background:rgba(12,16,20,0.5);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);border:1px solid rgba(95,233,255,0.22);box-shadow:0 6px 22px rgba(0,0,0,0.28)}
+.topchip .pulse{width:7px;height:7px;border-radius:50%;background:#5FE9FF;box-shadow:0 0 10px #5FE9FF;animation:blink 1.4s ease-in-out infinite}
+.topchip span{color:rgba(255,255,255,0.96);font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-.oval-wrap{position:relative;width:280px;height:280px}
+/* Corner HUD readouts — clearly below the chip */
+.hud{position:absolute;z-index:7;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:9.5px;letter-spacing:1.4px;color:rgba(95,233,255,0.72);text-transform:uppercase;text-shadow:0 0 8px rgba(95,233,255,0.35)}
+.hud.searching{color:rgba(244,168,48,0.85);text-shadow:0 0 8px rgba(244,168,48,0.35)}
+.hud-tl{top:max(90px,calc(env(safe-area-inset-top) + 74px));left:22px}
+.hud-tr{top:max(90px,calc(env(safe-area-inset-top) + 74px));right:22px;text-align:right}
+.hud-bl{bottom:max(150px,calc(env(safe-area-inset-bottom) + 150px));left:22px}
+.hud-br{bottom:max(150px,calc(env(safe-area-inset-bottom) + 150px));right:22px;text-align:right}
 
-/* Dim everything outside the circle */
-.guide-oval{
-  width:280px;height:280px;border-radius:50%;position:absolute;inset:0;z-index:2;
-  border:2px solid rgba(255,255,255,0.30);
-  box-shadow:0 0 0 2000px rgba(10,8,7,0.60);
-  transition:border-color .35s ease, box-shadow .35s ease;
-}
-.guide-oval.locked{
-  border-color:rgba(45,189,126,0.55);
-  box-shadow:0 0 0 2000px rgba(10,8,7,0.60), inset 0 0 36px rgba(45,189,126,0.22), 0 0 30px rgba(45,189,126,0.45);
-}
-/* Expanding pulse ring on lock */
-.guide-oval::after{content:'';position:absolute;inset:-2px;border-radius:50%;border:2px solid rgba(45,189,126,0.7);opacity:0;pointer-events:none}
+/* Larger rounded-square frame — easier to fill while holding the phone */
+.oval-wrap{position:relative;width:min(84vw,340px);height:min(84vw,340px)}
+
+/* Mesh + scan-beam layer, clipped to the frame */
+.oval-clip{position:absolute;inset:0;border-radius:34px;overflow:hidden;z-index:1}
+.mesh{position:absolute;inset:0;background-image:linear-gradient(rgba(95,233,255,0.10) 1px,transparent 1px),linear-gradient(90deg,rgba(95,233,255,0.10) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:radial-gradient(closest-side,#000 78%,transparent 100%);mask-image:radial-gradient(closest-side,#000 78%,transparent 100%);animation:meshpulse 3s ease-in-out infinite}
+@keyframes meshpulse{0%,100%{opacity:.35}50%{opacity:.72}}
+.scanbeam{position:absolute;left:-3%;right:-3%;height:2px;top:8%;border-radius:2px;background:linear-gradient(90deg,transparent,#5FE9FF 20%,#EAFBFF 50%,#5FE9FF 80%,transparent);box-shadow:0 0 16px 4px rgba(95,233,255,0.55);animation:scanmove 2.8s cubic-bezier(.55,0,.45,1) infinite}
+.scanbeam::before{content:'';position:absolute;left:0;right:0;top:-64px;height:64px;background:linear-gradient(to top,rgba(95,233,255,0.20),transparent)}
+@keyframes scanmove{0%{top:8%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:90%;opacity:0}}
+
+/* Guide frame — dims everything outside */
+.guide-oval{border-radius:34px;position:absolute;inset:0;z-index:2;border:1.5px solid rgba(255,255,255,0.5);box-shadow:0 0 0 2000px rgba(6,10,14,0.66),inset 0 0 22px rgba(95,233,255,0.10);transition:border-color .35s ease,box-shadow .35s ease}
+.guide-oval.locked{border-color:rgba(111,227,174,0.9);box-shadow:0 0 0 2000px rgba(6,10,14,0.66),inset 0 0 40px rgba(45,189,126,0.28),0 0 40px rgba(45,189,126,0.5)}
+/* Expanding pulse frame on lock */
+.guide-oval::after{content:'';position:absolute;inset:-1.5px;border-radius:35px;border:1.5px solid rgba(111,227,174,0.8);opacity:0;pointer-events:none}
 .guide-oval.locked::after{animation:pulsering 1.7s ease-out infinite}
-@keyframes pulsering{0%{transform:scale(1);opacity:.7}70%{transform:scale(1.12);opacity:0}100%{opacity:0}}
+@keyframes pulsering{0%{transform:scale(1);opacity:.8}70%{transform:scale(1.13);opacity:0}100%{opacity:0}}
 
-/* iOS-style circular progress ring — fills around the circle as it scans */
-.ring-progress{position:absolute;top:-11px;left:-11px;z-index:3;transform:rotate(-90deg);pointer-events:none}
-.ring-track{fill:none;stroke:rgba(255,255,255,0.16);stroke-width:5}
-.ring-bar{fill:none;stroke:${Colors.primary};stroke-width:5;stroke-linecap:round;filter:drop-shadow(0 0 6px ${Colors.primaryGlow});transition:stroke-dashoffset .2s ease}
+/* HUD corner brackets — reticle framing the square */
+.bracket{position:absolute;width:42px;height:42px;z-index:4;border:2.5px solid rgba(95,233,255,0.85);filter:drop-shadow(0 0 6px rgba(95,233,255,0.5));transition:border-color .35s,filter .35s;animation:brfloat 2.4s ease-in-out infinite}
+.b-tl{top:-13px;left:-13px;border-right:0;border-bottom:0;border-top-left-radius:20px}
+.b-tr{top:-13px;right:-13px;border-left:0;border-bottom:0;border-top-right-radius:20px}
+.b-bl{bottom:-13px;left:-13px;border-right:0;border-top:0;border-bottom-left-radius:20px}
+.b-br{bottom:-13px;right:-13px;border-left:0;border-top:0;border-bottom-right-radius:20px}
+@keyframes brfloat{0%,100%{opacity:.85}50%{opacity:.42}}
+#oval.locked ~ .bracket{border-color:rgba(111,227,174,0.95);filter:drop-shadow(0 0 8px rgba(45,189,126,0.6));animation:none;opacity:1}
+#oval.locked ~ .oval-clip .scanbeam{background:linear-gradient(90deg,transparent,#6FE3AE 20%,#EAFFF3 50%,#6FE3AE 80%,transparent);box-shadow:0 0 16px 4px rgba(45,189,126,0.55)}
 
 #hint{
-  position:relative;z-index:6;
-  margin-top:34px;display:inline-flex;align-items:center;
-  background:rgba(20,16,14,0.78);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  position:relative;z-index:8;
+  margin-top:38px;display:inline-flex;align-items:center;
+  background:rgba(12,16,20,0.52);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
   color:#fff;font-size:14px;font-weight:600;
-  padding:10px 22px;border-radius:30px;border:1px solid rgba(255,255,255,0.16);
-  letter-spacing:0.2px;transition:background .3s,border-color .3s
+  padding:12px 24px;border-radius:100px;border:1px solid rgba(255,255,255,0.14);
+  letter-spacing:0.2px;transition:background .3s,border-color .3s;box-shadow:0 8px 26px rgba(0,0,0,0.30)
 }
-#hint.success{background:rgba(45,189,126,0.85);border-color:rgba(255,255,255,0.25)}
-#hint.warn{background:rgba(244,168,48,0.90);border-color:rgba(255,255,255,0.25)}
+#hint.success{background:rgba(45,189,126,0.9);border-color:rgba(255,255,255,0.28)}
+#hint.warn{background:rgba(244,168,48,0.92);border-color:rgba(255,255,255,0.28)}
 
-/* Stage indicator */
-.stages{position:relative;z-index:6;margin-top:18px;display:flex;gap:9px}
-.stage-dot{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);transition:all .3s ease}
-.stage-dot .ic{width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;transition:all .3s ease}
-.stage-dot span{color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;letter-spacing:0.3px}
-.stage-dot.active{background:rgba(45,189,126,0.18);border-color:rgba(45,189,126,0.6)}
-.stage-dot.active .ic{border-color:#2DBD7E;box-shadow:0 0 8px rgba(45,189,126,0.55)}
-.stage-dot.active span{color:#9affc9}
-.stage-dot.done{background:rgba(45,189,126,0.92);border-color:rgba(45,189,126,0.92)}
-.stage-dot.done .ic{background:#fff;border-color:#fff;color:#2DBD7E}
-.stage-dot.done span{color:#fff}
+/* Capture button */
+#captureBtn{
+  position:relative;z-index:8;margin-top:26px;pointer-events:auto;
+  width:72px;height:72px;border-radius:50%;
+  background:rgba(255,255,255,0.14);border:3px solid rgba(255,255,255,0.35);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .25s ease;
+}
+#captureBtn::after{content:'';width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.4);transition:all .25s ease}
+#captureBtn.enabled{border-color:#6FE3AE;box-shadow:0 0 22px rgba(111,227,174,0.55)}
+#captureBtn.enabled::after{background:#6FE3AE}
+#captureBtn:disabled{opacity:.55}
+#captureHint{position:relative;z-index:8;margin-top:10px;color:rgba(255,255,255,0.55);font-size:11px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase}
+
+/* Review step — shown after capture, before the user commits to analyzing */
+#reviewRow{position:relative;z-index:8;margin-top:26px;display:none;gap:14px;pointer-events:auto}
+#reviewRow.show{display:flex}
+.reviewBtn{padding:14px 26px;border-radius:100px;font-size:14px;font-weight:700;letter-spacing:0.3px;border:1px solid rgba(255,255,255,0.22);transition:transform .15s ease}
+.reviewBtn:active{transform:scale(0.96)}
+#retakeBtn{background:rgba(12,16,20,0.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);color:#fff}
+#analyzeBtn{background:#6FE3AE;color:#06120c;border-color:transparent;box-shadow:0 8px 22px rgba(111,227,174,0.45)}
+
+/* Shape-detected reveal badge — pops in once the measurement animation lands */
+#shapeBadge{
+  position:absolute;left:50%;top:16%;z-index:9;pointer-events:none;
+  transform:translate(-50%,-50%) scale(.7);opacity:0;
+  display:flex;align-items:center;gap:8px;
+  background:rgba(45,189,126,0.95);border:1px solid rgba(255,255,255,0.32);
+  padding:11px 22px;border-radius:100px;box-shadow:0 10px 28px rgba(0,0,0,0.35);
+  transition:opacity .35s ease,transform .5s cubic-bezier(.34,1.56,.64,1);
+}
+#shapeBadge.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#shapeBadge .ic{color:#fff;font-size:15px}
+#shapeBadge span{color:#fff;font-weight:700;font-size:14px;letter-spacing:0.3px}
 
 #loading{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   color:rgba(255,255,255,.78);font-size:14px;text-align:center;line-height:2
 }
-.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:${Colors.primaryMid};border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:#5FE9FF;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
+<canvas id="snapCanvas"></canvas>
 <div id="overlay">
-  <div class="topbar"><div class="topchip"><span class="pulse"></span><span>AI Face Analysis</span></div></div>
+  <div class="topbar"><div class="topchip"><span class="pulse"></span><span>Biometric Face Scan</span></div></div>
+
+  <div class="hud hud-tl">Mesh &middot; 468 pts</div>
+  <div class="hud hud-tr searching" id="hudStatus">&#9679; Searching</div>
+  <div class="hud hud-bl">Depth Map &middot; Live</div>
+  <div class="hud hud-br" id="hudCoord">Yaw --&nbsp;&nbsp;Sz --</div>
+
   <div class="oval-wrap">
     <div class="guide-oval" id="oval"></div>
-    <svg class="ring-progress" width="302" height="302" viewBox="0 0 302 302">
-      <circle class="ring-track" cx="151" cy="151" r="144"></circle>
-      <circle class="ring-bar" id="ring" cx="151" cy="151" r="144"></circle>
-    </svg>
+    <div class="oval-clip"><div class="mesh"></div><div class="scanbeam"></div></div>
+    <span class="bracket b-tl"></span><span class="bracket b-tr"></span><span class="bracket b-bl"></span><span class="bracket b-br"></span>
   </div>
-  <div id="hint">Position your face in the circle</div>
-  <div class="stages">
-    <div class="stage-dot" data-i="0"><span class="ic"></span><span>Front</span></div>
-    <div class="stage-dot" data-i="1"><span class="ic"></span><span>Left</span></div>
-    <div class="stage-dot" data-i="2"><span class="ic"></span><span>Right</span></div>
+  <div id="hint">Position your face in the frame</div>
+  <button id="captureBtn" disabled></button>
+  <div id="captureHint">Tap to capture</div>
+  <div id="reviewRow">
+    <button id="retakeBtn" class="reviewBtn">Retake</button>
+    <button id="analyzeBtn" class="reviewBtn">Analyze</button>
   </div>
 </div>
+<div id="shapeBadge"><span class="ic">&#10003;</span><span id="shapeBadgeText"></span></div>
 <div id="loading"><div class="spinner"></div>Starting camera…</div>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous"></script>
 <script>
 (function(){
 'use strict';
@@ -549,56 +597,117 @@ if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='functi
   return;
 }
 
-var oval=document.getElementById('oval'),hint=document.getElementById('hint'),ring=document.getElementById('ring');
-var RING_C=2*Math.PI*144;
-ring.style.strokeDasharray=RING_C;
-ring.style.strokeDashoffset=RING_C;
-function setRing(pct){ring.style.strokeDashoffset=RING_C*(1-pct/100);}
-var stageEls=[].slice.call(document.querySelectorAll('.stage-dot'));
-function setStages(){
-  for(var i=0;i<stageEls.length;i++){
-    var el=stageEls[i],ic=el.querySelector('.ic');
-    el.classList.remove('active','done');
-    if(i<stageIdx){el.classList.add('done');if(ic)ic.textContent='✓';}
-    else{if(ic)ic.textContent='';if(i===stageIdx)el.classList.add('active');}
-  }
-}
+var oval=document.getElementById('oval'),hint=document.getElementById('hint');
+var hudStatus=document.getElementById('hudStatus'),hudCoord=document.getElementById('hudCoord');
+var captureBtn=document.getElementById('captureBtn'),captureHint=document.getElementById('captureHint');
+var reviewRow=document.getElementById('reviewRow'),retakeBtn=document.getElementById('retakeBtn'),analyzeBtn=document.getElementById('analyzeBtn');
+var snapCanvas=document.getElementById('snapCanvas');
+var shapeBadge=document.getElementById('shapeBadge'),shapeBadgeText=document.getElementById('shapeBadgeText');
 
-// ── Multi-angle capture flow: look straight, then turn left, then right ──────
-var STAGES=['front','left','right'];
-var stageIdx=0,stableFrames=0,done=false,capturedShape=null;
-// Frames to hold per stage. Front/straight is intentionally longer so the
-// shape capture isn't rushed; the side turns stay quick.
-var NEEDED_BY={front:44,left:22,right:22};
-function NEEDED(){return NEEDED_BY[STAGES[stageIdx]]||22;}
+// ── Single-shot capture flow: hold still facing forward, tap to capture ─────
+var done=false,aligned=false,lastLm=null;
+// Rolling buffer of recent well-aligned samples, so the tapped result is an
+// average of the last ~1s of tracking rather than one noisy frame.
+var recentMetrics=[],recentShapes=[];
+var MAX_SAMPLES=30;
 // Detection stays paused until RN "arms" it (after the 3-2-1 countdown), so the
 // camera can warm up behind the countdown overlay without capturing anything.
 var armed=false;
 window.armScan=function(){armed=true;};
-var frontShapes=[];        // shape samples collected during the front stage
 var MIRROR=true;           // front-camera preview is mirrored
 var FRONT_MAX=0.10;        // max yaw to count as "looking straight"
-var TURN=0.16;             // yaw magnitude to count as a head turn
 
 // ── Landmark helpers ────────────────────────────────────────────────────────
 function dist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
 
-// ── Face shape from landmarks ───────────────────────────────────────────────
+// ── Face measurements → shape + normalized 0..100 metrics ───────────────────
 // Landmark coords are normalized 0..1 separately by frame width and height, so
-// a width/height ratio is distorted unless we convert back to real pixels using
-// the actual video dimensions. Otherwise every face collapses to one shape.
-function computeShape(lm){
+// we convert back to real pixels using the actual video dimensions before
+// taking any ratio, otherwise every face collapses to one shape.
+function clampN(v,a,b){return v<a?a:(v>b?b:v);}
+function mapPct(v,lo,hi){return Math.round(clampN((v-lo)/(hi-lo),0,1)*100);}
+function angleAt(c,a,b,W,H){
+  var ax=(a.x-c.x)*W,ay=(a.y-c.y)*H,bx=(b.x-c.x)*W,by=(b.y-c.y)*H;
+  var dot=ax*bx+ay*by,mg=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by)||1;
+  return Math.acos(Math.max(-1,Math.min(1,dot/mg)))*180/Math.PI;
+}
+function computeMetrics(lm){
   var W=(video&&video.videoWidth)||640, H=(video&&video.videoHeight)||480;
   function pd(a,b){var dx=(a.x-b.x)*W,dy=(a.y-b.y)*H;return Math.sqrt(dx*dx+dy*dy);}
-  var faceH=pd(lm[10],lm[152]),faceW=pd(lm[234],lm[454]);
-  var jawW=pd(lm[172],lm[397]),fhW=pd(lm[54],lm[284]);
-  if(faceH<1)return null;
-  var whr=faceW/faceH,jawRatio=jawW/faceW,fhRatio=fhW/faceW;
-  if(whr>0.88&&jawRatio>0.82)return 'Square';
-  if(whr>0.83)return 'Round';
-  if(whr<0.66)return 'Oblong';
-  if(fhRatio>jawRatio+0.10)return 'Heart';
+  var faceL=pd(lm[10],lm[152]);      // forehead top → chin
+  var cheekW=pd(lm[234],lm[454]);    // cheekbone (widest) width
+  var jawW=pd(lm[172],lm[397]);      // jaw width
+  var fhW=pd(lm[54],lm[284]);        // forehead width
+  if(faceL<1)return null;
+  var jawDeg=angleAt(lm[152],lm[172],lm[397],W,H); // chin / jaw angle
+  return {
+    faceL:faceL,cheekW:cheekW,jawW:jawW,fhW:fhW,jawDeg:jawDeg,
+    aspect:faceL/cheekW, fVc:fhW/cheekW, jVc:jawW/cheekW,
+    pFaceWidth:mapPct(cheekW/faceL,0.62,0.98),
+    pFaceLength:mapPct(faceL/cheekW,1.02,1.62),
+    pJawAngle:mapPct(jawDeg,78,148),
+    pForehead:mapPct(fhW/cheekW,0.72,1.02),
+    pCheekbone:mapPct(cheekW/faceL,0.62,0.98),
+    pJawline:mapPct(jawW/cheekW,0.68,1.0)
+  };
+}
+// ── 7-way classification via percentile decision tree ────────────────────────
+// v1 scored against 7 "ideal" profiles with a gaussian similarity (biased to
+// whichever profile sat nearest the population average — collapsed almost
+// everyone to one shape). v2 replaced that with AND-conditions on absolute
+// ratio cutoffs (e.g. fVc>=0.92 && jVc<=0.82) — but cheekbones (lm 234/454)
+// are the widest points on nearly every face, so fVc/jVc cluster in a narrow
+// band and rarely clear BOTH halves of a tight AND at once. Almost every scan
+// fell through to the Oval default, and since the identical bug also ran on
+// every single frame, agreement-based confidence pegged near max (~98%) too.
+// v3: classify off the pFaceLength/pForehead/pJawline/pJawAngle percentiles
+// that computeMetrics already derives (0..100, scaled against the same
+// assumed real-face ranges used for the on-screen bars) and compare them
+// relative to each other with modest margins, instead of absolute ratio
+// cutoffs — this tracks the shape of each individual face rather than requiring
+// it to clear fixed thresholds that most real faces never reach.
+function classify(m){
+  if(!m)return 'Oval';
+  var len=m.pFaceLength,fh=m.pForehead,jw=m.pJawline,ang=m.pJawAngle;
+
+  // Face is notably longer than wide — dominates regardless of width shape.
+  if(len>=68) return 'Oblong';
+
+  var diff=fh-jw; // + : forehead relatively wider than jaw; - : jaw relatively wider
+
+  // Forehead clearly wider than the jaw, tapering to a narrower chin.
+  if(diff>=16 && fh>=45) return 'Heart';
+
+  // Jaw as wide or wider than the forehead — widest point is at the chin.
+  if(diff<=-16 && jw>=45) return 'Triangle';
+
+  // Both forehead and jaw pull in well short of the cheekbones.
+  if(fh<=35 && jw<=35) return 'Diamond';
+
+  // Forehead, cheekbones and jaw all close in width, face isn't long —
+  // classic Round vs Square split, decided by how angular the jaw is.
+  if(fh>=40 && jw>=40 && len<=45){
+    return ang<=40 ? 'Square' : 'Round';
+  }
+
+  // Balanced proportions, gently tapering — the fallback bucket.
   return 'Oval';
+}
+function computeShape(lm){return classify(computeMetrics(lm));}
+// Average the per-frame display metrics for a stable readout.
+function avgMetrics(arr){
+  if(!arr.length)return null;
+  var k=['pFaceWidth','pFaceLength','pJawAngle','pForehead','pCheekbone','pJawline'],o={},i,n=arr.length;
+  for(var x=0;x<k.length;x++){var s=0;for(i=0;i<n;i++)s+=arr[i][k[x]];o[k[x]]=Math.round(s/n);}
+  return o;
+}
+// Average the raw classification features across the front stage — logged as
+// "[FaceScan DBG]" for reference/debugging.
+function avgRaw(arr){
+  if(!arr.length)return null;
+  var k=['aspect','fVc','jVc','jawDeg'],o={},i,n=arr.length;
+  for(var x=0;x<k.length;x++){var s=0;for(i=0;i<n;i++)s+=arr[i][k[x]];o[k[x]]=+(s/n).toFixed(3);}
+  return o;
 }
 
 // Most frequent shape across sampled frames — smooths single-frame noise.
@@ -628,12 +737,250 @@ function yawOf(lm){
   return MIRROR?-raw:raw;
 }
 
-function setProgress(){
-  var per=100/STAGES.length;
-  var pct=Math.round(per*stageIdx + per*Math.min(1,stableFrames/NEEDED()));
-  setRing(pct);
-  setStages();
+function setCaptureEnabled(v){
+  aligned=v;
+  captureBtn.disabled=!v;
+  if(v)captureBtn.classList.add('enabled');else captureBtn.classList.remove('enabled');
 }
+
+// ── Captured-face reveal animation ───────────────────────────────────────────
+// Snapshots the mirrored frame once, then runs a timed sequence over it:
+// mesh fades in -> a scan sweep -> each measurement line draws in with a
+// label -> a pulsing outline + badge confirms the detected shape. Everything
+// is drawn fresh each frame from the frozen photo so nothing flickers.
+function easeOut(t){return 1-Math.pow(1-t,3);}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawMeasureLabel(ctx,x,y,text,color,canvasW){
+  var fontSize=Math.max(15,Math.round(canvasW/30));
+  ctx.font='700 '+fontSize+'px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var padX=13,padY=8;
+  var tw=ctx.measureText(text).width;
+  var bw=tw+padX*2,bh=fontSize+padY*2;
+  var bx=x-bw/2,by=y-bh-16;
+  ctx.fillStyle='rgba(6,10,14,0.8)';
+  roundRect(ctx,bx,by,bw,bh,bh/2);ctx.fill();
+  ctx.strokeStyle=color;ctx.lineWidth=1.3;
+  roundRect(ctx,bx,by,bw,bh,bh/2);ctx.stroke();
+  ctx.fillStyle='#fff';
+  ctx.fillText(text,x,by+bh/2+1);
+}
+
+var MEASURES=[
+  {a:54,b:284,color:'#6FE3AE',label:'Forehead'},
+  {a:234,b:454,color:'#F4A830',label:'Cheekbones'},
+  {a:172,b:397,color:'#E86AD8',label:'Jawline'},
+  {a:10,b:152,color:'#5FE9FF',label:'Face length'}
+];
+var MESH_END=480,SWEEP_END=740,LINE_DUR=320,LINE_GAP=60,LINE_LABEL_FADE=220;
+
+// photo is the already-frozen, mirrored snapshot taken at capture time (see
+// freezeFrame) — replayed every animation frame instead of re-sampling video,
+// since by this point the camera preview is hidden and paused anyway.
+function runCaptureAnimation(lm,shapeName,photo,onDone){
+  var w=photo.width,h=photo.height;
+  snapCanvas.width=w;snapCanvas.height=h;
+  var ctx=snapCanvas.getContext('2d');
+
+  function px(i){return w-lm[i].x*w;}
+  function py(i){return lm[i].y*h;}
+
+  var lineStart=[];
+  for(var i=0;i<MEASURES.length;i++) lineStart.push(SWEEP_END+120+i*(LINE_DUR+LINE_GAP));
+  var linesEnd=lineStart[lineStart.length-1]+LINE_DUR;
+  var badgeStart=linesEnd+240;
+  var badgeDur=450;
+  var totalDur=badgeStart+badgeDur+650;
+
+  var hints=[
+    {t:0,text:'Mapping facial structure…'},
+    {t:SWEEP_END+40,text:'Measuring proportions…'},
+    {t:badgeStart-160,text:'Analyzing shape…'},
+    {t:badgeStart,text:'Shape detected!'}
+  ];
+  var hintIdx=-1;
+  var badgeShown=false;
+  var t0=null;
+
+  function frame(ts){
+    if(t0===null)t0=ts;
+    var t=ts-t0;
+
+    for(var hi=0;hi<hints.length;hi++){
+      if(t>=hints[hi].t && hintIdx<hi){
+        hintIdx=hi;hint.className='success';hint.textContent=hints[hi].text;
+      }
+    }
+
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(photo,0,0,w,h);
+
+    // Mesh fades in over the frozen photo.
+    var meshT=Math.min(1,t/MESH_END);
+    if(meshT>0 && window.drawConnectors){
+      ctx.save();
+      ctx.globalAlpha=easeOut(meshT);
+      var thin={color:'rgba(95,233,255,0.30)',lineWidth:1};
+      var bold={color:'rgba(95,233,255,0.95)',lineWidth:2.5};
+      if(typeof FACEMESH_TESSELATION!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_TESSELATION,thin);
+      if(typeof FACEMESH_FACE_OVAL!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_FACE_OVAL,bold);
+      if(typeof FACEMESH_LEFT_EYEBROW!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_LEFT_EYEBROW,bold);
+      if(typeof FACEMESH_RIGHT_EYEBROW!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_RIGHT_EYEBROW,bold);
+      if(typeof FACEMESH_LIPS!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_LIPS,bold);
+      ctx.restore();
+    }
+
+    // A light sweep crosses the face once, reinforcing "actively scanning".
+    if(t<SWEEP_END){
+      var sweepT=Math.min(1,t/SWEEP_END);
+      var sy=sweepT*h;
+      var grad=ctx.createLinearGradient(0,sy-46,0,sy+46);
+      grad.addColorStop(0,'rgba(95,233,255,0)');
+      grad.addColorStop(0.5,'rgba(95,233,255,0.4)');
+      grad.addColorStop(1,'rgba(95,233,255,0)');
+      ctx.fillStyle=grad;
+      ctx.fillRect(0,sy-46,w,92);
+    }
+
+    // Measurement lines draw in one at a time, each with a glowing leading
+    // dot, then leave a label once complete.
+    for(var mi=0;mi<MEASURES.length;mi++){
+      var m=MEASURES[mi];
+      var lt=(t-lineStart[mi])/LINE_DUR;
+      if(lt<=0)continue;
+      lt=Math.min(1,lt);
+      var et=easeOut(lt);
+      var ax=px(m.a),ay=py(m.a),bx=px(m.b),by=py(m.b);
+      var cx=ax+(bx-ax)*et,cy=ay+(by-ay)*et;
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(cx,cy);
+      ctx.strokeStyle=m.color;ctx.lineWidth=3;ctx.lineCap='round';ctx.stroke();
+      ctx.beginPath();ctx.arc(ax,ay,4.5,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
+      if(lt<1){
+        ctx.save();
+        ctx.shadowColor=m.color;ctx.shadowBlur=12;
+        ctx.beginPath();ctx.arc(cx,cy,5.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.beginPath();ctx.arc(bx,by,4.5,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
+        var labelT=Math.min(1,(t-(lineStart[mi]+LINE_DUR))/LINE_LABEL_FADE);
+        if(labelT>0){
+          ctx.save();
+          ctx.globalAlpha=easeOut(labelT);
+          drawMeasureLabel(ctx,(ax+bx)/2,Math.min(ay,by),m.label,m.color,w);
+          ctx.restore();
+        }
+      }
+    }
+
+    // Final pulsing outline confirms the detected shape.
+    var bt=(t-badgeStart)/badgeDur;
+    if(bt>0 && window.drawConnectors && typeof FACEMESH_FACE_OVAL!=='undefined'){
+      var pulse=easeOut(Math.min(1,bt));
+      ctx.save();
+      ctx.globalAlpha=0.9;
+      ctx.shadowColor='#6FE3AE';ctx.shadowBlur=14*pulse;
+      window.drawConnectors(ctx,lm,FACEMESH_FACE_OVAL,{color:'#6FE3AE',lineWidth:3+pulse*1.5});
+      ctx.restore();
+    }
+    if(bt>0 && !badgeShown){
+      badgeShown=true;
+      shapeBadgeText.textContent=shapeName+' Face Detected';
+      shapeBadge.classList.add('show');
+    }
+
+    if(t<totalDur){
+      requestAnimationFrame(frame);
+    } else {
+      onDone();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── Capture → Review (Retake / Analyze) → Analyze flow ──────────────────────
+var capturedPhoto=null,capturedLm=null;
+
+// Freeze the current frame into a still photo and show it for review, without
+// running any analysis yet — the user decides whether to keep it or retake.
+function freezeFrame(lm){
+  if(video.pause) video.pause();
+  var w=(video.videoWidth||640),h=(video.videoHeight||480);
+  var photo=document.createElement('canvas');
+  photo.width=w;photo.height=h;
+  var pctx=photo.getContext('2d');
+  pctx.save();pctx.translate(w,0);pctx.scale(-1,1);pctx.drawImage(video,0,0,w,h);pctx.restore();
+  capturedPhoto=photo;
+  capturedLm=lm;
+
+  snapCanvas.width=w;snapCanvas.height=h;
+  snapCanvas.getContext('2d').drawImage(photo,0,0);
+  video.style.display='none';
+  snapCanvas.style.display='block';
+}
+
+captureBtn.addEventListener('click',function(){
+  if(done||!aligned||!lastLm)return;
+  done=true;
+  freezeFrame(lastLm);
+  captureBtn.style.display='none';
+  captureHint.style.display='none';
+  oval.className='guide-oval locked';
+  hint.className='success';
+  hint.textContent='Nice! Retake or analyze this photo';
+  reviewRow.classList.add('show');
+});
+
+retakeBtn.addEventListener('click',function(){
+  reviewRow.classList.remove('show');
+  capturedPhoto=null;capturedLm=null;
+  recentMetrics=[];recentShapes=[];
+  lastLm=null;
+  snapCanvas.style.display='none';
+  video.style.display='block';
+  if(video.play) video.play();
+  captureBtn.style.display='';
+  captureBtn.disabled=true;
+  captureBtn.classList.remove('enabled');
+  captureHint.style.display='';
+  oval.className='guide-oval';
+  hint.className='';
+  hint.textContent='Position your face in the frame';
+  done=false;
+  aligned=false;
+});
+
+analyzeBtn.addEventListener('click',function(){
+  if(!capturedLm||!capturedPhoto)return;
+  reviewRow.classList.remove('show');
+
+  // Compute the result now, from the buffered samples, so the reveal
+  // animation shows the shape that actually gets sent to RN.
+  var modal=modeOf(recentShapes)||computeShape(capturedLm)||'Oval';
+  var agreeN=0;
+  for(var i=0;i<recentShapes.length;i++){if(recentShapes[i]===modal)agreeN++;}
+  var agree=recentShapes.length?agreeN/recentShapes.length:0.8;
+  var confidence=Math.max(62,Math.min(98,Math.round(agree*100)));
+  var rawAvg=avgRaw(recentMetrics);
+  var metricsAvg=avgMetrics(recentMetrics);
+
+  runCaptureAnimation(capturedLm,modal,capturedPhoto,function(){
+    post({
+      type:'faceShape',shape:modal,confidence:confidence,
+      metrics:metricsAvg,
+      debug:{raw:rawAvg,scores:null,samples:recentShapes.length}
+    });
+  });
+});
 
 // ── MediaPipe face mesh ──────────────────────────────────────────────────────
 var faceMesh=new FaceMesh({locateFile:function(f){return'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/'+f;}});
@@ -643,79 +990,56 @@ faceMesh.onResults(function(results){
   if(done||!armed)return;
   var lms=results.multiFaceLandmarks;
 
-  // ── No face detected ──
   if(!lms||!lms[0]){
-    stableFrames=Math.max(0,stableFrames-3);
+    lastLm=null;
+    setCaptureEnabled(false);
     oval.className='guide-oval';
     hint.className='';
-    hint.textContent='Position your face in the circle';
-    setProgress();
+    hint.textContent='Position your face in the frame';
+    if(hudStatus){hudStatus.textContent='Searching';hudStatus.className='hud hud-tr searching';}
+    if(hudCoord){hudCoord.textContent='Yaw --  Sz --';}
     return;
   }
 
   var lm=lms[0];
+  lastLm=lm;
   var sz=faceSize(lm);
 
-  // ── Distance checks (apply to every stage) ──
   if(sz<0.16){
-    stableFrames=Math.max(0,stableFrames-2);
+    setCaptureEnabled(false);
     oval.className='guide-oval';hint.className='warn';
-    hint.textContent='Move closer';setProgress();return;
+    hint.textContent='Move closer';return;
   }
   if(sz>0.80){
-    stableFrames=Math.max(0,stableFrames-2);
+    setCaptureEnabled(false);
     oval.className='guide-oval';hint.className='warn';
-    hint.textContent='Move farther away';setProgress();return;
+    hint.textContent='Move farther away';return;
   }
 
   var yaw=yawOf(lm);
-  var stage=STAGES[stageIdx];
-  var ok=false,msg='';
+  if(hudStatus){hudStatus.textContent='Tracking';hudStatus.className='hud hud-tr';}
+  if(hudCoord){hudCoord.textContent='Yaw '+(yaw>=0?'+':'')+yaw.toFixed(2)+'  Sz '+sz.toFixed(2);}
 
-  if(stage==='front'){
-    if(!centeredEnough(lm)) msg='Center your face in the circle';
-    else if(Math.abs(yaw)>FRONT_MAX) msg='Look straight at the camera';
-    else {ok=true;msg='Hold still…';}
-  } else if(stage==='left'){
-    ok=yaw<-TURN;
-    msg=ok?'Hold…':'Slowly turn your head LEFT';
-  } else {
-    ok=yaw>TURN;
-    msg=ok?'Hold…':'Slowly turn your head RIGHT';
+  if(!centeredEnough(lm)){
+    setCaptureEnabled(false);
+    oval.className='guide-oval';hint.className='warn';
+    hint.textContent='Center your face in the frame';return;
+  }
+  if(Math.abs(yaw)>FRONT_MAX){
+    setCaptureEnabled(false);
+    oval.className='guide-oval';hint.className='warn';
+    hint.textContent='Look straight at the camera';return;
   }
 
-  if(ok){
-    stableFrames++;
-    if(stage==='front'){var s=computeShape(lm);if(s)frontShapes.push(s);}
-    oval.className='guide-oval locked';
-    hint.className='success';
-    var pct=Math.min(100,Math.round(stableFrames/NEEDED()*100));
-    hint.textContent=msg+' '+pct+'%';
-  } else {
-    stableFrames=Math.max(0,stableFrames-1);
-    oval.className='guide-oval';
-    hint.className='warn';
-    hint.textContent=msg;
-  }
-  setProgress();
-
-  // ── Stage complete ──
-  if(stableFrames>=NEEDED()){
-    if(stage==='front') capturedShape=modeOf(frontShapes)||computeShape(lm)||'Oval';
-    stageIdx++;
-    stableFrames=0;
-    if(stageIdx>=STAGES.length){
-      done=true;
-      oval.className='guide-oval locked';
-      hint.className='success';
-      hint.textContent='Scan complete!';
-      setRing(100);
-      setStages();
-      post({type:'faceShape',shape:capturedShape||'Oval'});
-    } else {
-      hint.className='success';
-      hint.textContent=stageIdx===1?'Great! Now turn your head LEFT':'Now turn your head RIGHT';
-    }
+  setCaptureEnabled(true);
+  oval.className='guide-oval locked';
+  hint.className='success';
+  hint.textContent='Perfect - tap to capture';
+  var mm=computeMetrics(lm);
+  if(mm){
+    recentMetrics.push(mm);
+    recentShapes.push(classify(mm));
+    if(recentMetrics.length>MAX_SAMPLES){recentMetrics.shift();recentShapes.shift();}
   }
 });
 
@@ -725,7 +1049,6 @@ var cam=new Camera(video,{
   onFrame:async function(){await faceMesh.send({image:video});},
   width:640,height:480,facingMode:'user'
 });
-setStages();
 cam.start()
   .then(function(){document.getElementById('loading').style.display='none';})
   .catch(function(err){
@@ -837,7 +1160,7 @@ const cdStyles = StyleSheet.create({
   ring: {
     width: 180,
     height: 180,
-    borderRadius: 90,
+    borderRadius: 36,
     borderWidth: 3,
     borderColor: 'rgba(45,189,126,0.55)',
     alignItems: 'center',
@@ -847,7 +1170,7 @@ const cdStyles = StyleSheet.create({
   ringText: {
     width: 230,
     height: 230,
-    borderRadius: 115,
+    borderRadius: 46,
     paddingHorizontal: Spacing.lg,
   },
   number: {
@@ -873,7 +1196,12 @@ const cdStyles = StyleSheet.create({
 
 const FaceScanCamera: React.FC<{
   armed: boolean;
-  onShapeDetected: (shape: FaceShape) => void;
+  onShapeDetected: (
+    shape: FaceShape,
+    confidence: number,
+    metrics: FaceMetrics | null,
+    debug: FaceDebug | null,
+  ) => void;
   onCameraError: () => void;
   onCancel: () => void;
 }> = ({ armed, onShapeDetected, onCameraError, onCancel }) => {
@@ -884,7 +1212,20 @@ const FaceScanCamera: React.FC<{
       try {
         const d = JSON.parse(e.nativeEvent.data);
         if (d.type === 'faceShape' && d.shape) {
-          onShapeDetected(d.shape as FaceShape);
+          // Temporary debugging aid — surfaces the raw ratios behind each result.
+          if (d.debug) {
+            console.log(
+              `[FaceScan DBG] shape=${d.shape} raw=${JSON.stringify(
+                d.debug.raw,
+              )} scores=${JSON.stringify(d.debug.scores)}`,
+            );
+          }
+          onShapeDetected(
+            d.shape as FaceShape,
+            typeof d.confidence === 'number' ? d.confidence : 90,
+            (d.metrics as FaceMetrics) || null,
+            (d.debug as FaceDebug) || null,
+          );
         } else if (d.type === 'cameraError') {
           onCameraError();
         }
@@ -914,6 +1255,7 @@ const FaceScanCamera: React.FC<{
         mediaCapturePermissionGrantType="grant"
         originWhitelist={['*']}
         mixedContentMode="always"
+        contentInsetAdjustmentBehavior="never"
         onMessage={onMessage}
       />
       <SafeAreaView style={styles.cancelArea} pointerEvents="box-none">
@@ -922,7 +1264,7 @@ const FaceScanCamera: React.FC<{
           onPress={onCancel}
           activeOpacity={0.8}
         >
-          <Ionicons name="close" size={20} color={Colors.gray600} />
+          <Ionicons name="close" size={20} color="rgba(255,255,255,0.9)" />
         </TouchableOpacity>
       </SafeAreaView>
     </View>
@@ -1047,11 +1389,11 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       { n: '1', text: 'Find good lighting and hold your phone at eye level.' },
       {
         n: '2',
-        text: 'Position your face inside the circle and look straight ahead.',
+        text: 'Position your face inside the frame and look straight ahead.',
       },
       {
         n: '3',
-        text: 'Follow the prompts to slowly turn your head left, then right.',
+        text: 'When the frame locks green, tap Capture to scan your face.',
       },
     ].map(step => (
       <View key={step.n} style={styles.stepRow}>
@@ -1082,6 +1424,64 @@ const SHAPE_EFFECT: Record<FaceShape, string> = {
   Square: 'softens your strong jawline and angular features.',
   Heart: 'balances your wider forehead and narrower chin.',
   Oblong: 'adds width and makes your face appear shorter.',
+  Diamond: 'highlights your cheekbones and softens the angles.',
+  Triangle: 'adds balance to your wider jawline.',
+};
+
+// Per-frame-shape icon + the reason it flatters a face — shown in the
+// "Recommended Frame Shapes" section.
+const FRAME_INFO: Record<string, { icon: string; reason: string }> = {
+  Wayfarer: {
+    icon: 'square-outline',
+    reason:
+      'Bold angular lines add structure and definition to softer features.',
+  },
+  Aviator: {
+    icon: 'triangle-outline',
+    reason:
+      'Teardrop curves balance an angular jaw and gently elongate the face.',
+  },
+  Round: {
+    icon: 'ellipse-outline',
+    reason: 'Soft circular frames offset strong angles and a wide jawline.',
+  },
+  'Cat-Eye': {
+    icon: 'sparkles-outline',
+    reason: 'Upswept outer corners lift the face and draw the eye upward.',
+  },
+  Rectangle: {
+    icon: 'tablet-landscape-outline',
+    reason: 'Straight, wider lines add definition and slim a rounder face.',
+  },
+  Square: {
+    icon: 'square-outline',
+    reason: 'Sharp geometric edges contrast soft curves for a balanced look.',
+  },
+  Browline: {
+    icon: 'glasses-outline',
+    reason:
+      'Weight on the top frame widens the forehead and offsets a strong jaw.',
+  },
+  Geometric: {
+    icon: 'shapes-outline',
+    reason: 'Distinct angles add a modern, structured edge to your look.',
+  },
+  Oval: {
+    icon: 'ellipse-outline',
+    reason: 'Gently rounded frames flatter almost any face and soften angles.',
+  },
+  Rimless: {
+    icon: 'remove-outline',
+    reason: 'Minimal, light frames keep the focus on your eyes and cheekbones.',
+  },
+  Oversized: {
+    icon: 'expand-outline',
+    reason: 'Larger frames add width and shorten the look of a longer face.',
+  },
+  Decorative: {
+    icon: 'diamond-outline',
+    reason: 'Detailing and depth add width and visual interest to a long face.',
+  },
 };
 
 const ProductRecommendations: React.FC<{
@@ -1181,10 +1581,14 @@ const ProductRecommendations: React.FC<{
 const GlassesBottomSheet: React.FC<{
   visible: boolean;
   shape: FaceShape;
+  confidence?: number | null;
+  metrics?: FaceMetrics | null;
+  debug?: FaceDebug | null;
   onClose: () => void;
-}> = ({ visible, shape, onClose }) => {
+}> = ({ visible, shape, confidence, metrics, debug, onClose }) => {
   const navigation = useNavigation<any>();
   const info = FACE_SHAPE_INFO[shape];
+  const [showMeasure, setShowMeasure] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -1248,21 +1652,9 @@ const GlassesBottomSheet: React.FC<{
         {/* Handle */}
         <View style={gsStyles.handle} />
 
-        {/* Header */}
+        {/* Header — minimal: title + close */}
         <View style={gsStyles.header}>
-          <View style={gsStyles.headerLeft}>
-            <View style={gsStyles.shapeIconSmall}>
-              <Ionicons
-                name={info.icon as any}
-                size={18}
-                color={Colors.primary}
-              />
-            </View>
-            <View>
-              <AppText style={gsStyles.headerOverline}>Your face shape</AppText>
-              <AppText style={gsStyles.headerShape}>{shape}</AppText>
-            </View>
-          </View>
+          <AppText style={gsStyles.headerTitle}>Your Results</AppText>
           <TouchableOpacity
             onPress={onClose}
             style={gsStyles.closeBtn}
@@ -1277,38 +1669,211 @@ const GlassesBottomSheet: React.FC<{
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* Face insight — description + frame tip combined */}
-          <View style={gsStyles.insightCard}>
-            <AppText style={gsStyles.insightDesc}>{info.description}</AppText>
-            <View style={gsStyles.insightDivider} />
-            <View style={gsStyles.insightTipRow}>
-              <Ionicons name="bulb" size={15} color={Colors.primary} />
-              <AppText style={gsStyles.insightTip}>{info.tip}</AppText>
-            </View>
-          </View>
-
-          {/* Recommended products — the focal point */}
-          <View style={gsStyles.recHeader}>
-            <View style={gsStyles.recBadge}>
-              <Ionicons name="sparkles" size={14} color={Colors.white} />
+          {/* Hero — face shape + confidence, compact */}
+          <View style={gsStyles.heroCard}>
+            <View style={gsStyles.heroIcon}>
+              <Ionicons
+                name={info.icon as any}
+                size={26}
+                color={Colors.primary}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <AppText style={gsStyles.recTitle}>Picked For You</AppText>
-              <AppText style={gsStyles.recSub}>
-                Frames that flatter your {shape.toLowerCase()} face
+              <AppText style={gsStyles.heroOverline}>YOUR FACE SHAPE</AppText>
+              <AppText style={gsStyles.heroShape}>{shape}</AppText>
+            </View>
+            {typeof confidence === 'number' && (
+              <View style={gsStyles.heroConf}>
+                <AppText style={gsStyles.heroConfPct}>{confidence}%</AppText>
+                <AppText style={gsStyles.heroConfLabel}>match</AppText>
+              </View>
+            )}
+          </View>
+          <AppText style={gsStyles.heroDesc}>{info.description}</AppText>
+
+          {/* ── Recommendations — the hero of this screen ── */}
+          <View style={gsStyles.sectionHeadRow}>
+            <AppText style={gsStyles.sectionH}>Best Frames for You</AppText>
+            <View style={gsStyles.countBadge}>
+              <AppText style={gsStyles.countBadgeText}>
+                {info.frames.length}
               </AppText>
             </View>
           </View>
-          <ProductRecommendations
-            shape={shape}
-            recommendedFrames={info.frames}
-            mode="face"
-            hairStyle={null}
-            onPickProduct={id => {
-              onClose();
-              navigation.navigate('GlassDetail', { id });
-            }}
-          />
+          <AppText style={gsStyles.sectionSub}>
+            Tap a shape to browse matching frames in store
+          </AppText>
+
+          <View style={gsStyles.recList}>
+            {info.frames.map((frame, idx) => {
+              const fi = FRAME_INFO[frame] || {
+                icon: 'glasses-outline',
+                reason: `A flattering match for your ${shape.toLowerCase()} face.`,
+              };
+              const best = idx === 0;
+              return (
+                <TouchableOpacity
+                  key={frame}
+                  style={[gsStyles.recCard, best && gsStyles.recCardBest]}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    onClose();
+                    navigation.navigate('GlassesList', {
+                      from: 'frame',
+                      frameShape: frame,
+                    });
+                  }}
+                >
+                  {best && (
+                    <View style={gsStyles.bestTag}>
+                      <Ionicons name="star" size={9} color={Colors.white} />
+                      <AppText style={gsStyles.bestTagText}>BEST MATCH</AppText>
+                    </View>
+                  )}
+                  <View style={gsStyles.recCardTop}>
+                    <View
+                      style={[gsStyles.recIcon, best && gsStyles.recIconBest]}
+                    >
+                      <Ionicons
+                        name={fi.icon as any}
+                        size={24}
+                        color={best ? Colors.white : Colors.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <AppText style={gsStyles.recName}>{frame}</AppText>
+                      <AppText style={gsStyles.recReason}>{fi.reason}</AppText>
+                    </View>
+                  </View>
+                  <View style={gsStyles.recCta}>
+                    <AppText style={gsStyles.recCtaText}>View frames</AppText>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={14}
+                      color={Colors.primary}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Styling tip */}
+          <View style={gsStyles.tipCard}>
+            <Ionicons name="bulb" size={16} color={Colors.primary} />
+            <AppText style={gsStyles.tipText}>{info.tip}</AppText>
+          </View>
+
+          {/* ── Secondary: measurements, collapsed by default ── */}
+          {metrics && (
+            <>
+              <TouchableOpacity
+                style={gsStyles.measureToggle}
+                onPress={() => setShowMeasure(v => !v)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="analytics-outline"
+                  size={16}
+                  color={Colors.gray600}
+                />
+                <AppText style={gsStyles.measureToggleText}>
+                  Face measurements
+                </AppText>
+                <Ionicons
+                  name={showMeasure ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={Colors.gray500}
+                />
+              </TouchableOpacity>
+
+              {showMeasure && (
+                <View style={gsStyles.analysisCard}>
+                  <AppText style={gsStyles.analysisLabel}>
+                    Face Landmarks
+                  </AppText>
+                  {[
+                    {
+                      label: 'Face Width',
+                      value: metrics.pFaceWidth,
+                      color: Colors.info,
+                    },
+                    {
+                      label: 'Face Length',
+                      value: metrics.pFaceLength,
+                      color: Colors.primary,
+                    },
+                    {
+                      label: 'Jaw Angle',
+                      value: metrics.pJawAngle,
+                      color: Colors.error,
+                    },
+                  ].map(row => (
+                    <View key={row.label} style={gsStyles.barRow}>
+                      <View style={gsStyles.barTop}>
+                        <AppText style={gsStyles.barLabel}>{row.label}</AppText>
+                        <AppText
+                          style={[gsStyles.barPct, { color: row.color }]}
+                        >
+                          {row.value}%
+                        </AppText>
+                      </View>
+                      <View style={gsStyles.barTrack}>
+                        <View
+                          style={[
+                            gsStyles.barFill,
+                            {
+                              width: `${row.value}%` as any,
+                              backgroundColor: row.color,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={gsStyles.tileGrid}>
+                    {[
+                      { label: 'Forehead Width', value: metrics.pForehead },
+                      { label: 'Cheekbone', value: metrics.pCheekbone },
+                      { label: 'Jawline', value: metrics.pJawline },
+                      { label: 'Face Length', value: metrics.pFaceLength },
+                    ].map(t => (
+                      <View key={t.label} style={gsStyles.tile}>
+                        <AppText style={gsStyles.tileLabel}>{t.label}</AppText>
+                        <AppText style={gsStyles.tileValue}>{t.value}%</AppText>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ── TEMPORARY debug panel showing the raw ratios behind the result.
+                 Safe to delete (along with the FaceDebug plumbing) any time. ── */}
+          {debug?.raw && (
+            <View style={gsStyles.dbgCard}>
+              <AppText style={gsStyles.dbgTitle}>
+                CALIBRATION DATA (temporary)
+              </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                aspect (len/width) : {debug.raw.aspect.toFixed(3)}
+              </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                fVc (forehead/cheek): {debug.raw.fVc.toFixed(3)}
+              </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                jVc (jaw/cheek) : {debug.raw.jVc.toFixed(3)}
+              </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                jawDeg : {debug.raw.jawDeg.toFixed(1)}
+              </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                picked : {shape} ({debug.samples} frames)
+              </AppText>
+            </View>
+          )}
 
           {/* CTAs */}
           <TouchableOpacity
@@ -1351,9 +1916,20 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       </View>
       <AppText style={styles.heroTitle}>Eye Refraction Test</AppText>
       <AppText style={styles.heroSub}>
-        A comprehensive 5-step screening to help identify potential refractive
-        errors, contrast issues, and colour vision deficiencies.
+        A quick 3-part screening to help identify potential refractive errors
+        and colour vision.
       </AppText>
+      <View style={rfStyles.oneHandBanner}>
+        <Ionicons
+          name="hand-left-outline"
+          size={20}
+          color={Colors.primaryDark}
+        />
+        <AppText style={rfStyles.oneHandBannerText}>
+          Cover one eye with your free hand — you'll only need your other thumb
+          to tap through each step.
+        </AppText>
+      </View>
       <TouchableOpacity
         style={[
           styles.primaryBtn,
@@ -1370,19 +1946,9 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
     <AppText style={styles.sectionLabel}>What we'll test</AppText>
     {[
       {
-        icon: 'text-outline',
-        title: 'Distance Vision',
-        desc: 'Read rows of letters at decreasing sizes to check visual acuity.',
-      },
-      {
-        icon: 'contrast-outline',
-        title: 'Contrast Sensitivity',
-        desc: 'Identify fading letters to detect contrast perception issues.',
-      },
-      {
-        icon: 'radio-button-off-outline',
-        title: 'Astigmatism Check',
-        desc: 'View a radial pattern to detect uneven focus in the eye.',
+        icon: 'compass-outline',
+        title: 'Visual Acuity',
+        desc: 'Cover one eye at a time and pick which direction the gap in each ring is facing.',
       },
       {
         icon: 'color-palette-outline',
@@ -1390,29 +1956,9 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         desc: 'Identify numbers hidden in coloured dot plates (Ishihara-style).',
       },
       {
-        icon: 'book-outline',
-        title: 'Near Vision',
-        desc: 'Read a short paragraph to assess your close-up focus.',
-      },
-      {
-        icon: 'scan-outline',
-        title: 'Visual Field',
-        desc: 'Tap dots that flash in your side vision to check peripheral awareness.',
-      },
-      {
-        icon: 'git-compare-outline',
-        title: 'Eye Alignment',
-        desc: 'Follow a moving dot to check eye-muscle coordination.',
-      },
-      {
-        icon: 'flash-outline',
-        title: 'Light Response',
-        desc: 'A brief flash to gauge how comfortably your eyes adjust to light.',
-      },
-      {
-        icon: 'heart-outline',
-        title: 'Eye Health',
-        desc: 'A few questions on risk factors for pressure and retinal health.',
+        icon: 'radio-button-off-outline',
+        title: 'Astigmatism Check',
+        desc: 'View a radial pattern to detect uneven focus in the eye.',
       },
     ].map(item => (
       <View key={item.title} style={styles.featureRow}>
@@ -1440,27 +1986,233 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
   </ScrollView>
 );
 
-// ─── Refraction — Step 1: Visual Acuity ──────────────────────────────────────
+// ─── Refraction — Eye Switch Instruction ─────────────────────────────────────
+// Shown between per-eye tests so each eye is a clearly separated session:
+// cover the other eye and confirm before the next set of questions starts.
+
+const EyeCoverStep: React.FC<{
+  eye: 'left' | 'right';
+  stepNum: string;
+  testName: string;
+  onContinue: () => void;
+}> = ({ eye, stepNum, testName, onContinue }) => {
+  const coverEye = eye === 'left' ? 'right' : 'left';
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <AppText style={styles.stepCounter}>
+          Step {stepNum} of 3 — {testName} ({eye === 'left' ? 'Left' : 'Right'}{' '}
+          Eye)
+        </AppText>
+      </View>
+      <View style={styles.heroCard}>
+        <View style={styles.heroIconRing}>
+          <Ionicons name="eye-outline" size={56} color={Colors.primary} />
+        </View>
+        <AppText style={styles.heroTitle}>
+          {eye === 'left' ? 'Left' : 'Right'} Eye's Turn
+        </AppText>
+        <AppText style={styles.heroSub}>
+          Cover your {coverEye} eye with your free hand. When you're ready,
+          we'll test your {eye} eye only.
+        </AppText>
+        <View style={rfStyles.oneHandBanner}>
+          <Ionicons
+            name="hand-left-outline"
+            size={20}
+            color={Colors.primaryDark}
+          />
+          <AppText style={rfStyles.oneHandBannerText}>
+            Keep the phone at arm's length and tap Continue once your {coverEye}{' '}
+            eye is covered.
+          </AppText>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.primaryBtn,
+            { marginTop: Spacing.md, alignSelf: 'stretch' },
+          ]}
+          onPress={onContinue}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="play-outline" size={20} color={Colors.white} />
+          <AppText style={styles.primaryBtnText}>
+            Continue — {eye === 'left' ? 'Left' : 'Right'} Eye
+          </AppText>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+};
+
+// ─── Refraction — Step 1: Visual Acuity (Landolt C) ──────────────────────────
+
+// Renders a ring with a gap on one edge, rotated so the gap points at `angle`
+// degrees clockwise from up (0 = up, 90 = right, 180 = down, 270 = left).
+const LandoltC: React.FC<{ size: number; angle: number }> = ({
+  size,
+  angle,
+}) => {
+  const stroke = size * 0.22;
+  const gapWidth = stroke * 1.2;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        transform: [{ rotate: `${angle}deg` }],
+      }}
+    >
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: stroke,
+          borderColor: Colors.black,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: -1,
+          left: (size - gapWidth) / 2,
+          width: gapWidth,
+          height: stroke + 2,
+          backgroundColor: Colors.white,
+        }}
+      />
+    </View>
+  );
+};
+
+// A compass of 8 direction buttons arranged in a circle around the ring
+// preview, so the user can pick the angle the gap is facing.
+const DirectionPicker: React.FC<{
+  selected: number | null;
+  correctAngle: number;
+  onSelect: (angle: number) => void;
+}> = ({ selected, correctAngle, onSelect }) => (
+  <View style={rfStyles.compassContainer}>
+    {LANDOLT_DIRECTIONS.map(dir => {
+      const rad = (dir.angle * Math.PI) / 180;
+      const half = rfStyles.compassBtn.width! / 2;
+      const radius = rfStyles.compassContainer.width! / 2 - half - 4;
+      const x =
+        rfStyles.compassContainer.width! / 2 - half + radius * Math.sin(rad);
+      const y =
+        rfStyles.compassContainer.height! / 2 - half - radius * Math.cos(rad);
+      const isSelected = selected === dir.angle;
+      const revealCorrect = selected !== null && dir.angle === correctAngle;
+      const showWrong = isSelected && dir.angle !== correctAngle;
+      const highlighted = revealCorrect || showWrong;
+      return (
+        <TouchableOpacity
+          key={dir.angle}
+          accessibilityLabel={dir.label}
+          disabled={selected !== null}
+          style={[
+            rfStyles.compassBtn,
+            { left: x, top: y },
+            revealCorrect && rfStyles.compassBtnCorrect,
+            showWrong && rfStyles.compassBtnWrong,
+          ]}
+          onPress={() => onSelect(dir.angle)}
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name="arrow-up"
+            size={15}
+            color={highlighted ? Colors.white : Colors.gray600}
+            style={{ transform: [{ rotate: `${dir.angle}deg` }] }}
+          />
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
+
+// Shared countdown bar — used by every timed step to keep the pressure on.
+const CountdownBar: React.FC<{ timeLeft: number; timeLimit: number }> = ({
+  timeLeft,
+  timeLimit,
+}) => {
+  const danger = timeLeft <= Math.min(1, timeLimit);
+  return (
+    <View style={rfStyles.timerRow}>
+      <Ionicons
+        name="timer-outline"
+        size={16}
+        color={danger ? Colors.error : Colors.gray500}
+      />
+      <View style={rfStyles.timerTrack}>
+        <View
+          style={[
+            rfStyles.timerFill,
+            { width: `${Math.max(0, (timeLeft / timeLimit) * 100)}%` },
+            danger && rfStyles.timerFillDanger,
+          ]}
+        />
+      </View>
+      <AppText style={[rfStyles.timerText, danger && rfStyles.timerTextDanger]}>
+        {Math.max(0, timeLeft)}s
+      </AppText>
+    </View>
+  );
+};
 
 const AcuityStep: React.FC<{
+  eye: 'left' | 'right';
   rows: AcuityRow[];
   onComplete: (passCount: number) => void;
-}> = ({ rows, onComplete }) => {
+}> = ({ eye, rows, onComplete }) => {
   const [rowIndex, setRowIndex] = useState(0);
   const [passCount, setPassCount] = useState(0);
-
-  const handleAnswer = (canRead: boolean) => {
-    const newCount = canRead ? passCount + 1 : passCount;
-    if (rowIndex + 1 >= rows.length) {
-      onComplete(newCount);
-    } else {
-      setPassCount(newCount);
-      setRowIndex(prev => prev + 1);
-    }
-  };
+  const [selectedAngle, setSelectedAngle] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(ACUITY_TIME_LIMIT);
 
   const row = rows[rowIndex];
+
+  // Staircase: the ring gets smaller after every correct answer. The test
+  // ends as soon as one is missed (or the smallest ring is read correctly).
+  const handleSelect = (angle: number) => {
+    setSelectedAngle(angle);
+    const isCorrect = angle === row.angle;
+    const newCount = isCorrect ? passCount + 1 : passCount;
+    setTimeout(() => {
+      if (!isCorrect || rowIndex + 1 >= rows.length) {
+        onComplete(newCount);
+      } else {
+        setPassCount(newCount);
+        setSelectedAngle(null);
+        setRowIndex(prev => prev + 1);
+      }
+    }, 500);
+  };
+
+  // Reset the clock every time a new ring appears.
+  useEffect(() => {
+    setTimeLeft(ACUITY_TIME_LIMIT);
+  }, [rowIndex]);
+
+  // Tick the clock; running out counts as a wrong (auto-fail) answer.
+  useEffect(() => {
+    if (selectedAngle !== null) return;
+    if (timeLeft <= 0) {
+      handleSelect(-1);
+      return;
+    }
+    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, selectedAngle, rowIndex]);
+
   const progress = (rowIndex / rows.length) * 100;
+  const coverEye = eye === 'left' ? 'right' : 'left';
+  const stepNum = eye === 'left' ? '1a' : '1b';
 
   return (
     <ScrollView
@@ -1470,7 +2222,8 @@ const AcuityStep: React.FC<{
       {/* Progress */}
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step 1 of 5 — Distance Vision
+          Step {stepNum} of 3 — Visual Acuity (
+          {eye === 'left' ? 'Left' : 'Right'} Eye)
         </AppText>
         <AppText style={styles.stepCounterRight}>
           Row {rowIndex + 1}/{rows.length}
@@ -1480,200 +2233,75 @@ const AcuityStep: React.FC<{
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
 
-      <View style={styles.acuityCard}>
-        <AppText style={styles.acuityInstruction}>
-          Look at the letters below from normal reading distance.
-        </AppText>
-        <View style={styles.acuityLetterBox}>
-          <AppText style={[styles.acuityLetters, { fontSize: row.size }]}>
-            {row.letters}
-          </AppText>
-          <AppText style={styles.acuityLabel}>{row.label} line</AppText>
-        </View>
-        <AppText style={styles.acuityQuestion}>
-          Can you read these letters clearly without squinting?
+      <View style={rfStyles.coverEyeBanner}>
+        <Ionicons
+          name="hand-left-outline"
+          size={22}
+          color={Colors.primaryDark}
+        />
+        <AppText style={rfStyles.coverEyeBannerText}>
+          Cover your <AppText style={rfStyles.coverEyeBold}>{coverEye}</AppText>{' '}
+          eye with your free hand, then read with your {eye} eye only.
         </AppText>
       </View>
 
-      <TouchableOpacity
-        style={styles.primaryBtn}
-        onPress={() => handleAnswer(true)}
-        activeOpacity={0.82}
-      >
-        <Ionicons
-          name="checkmark-circle-outline"
-          size={20}
-          color={Colors.white}
-        />
-        <AppText style={styles.primaryBtnText}>Yes, clearly</AppText>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-        onPress={() => handleAnswer(false)}
-        activeOpacity={0.8}
-      >
-        <Ionicons
-          name="close-circle-outline"
-          size={18}
-          color={Colors.gray600}
-        />
-        <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-          Blurry / Hard to read
+      <View style={styles.acuityCard}>
+        <AppText style={styles.acuityInstruction}>
+          Hold the phone at arm's length. Find the gap in the ring below.
         </AppText>
-      </TouchableOpacity>
+        <View style={styles.acuityLetterBox}>
+          <LandoltC size={row.size} angle={row.angle} />
+          <AppText style={styles.acuityLabel}>{row.label} line</AppText>
+        </View>
+        <AppText style={styles.acuityQuestion}>
+          Which direction is the gap facing?
+        </AppText>
+      </View>
+
+      <CountdownBar timeLeft={timeLeft} timeLimit={ACUITY_TIME_LIMIT} />
+
+      <DirectionPicker
+        selected={selectedAngle}
+        correctAngle={row.angle}
+        onSelect={handleSelect}
+      />
     </ScrollView>
   );
 };
 
 // ─── Refraction — Step 2: Astigmatism ────────────────────────────────────────
 
+// Seconds allowed to answer before it's auto-marked as unequal (fail-safe:
+// running out of time reads as "couldn't tell", the stricter outcome).
+const ASTIGMATISM_TIME_LIMIT = 5;
+// 36 spokes at 5° spacing — finer than the eye can lazily eyeball at a glance.
+const ASTIGMATISM_SPOKES = 36;
+
 const AstigmatismStep: React.FC<{
+  eye: 'left' | 'right';
   onComplete: (result: 'equal' | 'unequal') => void;
-}> = ({ onComplete }) => (
-  <ScrollView
-    contentContainerStyle={styles.contentPad}
-    showsVerticalScrollIndicator={false}
-  >
-    <View style={styles.stepHeader}>
-      <AppText style={styles.stepCounter}>
-        Step 3 of 5 — Astigmatism Check
-      </AppText>
-    </View>
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: '33%' }]} />
-    </View>
+}> = ({ eye, onComplete }) => {
+  const [answered, setAnswered] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(ASTIGMATISM_TIME_LIMIT);
+  const coverEye = eye === 'left' ? 'right' : 'left';
+  const stepNum = eye === 'left' ? '3a' : '3b';
 
-    <View style={styles.acuityCard}>
-      <AppText style={styles.acuityInstruction}>
-        Look at the center dot of the pattern below. Keep your eyes relaxed.
-      </AppText>
-
-      {/* Radial fan rendered with rotated views */}
-      <View style={rfStyles.wheelContainer}>
-        {Array.from({ length: 18 }, (_, i) => (
-          <View
-            key={i}
-            style={[
-              rfStyles.wheelSpoke,
-              { transform: [{ rotate: `${i * 10}deg` }] },
-            ]}
-          />
-        ))}
-        <View style={rfStyles.wheelDot} />
-      </View>
-
-      <AppText style={styles.acuityQuestion}>
-        Do all the lines appear equally dark and the same thickness?
-      </AppText>
-    </View>
-
-    <TouchableOpacity
-      style={styles.primaryBtn}
-      onPress={() => onComplete('equal')}
-      activeOpacity={0.82}
-    >
-      <Ionicons
-        name="checkmark-circle-outline"
-        size={20}
-        color={Colors.white}
-      />
-      <AppText style={styles.primaryBtnText}>Yes, all lines look equal</AppText>
-    </TouchableOpacity>
-
-    <TouchableOpacity
-      style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-      onPress={() => onComplete('unequal')}
-      activeOpacity={0.8}
-    >
-      <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
-      <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-        Some lines look darker / thicker
-      </AppText>
-    </TouchableOpacity>
-  </ScrollView>
-);
-
-// ─── Refraction — Step 3: Near Vision ────────────────────────────────────────
-
-const NearVisionStep: React.FC<{
-  text: string;
-  onComplete: (result: 'clear' | 'blurry') => void;
-}> = ({ text, onComplete }) => (
-  <ScrollView
-    contentContainerStyle={styles.contentPad}
-    showsVerticalScrollIndicator={false}
-  >
-    <View style={styles.stepHeader}>
-      <AppText style={styles.stepCounter}>Step 5 of 5 — Near Vision</AppText>
-    </View>
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: '78%' }]} />
-    </View>
-
-    <View style={styles.acuityCard}>
-      <AppText style={styles.acuityInstruction}>
-        Hold your phone at a comfortable reading distance (~30 cm). Do not move
-        the phone closer.
-      </AppText>
-      <View style={rfStyles.nearTextBox}>
-        <AppText style={rfStyles.nearText}>{text}</AppText>
-      </View>
-      <AppText style={styles.acuityQuestion}>
-        Can you read the paragraph above clearly without straining?
-      </AppText>
-    </View>
-
-    <TouchableOpacity
-      style={styles.primaryBtn}
-      onPress={() => onComplete('clear')}
-      activeOpacity={0.82}
-    >
-      <Ionicons
-        name="checkmark-circle-outline"
-        size={20}
-        color={Colors.white}
-      />
-      <AppText style={styles.primaryBtnText}>Yes, clearly</AppText>
-    </TouchableOpacity>
-
-    <TouchableOpacity
-      style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-      onPress={() => onComplete('blurry')}
-      activeOpacity={0.8}
-    >
-      <Ionicons name="close-circle-outline" size={18} color={Colors.gray600} />
-      <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-        Blurry / I had to bring it closer
-      </AppText>
-    </TouchableOpacity>
-  </ScrollView>
-);
-
-// ─── Refraction — Step 2: Contrast Sensitivity ───────────────────────────────
-
-const ContrastStep: React.FC<{
-  levels: ContrastLevel[];
-  onComplete: (result: ContrastResult) => void;
-}> = ({ levels, onComplete }) => {
-  const [levelIndex, setLevelIndex] = useState(0);
-
-  const handleAnswer = (canRead: boolean) => {
-    if (!canRead) {
-      if (levelIndex === 0) onComplete('poor');
-      else if (levelIndex <= 2) onComplete('reduced');
-      else onComplete('good');
-      return;
-    }
-    if (levelIndex + 1 >= levels.length) {
-      onComplete('good');
-    } else {
-      setLevelIndex(prev => prev + 1);
-    }
+  const handleAnswer = (result: 'equal' | 'unequal') => {
+    if (answered) return;
+    setAnswered(true);
+    onComplete(result);
   };
 
-  const level = levels[levelIndex];
-  const progress = (levelIndex / levels.length) * 100;
+  useEffect(() => {
+    if (answered) return;
+    if (timeLeft <= 0) {
+      handleAnswer('unequal');
+      return;
+    }
+    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, answered]);
 
   return (
     <ScrollView
@@ -1682,71 +2310,92 @@ const ContrastStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step 2 of 5 — Contrast Sensitivity
-        </AppText>
-        <AppText style={styles.stepCounterRight}>
-          Level {levelIndex + 1}/{levels.length}
+          Step {stepNum} of 3 — Astigmatism Check (
+          {eye === 'left' ? 'Left' : 'Right'} Eye)
         </AppText>
       </View>
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+        <View
+          style={[
+            styles.progressFill,
+            { width: eye === 'left' ? '85%' : '100%' },
+          ]}
+        />
       </View>
+
+      <View style={rfStyles.coverEyeBanner}>
+        <Ionicons
+          name="hand-left-outline"
+          size={22}
+          color={Colors.primaryDark}
+        />
+        <AppText style={rfStyles.coverEyeBannerText}>
+          Cover your <AppText style={rfStyles.coverEyeBold}>{coverEye}</AppText>{' '}
+          eye with your free hand, hold the phone at arm's length.
+        </AppText>
+      </View>
+
+      <CountdownBar timeLeft={timeLeft} timeLimit={ASTIGMATISM_TIME_LIMIT} />
 
       <View style={styles.acuityCard}>
         <AppText style={styles.acuityInstruction}>
-          Letters will progressively fade. Read them at arm's length without
-          squinting or adjusting the screen brightness.
+          Look at the center dot of the pattern below. Keep your eyes relaxed.
         </AppText>
-        <View style={styles.acuityLetterBox}>
-          <AppText
-            style={[
-              styles.acuityLetters,
-              { fontSize: level.size, opacity: level.opacity },
-            ]}
-          >
-            {level.letters}
-          </AppText>
-          <AppText style={styles.acuityLabel}>
-            Contrast level {levelIndex + 1}
-          </AppText>
+
+        {/* Radial fan rendered with rotated views */}
+        <View style={rfStyles.wheelContainer}>
+          {Array.from({ length: ASTIGMATISM_SPOKES }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                rfStyles.wheelSpoke,
+                {
+                  transform: [
+                    { rotate: `${i * (360 / ASTIGMATISM_SPOKES)}deg` },
+                  ],
+                },
+              ]}
+            />
+          ))}
+          <View style={rfStyles.wheelDot} />
         </View>
+
         <AppText style={styles.acuityQuestion}>
-          Can you clearly read all the letters above?
+          Do all the lines appear equally dark and the same thickness?
         </AppText>
       </View>
 
       <TouchableOpacity
-        style={styles.primaryBtn}
-        onPress={() => handleAnswer(true)}
+        style={rfStyles.answerYesBtn}
+        disabled={answered}
+        onPress={() => handleAnswer('equal')}
         activeOpacity={0.82}
       >
-        <Ionicons
-          name="checkmark-circle-outline"
-          size={20}
-          color={Colors.white}
-        />
-        <AppText style={styles.primaryBtnText}>Yes, I can read them</AppText>
+        <Ionicons name="checkmark-circle" size={24} color={Colors.white} />
+        <AppText style={rfStyles.answerYesBtnText}>
+          Yes, all lines look equal
+        </AppText>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-        onPress={() => handleAnswer(false)}
+        style={rfStyles.answerNoBtn}
+        disabled={answered}
+        onPress={() => handleAnswer('unequal')}
         activeOpacity={0.8}
       >
-        <Ionicons
-          name="close-circle-outline"
-          size={18}
-          color={Colors.gray600}
-        />
-        <AppText style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-          Too faint / Hard to see
+        <Ionicons name="close-circle" size={22} color={Colors.error} />
+        <AppText style={rfStyles.answerNoBtnText}>
+          Some lines look darker / thicker
         </AppText>
       </TouchableOpacity>
     </ScrollView>
   );
 };
 
-// ─── Refraction — Step 4: Colour Vision ──────────────────────────────────────
+// ─── Refraction — Step 2: Colour Vision ──────────────────────────────────────
+
+// Seconds allowed per plate before it's auto-marked wrong.
+const COLOR_TIME_LIMIT = 5;
 
 const ColorVisionStep: React.FC<{
   plates: CvPlate[];
@@ -1754,22 +2403,45 @@ const ColorVisionStep: React.FC<{
 }> = ({ plates, onComplete }) => {
   const [plateIndex, setPlateIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
+  const [answered, setAnswered] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(COLOR_TIME_LIMIT);
 
   const plate = plates[plateIndex];
 
+  // Getting more than one plate wrong (out of the full set) now reads as
+  // a full deficiency rather than "mild" — a stricter bar to pass clean.
   const handleAnswer = (answer: string) => {
+    setAnswered(true);
     const isCorrect = answer === plate.correct;
     const newCorrect = isCorrect ? correctCount + 1 : correctCount;
 
-    if (plateIndex + 1 >= plates.length) {
-      if (newCorrect === plates.length) onComplete('normal');
-      else if (newCorrect >= 1) onComplete('mild');
-      else onComplete('deficient');
-    } else {
-      setCorrectCount(newCorrect);
-      setPlateIndex(prev => prev + 1);
-    }
+    setTimeout(() => {
+      if (plateIndex + 1 >= plates.length) {
+        if (newCorrect === plates.length) onComplete('normal');
+        else if (newCorrect >= plates.length - 1) onComplete('mild');
+        else onComplete('deficient');
+      } else {
+        setCorrectCount(newCorrect);
+        setAnswered(false);
+        setPlateIndex(prev => prev + 1);
+      }
+    }, 300);
   };
+
+  useEffect(() => {
+    setTimeLeft(COLOR_TIME_LIMIT);
+  }, [plateIndex]);
+
+  useEffect(() => {
+    if (answered) return;
+    if (timeLeft <= 0) {
+      handleAnswer('');
+      return;
+    }
+    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, answered, plateIndex]);
 
   const progress = (plateIndex / plates.length) * 100;
 
@@ -1780,7 +2452,7 @@ const ColorVisionStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step 4 of 5 — Colour Vision
+          Step 2 of 3 — Colour Vision
         </AppText>
         <AppText style={styles.stepCounterRight}>
           Plate {plateIndex + 1}/{plates.length}
@@ -1789,6 +2461,8 @@ const ColorVisionStep: React.FC<{
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
+
+      <CountdownBar timeLeft={timeLeft} timeLimit={COLOR_TIME_LIMIT} />
 
       <View style={[styles.acuityCard, { paddingBottom: Spacing.md }]}>
         <AppText style={styles.acuityInstruction}>{plate.hint}</AppText>
@@ -1807,10 +2481,11 @@ const ColorVisionStep: React.FC<{
       </View>
 
       {plate.options.map(opt => {
-        const isNone = opt === "I can't see a number";
+        const isNone = opt === CANT_SEE;
         return (
           <TouchableOpacity
             key={opt}
+            disabled={answered}
             style={[
               styles.outlineBtn,
               { marginTop: Spacing.sm },
@@ -1848,633 +2523,6 @@ const ColorVisionStep: React.FC<{
     </ScrollView>
   );
 };
-
-// ─── Refraction — Step 6: Visual Field (peripheral awareness) ────────────────
-// Dots flash in the periphery while the user fixates on a centre point. Missed
-// dots hint at blind spots. Touch-based — not a clinical perimetry test.
-
-const VF_ROUNDS = 8;
-const VF_DOT = 34;
-const VF_PLAY_W = SCREEN_WIDTH - Spacing.lg * 2;
-const VF_PLAY_H = 400;
-
-const VisualFieldStep: React.FC<{
-  onComplete: (result: VisualFieldResult) => void;
-}> = ({ onComplete }) => {
-  const [started, setStarted] = useState(false);
-  const [shown, setShown] = useState(0);
-  const [dot, setDot] = useState<{ x: number; y: number } | null>(null);
-  const caughtRef = useRef(0);
-  const roundRef = useRef(0);
-  const missTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const finish = useCallback(() => {
-    const ratio = caughtRef.current / VF_ROUNDS;
-    onComplete(ratio >= 0.85 ? 'full' : ratio >= 0.6 ? 'mild' : 'reduced');
-  }, [onComplete]);
-
-  const scheduleNext = useCallback(() => {
-    if (roundRef.current >= VF_ROUNDS) {
-      finish();
-      return;
-    }
-    roundRef.current += 1;
-    setShown(roundRef.current);
-    // Short blank gap, then flash a dot somewhere in the peripheral ring.
-    showTimer.current = setTimeout(() => {
-      const cx = VF_PLAY_W / 2;
-      const cy = VF_PLAY_H / 2;
-      const ang = Math.random() * Math.PI * 2;
-      const rad =
-        (0.55 + Math.random() * 0.4) * (Math.min(VF_PLAY_W, VF_PLAY_H) / 2);
-      const x = Math.max(
-        4,
-        Math.min(VF_PLAY_W - VF_DOT - 4, cx + Math.cos(ang) * rad - VF_DOT / 2),
-      );
-      const y = Math.max(
-        4,
-        Math.min(VF_PLAY_H - VF_DOT - 4, cy + Math.sin(ang) * rad - VF_DOT / 2),
-      );
-      setDot({ x, y });
-      missTimer.current = setTimeout(() => {
-        setDot(null);
-        scheduleNext();
-      }, 1100);
-    }, 500 + Math.random() * 800);
-  }, [finish]);
-
-  const handleHit = () => {
-    if (missTimer.current) clearTimeout(missTimer.current);
-    caughtRef.current += 1;
-    setDot(null);
-    scheduleNext();
-  };
-
-  const start = () => {
-    setStarted(true);
-    scheduleNext();
-  };
-
-  useEffect(
-    () => () => {
-      if (missTimer.current) clearTimeout(missTimer.current);
-      if (showTimer.current) clearTimeout(showTimer.current);
-    },
-    [],
-  );
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.contentPad}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 6 of 9 — Visual Field</Text>
-        {started && (
-          <Text style={styles.stepCounterRight}>
-            {Math.min(shown, VF_ROUNDS)}/{VF_ROUNDS}
-          </Text>
-        )}
-      </View>
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: started ? `${(shown / VF_ROUNDS) * 100}%` : '0%' },
-          ]}
-        />
-      </View>
-
-      <Text style={styles.acuityInstruction}>
-        Keep your eyes fixed on the centre dot and hold the phone steady. Tap
-        each green dot the instant it appears in your side vision — try not to
-        move your eyes.
-      </Text>
-
-      <View style={etStyles.vfPlay}>
-        <View style={etStyles.vfFixation} />
-        {!started && (
-          <TouchableOpacity
-            style={etStyles.vfStartOverlay}
-            onPress={start}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="play-circle" size={56} color={Colors.primary} />
-            <Text style={etStyles.vfStartText}>Tap to start</Text>
-          </TouchableOpacity>
-        )}
-        {dot && (
-          <TouchableOpacity
-            style={[etStyles.vfTarget, { left: dot.x, top: dot.y }]}
-            onPress={handleHit}
-            activeOpacity={0.7}
-          />
-        )}
-      </View>
-
-      <View style={rfStyles.footerNote}>
-        <Ionicons
-          name="information-circle-outline"
-          size={13}
-          color={Colors.gray400}
-        />
-        <Text style={rfStyles.footerNoteText}>
-          A simple peripheral-awareness check. Missed dots may indicate blind
-          spots but can also result from distraction — it does not replace a
-          clinical visual-field exam.
-        </Text>
-      </View>
-    </ScrollView>
-  );
-};
-
-// ─── Refraction — Step 7: Eye Muscle & Alignment (follow-the-dot) ─────────────
-// A target traces an H/cross/diagonal path (a classic ocular-motility pattern).
-// The user follows with their eyes, then self-reports any doubling or jumping.
-
-const EM_R = 11; // dot radius
-const EM_PAD = 34;
-const EM_W = SCREEN_WIDTH - Spacing.lg * 2;
-const EM_H = 320;
-
-const EyeMuscleStep: React.FC<{
-  onComplete: (result: EyeMuscleResult) => void;
-}> = ({ onComplete }) => {
-  const [phase, setPhase] = useState<'ready' | 'running' | 'answer'>('ready');
-  const pos = useRef(
-    new Animated.ValueXY({ x: EM_W / 2 - EM_R, y: EM_H / 2 - EM_R }),
-  ).current;
-
-  const run = () => {
-    setPhase('running');
-    const cX = EM_W / 2;
-    const cY = EM_H / 2;
-    const lX = EM_PAD;
-    const rX = EM_W - EM_PAD;
-    const tY = EM_PAD;
-    const bY = EM_H - EM_PAD;
-    pos.setValue({ x: cX - EM_R, y: cY - EM_R });
-    const to = (x: number, y: number, d = 850) =>
-      Animated.timing(pos, {
-        toValue: { x: x - EM_R, y: y - EM_R },
-        duration: d,
-        useNativeDriver: true,
-      });
-    Animated.sequence([
-      to(lX, cY),
-      to(rX, cY),
-      to(cX, cY),
-      to(cX, tY),
-      to(cX, bY),
-      to(cX, cY),
-      to(lX, tY),
-      to(rX, bY),
-      to(lX, bY),
-      to(rX, tY),
-      to(cX, cY, 650),
-    ]).start(({ finished }) => {
-      if (finished) setPhase('answer');
-    });
-  };
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.contentPad}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 7 of 9 — Eye Alignment</Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: '70%' }]} />
-      </View>
-
-      <Text style={styles.acuityInstruction}>
-        Hold your head still and follow the moving dot with your eyes only.
-        Watch whether it ever splits into two, jumps, or one eye struggles to
-        keep up.
-      </Text>
-
-      <View style={etStyles.emPlay}>
-        <Animated.View
-          style={[
-            etStyles.emDot,
-            { transform: [{ translateX: pos.x }, { translateY: pos.y }] },
-          ]}
-        />
-        {phase === 'ready' && (
-          <TouchableOpacity
-            style={etStyles.vfStartOverlay}
-            onPress={run}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="play-circle" size={56} color={Colors.primary} />
-            <Text style={etStyles.vfStartText}>Start tracking</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {phase === 'running' && (
-        <Text style={styles.acuityQuestion}>Follow the dot…</Text>
-      )}
-
-      {phase === 'answer' && (
-        <>
-          <Text style={styles.acuityQuestion}>
-            Did the dot stay single and move smoothly the whole time?
-          </Text>
-          <TouchableOpacity
-            style={[styles.primaryBtn, { marginTop: Spacing.md }]}
-            onPress={() => onComplete('aligned')}
-            activeOpacity={0.82}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color={Colors.white}
-            />
-            <Text style={styles.primaryBtnText}>Yes, single and smooth</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-            onPress={() => onComplete('misaligned')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="close-circle-outline"
-              size={18}
-              color={Colors.gray600}
-            />
-            <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-              It doubled / jumped / one eye lagged
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-            onPress={run}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
-            <Text style={styles.outlineBtnText}>Replay</Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </ScrollView>
-  );
-};
-
-// ─── Refraction — Step 8: Light Response (pupil / photophobia screen) ─────────
-// Phone cameras can't reliably measure pupil constriction, so this is framed as
-// a light-sensitivity self-report: the panel flashes bright, then the user
-// reports any pain or lingering afterimage.
-
-const PupilResponseStep: React.FC<{
-  onComplete: (result: PupilResult) => void;
-}> = ({ onComplete }) => {
-  const [phase, setPhase] = useState<'ready' | 'running' | 'answer'>('ready');
-  const bright = useRef(new Animated.Value(0)).current;
-
-  const run = () => {
-    setPhase('running');
-    bright.setValue(0);
-    const flash = () =>
-      Animated.sequence([
-        Animated.timing(bright, {
-          toValue: 1,
-          duration: 120,
-          useNativeDriver: false,
-        }),
-        Animated.delay(1200),
-        Animated.timing(bright, {
-          toValue: 0,
-          duration: 650,
-          useNativeDriver: false,
-        }),
-        Animated.delay(600),
-      ]);
-    Animated.sequence([Animated.delay(500), flash(), flash()]).start(
-      ({ finished }) => {
-        if (finished) setPhase('answer');
-      },
-    );
-  };
-
-  const bg = bright.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['#0b0b0d', '#ffffff'],
-  });
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.contentPad}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 8 of 9 — Light Response</Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: '85%' }]} />
-      </View>
-
-      <Text style={styles.acuityInstruction}>
-        Best done in a dim room. Look at the panel below and keep both eyes open
-        — it will flash bright twice. Notice how your eyes feel as the light
-        changes.
-      </Text>
-
-      <Animated.View style={[etStyles.ppPanel, { backgroundColor: bg }]}>
-        {phase === 'ready' && (
-          <TouchableOpacity
-            style={etStyles.vfStartOverlay}
-            onPress={run}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="flash" size={48} color={Colors.primary} />
-            <Text style={etStyles.vfStartText}>Start light test</Text>
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-
-      {phase === 'answer' && (
-        <>
-          <Text style={styles.acuityQuestion}>
-            When the screen flashed bright, did your eyes adjust comfortably?
-          </Text>
-          <TouchableOpacity
-            style={[styles.primaryBtn, { marginTop: Spacing.md }]}
-            onPress={() => onComplete('normal')}
-            activeOpacity={0.82}
-          >
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color={Colors.white}
-            />
-            <Text style={styles.primaryBtnText}>Yes, adjusted comfortably</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-            onPress={() => onComplete('sensitive')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="close-circle-outline"
-              size={18}
-              color={Colors.gray600}
-            />
-            <Text style={[styles.outlineBtnText, { color: Colors.gray600 }]}>
-              It was painful / left an afterimage
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
-            onPress={run}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
-            <Text style={styles.outlineBtnText}>Replay</Text>
-          </TouchableOpacity>
-        </>
-      )}
-
-      <View style={rfStyles.footerNote}>
-        <Ionicons
-          name="information-circle-outline"
-          size={13}
-          color={Colors.gray400}
-        />
-        <Text style={rfStyles.footerNoteText}>
-          A light-comfort screen only. True pupil-reaction testing requires a
-          clinician's penlight examination.
-        </Text>
-      </View>
-    </ScrollView>
-  );
-};
-
-// ─── Refraction — Step 9: Eye Health Screening (tonometry / retinal) ──────────
-// Eye pressure (tonometry) and retinal/fundus health can't be measured on a
-// phone. Instead we educate and capture self-reported risk factors that feed
-// into the overall recommendation.
-
-const HEALTH_RISK_FACTORS: { key: string; label: string }[] = [
-  { key: 'family', label: 'Family history of glaucoma or eye disease' },
-  { key: 'systemic', label: 'Diabetes or high blood pressure' },
-  { key: 'age', label: 'Age 40 or older' },
-  { key: 'pain', label: 'Frequent eye pain, redness or headaches' },
-  { key: 'floaters', label: 'Flashes, floaters or sudden vision changes' },
-];
-
-const EyeHealthStep: React.FC<{
-  onComplete: (riskFactorCount: number) => void;
-}> = ({ onComplete }) => {
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const toggle = (k: string) => setSelected(s => ({ ...s, [k]: !s[k] }));
-  const count = Object.values(selected).filter(Boolean).length;
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.contentPad}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stepHeader}>
-        <Text style={styles.stepCounter}>Step 9 of 9 — Eye Health</Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: '100%' }]} />
-      </View>
-
-      {[
-        {
-          icon: 'speedometer-outline',
-          title: 'Eye Pressure (Tonometry)',
-          desc: 'High intraocular pressure is a key glaucoma risk and can only be measured with clinical equipment — not a phone.',
-        },
-        {
-          icon: 'aperture-outline',
-          title: 'Retinal / Fundus Health',
-          desc: 'Examining the retina needs a specialised lens. We can flag your risk, but an in-store exam is required to check it.',
-        },
-      ].map(item => (
-        <View key={item.title} style={styles.featureRow}>
-          <View style={styles.featureIconBox}>
-            <Ionicons
-              name={item.icon as any}
-              size={20}
-              color={Colors.primary}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.featureTitle}>{item.title}</Text>
-            <Text style={styles.featureDesc}>{item.desc}</Text>
-          </View>
-        </View>
-      ))}
-
-      <Text style={[styles.sectionLabel, { marginTop: Spacing.md }]}>
-        Do any of these apply to you?
-      </Text>
-      {HEALTH_RISK_FACTORS.map(rf => {
-        const on = !!selected[rf.key];
-        return (
-          <TouchableOpacity
-            key={rf.key}
-            style={[etStyles.ehRow, on && etStyles.ehRowOn]}
-            onPress={() => toggle(rf.key)}
-            activeOpacity={0.8}
-          >
-            <View style={[etStyles.ehCheck, on && etStyles.ehCheckOn]}>
-              {on && (
-                <Ionicons name="checkmark" size={14} color={Colors.white} />
-              )}
-            </View>
-            <Text style={[etStyles.ehLabel, on && { color: Colors.primary }]}>
-              {rf.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-
-      <TouchableOpacity
-        style={[styles.primaryBtn, { marginTop: Spacing.md }]}
-        onPress={() => onComplete(count)}
-        activeOpacity={0.82}
-      >
-        <Ionicons
-          name="arrow-forward-circle-outline"
-          size={20}
-          color={Colors.white}
-        />
-        <Text style={styles.primaryBtnText}>See My Results</Text>
-      </TouchableOpacity>
-
-      <View style={rfStyles.footerNote}>
-        <Ionicons
-          name="information-circle-outline"
-          size={13}
-          color={Colors.gray400}
-        />
-        <Text style={rfStyles.footerNoteText}>
-          These factors help tailor your recommendation. They are not a
-          diagnosis of glaucoma or retinal disease.
-        </Text>
-      </View>
-    </ScrollView>
-  );
-};
-
-// ─── New-test Styles ──────────────────────────────────────────────────────────
-
-const etStyles = StyleSheet.create({
-  // Visual field play area
-  vfPlay: {
-    width: VF_PLAY_W,
-    height: VF_PLAY_H,
-    alignSelf: 'center',
-    backgroundColor: Colors.glassSurfaceHigh,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.glassBorderStrong,
-    marginVertical: Spacing.md,
-    overflow: 'hidden',
-  },
-  vfFixation: {
-    position: 'absolute',
-    left: VF_PLAY_W / 2 - 5,
-    top: VF_PLAY_H / 2 - 5,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.gray600,
-  },
-  vfTarget: {
-    position: 'absolute',
-    width: VF_DOT,
-    height: VF_DOT,
-    borderRadius: VF_DOT / 2,
-    backgroundColor: Colors.primary,
-    ...Shadow.md,
-  },
-  vfStartOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  vfStartText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  // Eye-muscle play area
-  emPlay: {
-    width: EM_W,
-    height: EM_H,
-    alignSelf: 'center',
-    backgroundColor: '#101012',
-    borderRadius: BorderRadius.xl,
-    marginVertical: Spacing.md,
-    overflow: 'hidden',
-  },
-  emDot: {
-    position: 'absolute',
-    width: EM_R * 2,
-    height: EM_R * 2,
-    borderRadius: EM_R,
-    backgroundColor: Colors.primary,
-    ...Shadow.md,
-  },
-
-  // Pupil / light panel
-  ppPanel: {
-    width: VF_PLAY_W,
-    height: 280,
-    alignSelf: 'center',
-    borderRadius: BorderRadius.xl,
-    marginVertical: Spacing.md,
-    overflow: 'hidden',
-  },
-
-  // Eye-health risk rows
-  ehRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.glassSurface,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-    borderColor: Colors.glassBorder,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  ehRowOn: {
-    borderColor: Colors.primaryGlow,
-    backgroundColor: Colors.primaryLight,
-  },
-  ehCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: Colors.gray300,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  ehCheckOn: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  ehLabel: {
-    flex: 1,
-    fontSize: FontSize.sm,
-    color: Colors.gray700,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-});
 
 // ─── Booking Modal ────────────────────────────────────────────────────────────
 
@@ -2750,123 +2798,61 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
 
 const RefractionResult: React.FC<{
   risk: RiskLevel;
-  acuityPass: number;
-  contrast: ContrastResult;
+  acuityLeftPass: number;
+  acuityRightPass: number;
   astigmatism: 'equal' | 'unequal';
   colorVision: ColorResult;
-  nearVision: 'clear' | 'blurry';
-  visualField: VisualFieldResult;
-  eyeMuscle: EyeMuscleResult;
-  pupil: PupilResult;
-  healthRiskFactors: number;
   onRetry: () => void;
 }> = ({
   risk,
-  acuityPass,
-  contrast,
+  acuityLeftPass,
+  acuityRightPass,
   astigmatism,
   colorVision,
-  nearVision,
-  visualField,
-  eyeMuscle,
-  pupil,
-  healthRiskFactors,
   onRetry,
 }) => {
   const cfg = RISK_CONFIG[risk];
   const [showBooking, setShowBooking] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const checks: { label: string; ok: boolean; detail: string }[] = [
-    {
-      label: 'Distance Vision',
-      ok: acuityPass >= 4,
-      detail:
-        acuityPass >= 5
-          ? 'Excellent — 20/40 line or better'
-          : acuityPass >= 4
-          ? 'Good — 20/50 line'
-          : acuityPass >= 3
-          ? 'Fair — difficulty at smaller sizes'
-          : 'Poor — significant blur detected',
-    },
-    {
-      label: 'Contrast Sensitivity',
-      ok: contrast === 'good',
-      detail:
-        contrast === 'good'
-          ? 'Normal contrast perception'
-          : contrast === 'reduced'
-          ? 'Mildly reduced contrast sensitivity'
-          : 'Significantly reduced contrast sensitivity',
-    },
-    {
-      label: 'Astigmatism',
-      ok: astigmatism === 'equal',
-      detail:
-        astigmatism === 'equal'
-          ? 'No irregularity detected'
-          : 'Uneven line clarity detected',
-    },
-    {
-      label: 'Colour Vision',
-      ok: colorVision === 'normal',
-      detail:
-        colorVision === 'normal'
-          ? 'Normal colour discrimination'
-          : colorVision === 'mild'
-          ? 'Possible mild colour deficiency'
-          : 'Signs of colour vision deficiency detected',
-    },
-    {
-      label: 'Near Vision',
-      ok: nearVision === 'clear',
-      detail:
-        nearVision === 'clear'
-          ? 'Near focus appears normal'
-          : 'Difficulty with near focus detected',
-    },
-  ];
+  const acuityOk = acuityLeftPass >= 4 && acuityRightPass >= 4;
+  const colorOk = colorVision === 'normal';
+  const astigmatismOk = astigmatism === 'equal';
 
-  // Eye-health screening — shown as its own section (per design choice) but
-  // still folded into the overall risk score above.
-  const healthChecks: { label: string; ok: boolean; detail: string }[] = [
-    {
-      label: 'Visual Field',
-      ok: visualField === 'full',
-      detail:
-        visualField === 'full'
-          ? 'Full peripheral awareness'
-          : visualField === 'mild'
-          ? 'A few peripheral dots were missed'
-          : 'Several peripheral dots were missed',
-    },
-    {
-      label: 'Eye Alignment',
-      ok: eyeMuscle === 'aligned',
-      detail:
-        eyeMuscle === 'aligned'
-          ? 'Smooth, single tracking'
-          : 'Possible doubling or uneven tracking',
-    },
-    {
-      label: 'Light Response',
-      ok: pupil === 'normal',
-      detail:
-        pupil === 'normal'
-          ? 'Comfortable adjustment to light'
-          : 'Light sensitivity reported',
-    },
-    {
-      label: 'Health Risk Factors',
-      ok: healthRiskFactors === 0,
-      detail:
-        healthRiskFactors === 0
-          ? 'No risk factors reported'
-          : `${healthRiskFactors} risk factor${
-              healthRiskFactors > 1 ? 's' : ''
-            } reported`,
-    },
-  ];
+  const results: { key: string; label: string; ok: boolean; detail: string }[] =
+    [
+      {
+        key: 'acuity',
+        label: 'Visual Acuity',
+        ok: acuityOk,
+        detail: `Left eye: ${
+          acuityLeftPass >= 4 ? 'Good' : 'Needs attention'
+        }. Right eye: ${acuityRightPass >= 4 ? 'Good' : 'Needs attention'}. ${
+          acuityOk
+            ? 'Both eyes read the chart clearly.'
+            : 'One or both eyes had difficulty reading the smaller lines.'
+        }`,
+      },
+      {
+        key: 'color',
+        label: 'Colour Vision',
+        ok: colorOk,
+        detail:
+          colorVision === 'normal'
+            ? 'Normal colour discrimination.'
+            : colorVision === 'mild'
+            ? 'Possible mild colour vision deficiency.'
+            : 'Signs of colour vision deficiency detected.',
+      },
+      {
+        key: 'astigmatism',
+        label: 'Astigmatism',
+        ok: astigmatismOk,
+        detail: astigmatismOk
+          ? 'All lines appeared equally dark and clear — no irregularity detected.'
+          : 'Some lines appeared darker or thicker than others.',
+      },
+    ];
 
   return (
     <ScrollView
@@ -2880,73 +2866,85 @@ const RefractionResult: React.FC<{
           { backgroundColor: cfg.bg, borderColor: cfg.color + '40' },
         ]}
       >
-        <Ionicons name={cfg.icon as any} size={40} color={cfg.color} />
+        <Ionicons name={cfg.icon as any} size={48} color={cfg.color} />
         <AppText style={[rfStyles.riskLabel, { color: cfg.color }]}>
           {cfg.label}
         </AppText>
         <AppText style={rfStyles.riskSummary}>{cfg.summary}</AppText>
       </View>
 
-      {/* Per-test breakdown */}
-      <AppText style={styles.sectionLabel}>Test Results</AppText>
-      {checks.map(c => (
-        <View key={c.label} style={rfStyles.checkRow}>
-          <View
-            style={[
-              rfStyles.checkIcon,
-              {
-                backgroundColor: c.ok
-                  ? 'rgba(45,189,126,0.12)'
-                  : 'rgba(231,76,60,0.12)',
-              },
-            ]}
-          >
-            <Ionicons
-              name={c.ok ? 'checkmark' : 'close'}
-              size={16}
-              color={c.ok ? '#2DBD7E' : '#E74C3C'}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <AppText style={rfStyles.checkLabel}>{c.label}</AppText>
-            <AppText style={rfStyles.checkDetail}>{c.detail}</AppText>
-          </View>
-        </View>
-      ))}
-
-      {/* Separate section — Eye Health Screening */}
-      <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>
-        Eye Health Screening
-      </Text>
-      {healthChecks.map(c => (
-        <View key={c.label} style={rfStyles.checkRow}>
-          <View
-            style={[
-              rfStyles.checkIcon,
-              {
-                backgroundColor: c.ok
-                  ? 'rgba(45,189,126,0.12)'
-                  : 'rgba(244,168,48,0.14)',
-              },
-            ]}
-          >
-            <Ionicons
-              name={c.ok ? 'checkmark' : 'alert'}
-              size={16}
-              color={c.ok ? '#2DBD7E' : '#F4A830'}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={rfStyles.checkLabel}>{c.label}</Text>
-            <Text style={rfStyles.checkDetail}>{c.detail}</Text>
-          </View>
-        </View>
-      ))}
-
-      {/* Advice card */}
+      {/* Recommendation */}
       <View style={[rfStyles.adviceCard, { borderLeftColor: cfg.color }]}>
         <AppText style={rfStyles.adviceTitle}>Our Recommendation</AppText>
         <AppText style={rfStyles.adviceText}>{cfg.advice}</AppText>
+      </View>
+
+      {/* Specialist referral card */}
+      <View style={rfStyles.specialistCard}>
+        <AppText style={rfStyles.specialistText}>
+          If you have an eye condition and need to see a specialist, please
+          submit a request below. A referral is necessary for a specialist
+          appointment, which you can obtain from your General Practitioner or
+          Optometrist.
+        </AppText>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => setShowBooking(true)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="calendar-outline" size={18} color={Colors.white} />
+          <AppText style={styles.primaryBtnText}>
+            Request for specialist appointment
+          </AppText>
+        </TouchableOpacity>
+      </View>
+
+      {/* Per-test accordion */}
+      <View style={rfStyles.accordionCard}>
+        {results.map((r, idx) => {
+          const isOpen = expanded === r.key;
+          return (
+            <View
+              key={r.key}
+              style={[
+                rfStyles.accordionRow,
+                idx > 0 && rfStyles.accordionRowBorder,
+              ]}
+            >
+              <TouchableOpacity
+                style={rfStyles.accordionHeader}
+                onPress={() => setExpanded(isOpen ? null : r.key)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    rfStyles.faceCircle,
+                    {
+                      backgroundColor: r.ok
+                        ? 'rgba(45,189,126,0.14)'
+                        : 'rgba(244,168,48,0.16)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={r.ok ? 'happy' : 'sad'}
+                    size={24}
+                    color={r.ok ? '#2DBD7E' : '#F4A830'}
+                  />
+                </View>
+                <AppText style={rfStyles.accordionLabel}>{r.label}</AppText>
+                <Ionicons
+                  name={isOpen ? 'chevron-up' : 'chevron-down'}
+                  size={22}
+                  color={Colors.gray600}
+                />
+              </TouchableOpacity>
+              {isOpen && (
+                <AppText style={rfStyles.accordionDetail}>{r.detail}</AppText>
+              )}
+            </View>
+          );
+        })}
       </View>
 
       <BookingModal
@@ -2954,28 +2952,13 @@ const RefractionResult: React.FC<{
         onClose={() => setShowBooking(false)}
       />
 
-      {/* CTAs */}
-      {risk !== 'low' && (
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => setShowBooking(true)}
-          activeOpacity={0.82}
-        >
-          <Ionicons name="calendar-outline" size={19} color={Colors.white} />
-          <AppText style={styles.primaryBtnText}>Book Appointment</AppText>
-        </TouchableOpacity>
-      )}
-
       <TouchableOpacity
-        style={[
-          styles.outlineBtn,
-          { marginTop: risk !== 'low' ? Spacing.sm : 0 },
-        ]}
+        style={[styles.primaryBtn, { marginTop: Spacing.lg }]}
         onPress={onRetry}
-        activeOpacity={0.8}
+        activeOpacity={0.82}
       >
-        <Ionicons name="refresh-outline" size={17} color={Colors.primary} />
-        <AppText style={styles.outlineBtnText}>Retake Test</AppText>
+        <Ionicons name="refresh-outline" size={18} color={Colors.white} />
+        <AppText style={styles.primaryBtnText}>Re-do Test</AppText>
       </TouchableOpacity>
 
       <View style={rfStyles.footerNote}>
@@ -2985,8 +2968,8 @@ const RefractionResult: React.FC<{
           color={Colors.gray400}
         />
         <AppText style={rfStyles.footerNoteText}>
-          Results are indicative only. A full clinical refraction by a licensed
-          optometrist is required for a prescription.
+          Results are indicative only. A full clinical eye examination by a
+          licensed optometrist is required for a prescription.
         </AppText>
       </View>
     </ScrollView>
@@ -2997,102 +2980,104 @@ const RefractionResult: React.FC<{
 
 const RefractionFlow: React.FC = () => {
   const [stage, setStage] = useState<RefractionStage>('intro');
-  const [acuityPass, setAcuityPass] = useState(0);
-  const [contrast, setContrast] = useState<ContrastResult>('good');
-  const [astigmatism, setAstigmatism] = useState<'equal' | 'unequal'>('equal');
+  const [acuityLeftPass, setAcuityLeftPass] = useState(0);
+  const [acuityRightPass, setAcuityRightPass] = useState(0);
+  const [astigmatismLeft, setAstigmatismLeft] = useState<'equal' | 'unequal'>(
+    'equal',
+  );
+  const [astigmatismRight, setAstigmatismRight] = useState<'equal' | 'unequal'>(
+    'equal',
+  );
   const [colorVision, setColorVision] = useState<ColorResult>('normal');
-  const [nearVision, setNearVision] = useState<'clear' | 'blurry'>('clear');
-  const [visualField, setVisualField] = useState<VisualFieldResult>('full');
-  const [eyeMuscle, setEyeMuscle] = useState<EyeMuscleResult>('aligned');
-  const [pupil, setPupil] = useState<PupilResult>('normal');
-  const [healthRiskFactors, setHealthRiskFactors] = useState(0);
+
+  // Worst-eye result carries the risk score, same approach as acuity.
+  const astigmatism: 'equal' | 'unequal' =
+    astigmatismLeft === 'unequal' || astigmatismRight === 'unequal'
+      ? 'unequal'
+      : 'equal';
 
   // Fresh randomised content per run; `runId` bumps on retry to regenerate it.
   const [runId, setRunId] = useState(0);
   const testSet = useMemo(
     () => ({
-      acuityRows: genAcuityRows(),
-      contrastLevels: genContrastLevels(),
-      cvPlates: genCvPlates(3),
-      nearText: genNearText(),
+      acuityRowsLeft: genAcuityRows(),
+      acuityRowsRight: genAcuityRows(),
+      cvPlates: genCvPlates(5),
     }),
     [runId],
   );
 
-  const handleAcuityDone = (passCount: number) => {
-    setAcuityPass(passCount);
-    setStage('contrast');
+  const handleAcuityLeftDone = (passCount: number) => {
+    setAcuityLeftPass(passCount);
+    setStage('acuityRightReady');
   };
 
-  const handleContrastDone = (result: ContrastResult) => {
-    setContrast(result);
-    setStage('astigmatism');
-  };
-
-  const handleAstigmatismDone = (result: 'equal' | 'unequal') => {
-    setAstigmatism(result);
+  const handleAcuityRightDone = (passCount: number) => {
+    setAcuityRightPass(passCount);
     setStage('colorVision');
   };
 
   const handleColorVisionDone = (result: ColorResult) => {
     setColorVision(result);
-    setStage('nearVision');
+    setStage('astigmatismLeftReady');
   };
 
-  const handleNearVisionDone = (result: 'clear' | 'blurry') => {
-    setNearVision(result);
-    setStage('visualField');
+  const handleAstigmatismLeftDone = (result: 'equal' | 'unequal') => {
+    setAstigmatismLeft(result);
+    setStage('astigmatismRightReady');
   };
 
-  const handleVisualFieldDone = (result: VisualFieldResult) => {
-    setVisualField(result);
-    setStage('eyeMuscle');
-  };
-
-  const handleEyeMuscleDone = (result: EyeMuscleResult) => {
-    setEyeMuscle(result);
-    setStage('pupil');
-  };
-
-  const handlePupilDone = (result: PupilResult) => {
-    setPupil(result);
-    setStage('eyeHealth');
-  };
-
-  const handleEyeHealthDone = (riskFactorCount: number) => {
-    setHealthRiskFactors(riskFactorCount);
+  const handleAstigmatismRightDone = (result: 'equal' | 'unequal') => {
+    setAstigmatismRight(result);
     setStage('result');
   };
 
   const handleRetry = () => {
-    setAcuityPass(0);
-    setContrast('good');
-    setAstigmatism('equal');
+    setAcuityLeftPass(0);
+    setAcuityRightPass(0);
+    setAstigmatismLeft('equal');
+    setAstigmatismRight('equal');
     setColorVision('normal');
-    setNearVision('clear');
-    setVisualField('full');
-    setEyeMuscle('aligned');
-    setPupil('normal');
-    setHealthRiskFactors(0);
     setRunId(prev => prev + 1); // regenerate randomised test content
     setStage('intro');
   };
 
   if (stage === 'intro')
-    return <RefractionIntro onStart={() => setStage('acuity')} />;
-  if (stage === 'acuity')
+    return <RefractionIntro onStart={() => setStage('acuityLeftReady')} />;
+  if (stage === 'acuityLeftReady')
     return (
-      <AcuityStep rows={testSet.acuityRows} onComplete={handleAcuityDone} />
-    );
-  if (stage === 'contrast')
-    return (
-      <ContrastStep
-        levels={testSet.contrastLevels}
-        onComplete={handleContrastDone}
+      <EyeCoverStep
+        eye="left"
+        stepNum="1a"
+        testName="Visual Acuity"
+        onContinue={() => setStage('acuityLeft')}
       />
     );
-  if (stage === 'astigmatism')
-    return <AstigmatismStep onComplete={handleAstigmatismDone} />;
+  if (stage === 'acuityLeft')
+    return (
+      <AcuityStep
+        eye="left"
+        rows={testSet.acuityRowsLeft}
+        onComplete={handleAcuityLeftDone}
+      />
+    );
+  if (stage === 'acuityRightReady')
+    return (
+      <EyeCoverStep
+        eye="right"
+        stepNum="1b"
+        testName="Visual Acuity"
+        onContinue={() => setStage('acuityRight')}
+      />
+    );
+  if (stage === 'acuityRight')
+    return (
+      <AcuityStep
+        eye="right"
+        rows={testSet.acuityRowsRight}
+        onComplete={handleAcuityRightDone}
+      />
+    );
   if (stage === 'colorVision')
     return (
       <ColorVisionStep
@@ -3100,44 +3085,44 @@ const RefractionFlow: React.FC = () => {
         onComplete={handleColorVisionDone}
       />
     );
-  if (stage === 'nearVision')
+  if (stage === 'astigmatismLeftReady')
     return (
-      <NearVisionStep
-        text={testSet.nearText}
-        onComplete={handleNearVisionDone}
+      <EyeCoverStep
+        eye="left"
+        stepNum="3a"
+        testName="Astigmatism Check"
+        onContinue={() => setStage('astigmatismLeft')}
       />
     );
-  if (stage === 'visualField')
-    return <VisualFieldStep onComplete={handleVisualFieldDone} />;
-  if (stage === 'eyeMuscle')
-    return <EyeMuscleStep onComplete={handleEyeMuscleDone} />;
-  if (stage === 'pupil')
-    return <PupilResponseStep onComplete={handlePupilDone} />;
-  if (stage === 'eyeHealth')
-    return <EyeHealthStep onComplete={handleEyeHealthDone} />;
+  if (stage === 'astigmatismLeft')
+    return (
+      <AstigmatismStep eye="left" onComplete={handleAstigmatismLeftDone} />
+    );
+  if (stage === 'astigmatismRightReady')
+    return (
+      <EyeCoverStep
+        eye="right"
+        stepNum="3b"
+        testName="Astigmatism Check"
+        onContinue={() => setStage('astigmatismRight')}
+      />
+    );
+  if (stage === 'astigmatismRight')
+    return (
+      <AstigmatismStep eye="right" onComplete={handleAstigmatismRightDone} />
+    );
 
   return (
     <RefractionResult
       risk={computeRisk(
-        acuityPass,
+        Math.min(acuityLeftPass, acuityRightPass),
         astigmatism,
-        nearVision,
-        contrast,
         colorVision,
-        visualField,
-        eyeMuscle,
-        pupil,
-        healthRiskFactors,
       )}
-      acuityPass={acuityPass}
-      contrast={contrast}
+      acuityLeftPass={acuityLeftPass}
+      acuityRightPass={acuityRightPass}
       astigmatism={astigmatism}
       colorVision={colorVision}
-      nearVision={nearVision}
-      visualField={visualField}
-      eyeMuscle={eyeMuscle}
-      pupil={pupil}
-      healthRiskFactors={healthRiskFactors}
       onRetry={handleRetry}
     />
   );
@@ -3151,6 +3136,9 @@ const ScanScreen: React.FC = () => {
   const [tab, setTab] = useState<Tab>('face');
   const [faceScanStage, setFaceScanStage] = useState<FaceScanStage>('idle');
   const [faceShape, setFaceShape] = useState<FaceShape | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [metrics, setMetrics] = useState<FaceMetrics | null>(null);
+  const [debug, setDebug] = useState<FaceDebug | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const isScanning =
@@ -3179,8 +3167,16 @@ const ScanScreen: React.FC = () => {
     setFaceScanStage('countdown');
   }, []);
 
-  const handleShapeDetected = (shape: FaceShape) => {
+  const handleShapeDetected = (
+    shape: FaceShape,
+    conf: number,
+    m: FaceMetrics | null,
+    dbg: FaceDebug | null,
+  ) => {
     setFaceShape(shape);
+    setConfidence(conf);
+    setMetrics(m);
+    setDebug(dbg);
     // Brief pause so the user sees "Scan complete!" in the camera view,
     // then transition: close camera, open bottom sheet.
     setTimeout(() => {
@@ -3192,6 +3188,8 @@ const ScanScreen: React.FC = () => {
   const handleSheetClose = () => {
     setSheetVisible(false);
     setFaceShape(null);
+    setConfidence(null);
+    setMetrics(null);
     setFaceScanStage('idle');
   };
 
@@ -3234,6 +3232,8 @@ const ScanScreen: React.FC = () => {
             <FaceShapeSelector
               onSelect={shape => {
                 setFaceShape(shape);
+                setConfidence(null);
+                setMetrics(null);
                 setFaceScanStage('idle');
                 setSheetVisible(true);
               }}
@@ -3246,6 +3246,9 @@ const ScanScreen: React.FC = () => {
             <GlassesBottomSheet
               visible={sheetVisible}
               shape={faceShape}
+              confidence={confidence}
+              metrics={metrics}
+              debug={debug}
               onClose={handleSheetClose}
             />
           )}
@@ -3343,7 +3346,7 @@ const gsStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: SCREEN_HEIGHT * 0.78,
+    maxHeight: SCREEN_HEIGHT * 0.88,
     backgroundColor: Colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -3372,34 +3375,11 @@ const gsStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.glassBorder,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  shapeIconSmall: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerOverline: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.gray400,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  headerShape: {
-    fontSize: FontSize.xl,
-    fontWeight: '900',
-    color: Colors.primary,
-    letterSpacing: -0.5,
-    marginTop: 1,
+  headerTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: -0.2,
   },
   closeBtn: {
     width: 34,
@@ -3411,77 +3391,367 @@ const gsStyles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: Platform.OS === 'ios' ? 40 : Spacing.xxl,
   },
-  insightCard: {
+
+  // ── Hero: face shape + confidence ──
+  heroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm + 2,
     backgroundColor: Colors.primaryLight,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.primaryGlow,
     padding: Spacing.md,
-    marginBottom: Spacing.md,
   },
-  insightDesc: {
+  heroIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroOverline: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  heroShape: {
+    fontSize: FontSize.xxl,
+    fontWeight: '900',
+    color: Colors.primary,
+    letterSpacing: -0.6,
+    marginTop: 1,
+  },
+  heroConf: {
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 62,
+  },
+  heroConfPct: {
+    fontSize: FontSize.lg,
+    fontWeight: '900',
+    color: Colors.success,
+    letterSpacing: -0.4,
+  },
+  heroConfLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.gray400,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  heroDesc: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: Colors.gray600,
     lineHeight: 20,
-    fontWeight: '500',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+    paddingHorizontal: 2,
   },
-  insightDivider: {
-    height: 1,
-    backgroundColor: Colors.primaryGlow,
-    marginVertical: Spacing.sm,
-  },
-  insightTipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  insightTip: {
-    flex: 1,
-    fontSize: FontSize.xs,
-    color: Colors.primary,
-    lineHeight: 17,
-    fontWeight: '600',
-  },
-  recHeader: {
+
+  // ── Section heading ──
+  sectionHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
   },
-  recBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.md,
+  sectionH: {
+    fontSize: FontSize.lg,
+    fontWeight: '900',
+    color: Colors.black,
+    letterSpacing: -0.4,
+  },
+  countBadge: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recTitle: {
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  sectionSub: {
+    fontSize: FontSize.xs,
+    color: Colors.gray400,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: Spacing.md,
+  },
+
+  // ── Recommendation cards (the focal point) ──
+  recList: { gap: Spacing.sm + 2, marginBottom: Spacing.md },
+  recCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    padding: Spacing.md,
+    ...Shadow.sm,
+  },
+  recCardBest: {
+    borderColor: Colors.primary,
+    borderWidth: 1.5,
+    backgroundColor: Colors.primaryLight,
+  },
+  bestTag: {
+    position: 'absolute',
+    top: -9,
+    left: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  bestTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.6,
+  },
+  recCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm + 2,
+  },
+  recIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recIconBest: {
+    backgroundColor: Colors.primary,
+  },
+  recName: {
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,
     letterSpacing: -0.2,
+    marginBottom: 2,
   },
-  recSub: {
+  recReason: {
     fontSize: FontSize.xs,
-    color: Colors.gray400,
-    fontWeight: '500',
-    marginTop: 1,
+    color: Colors.gray600,
+    lineHeight: 16,
+  },
+  recCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 5,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.glassBorder,
+  },
+  recCtaText: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.2,
+  },
+
+  // ── Styling tip ──
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: Colors.gray50,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: FontSize.xs,
+    color: Colors.gray700,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
+
+  // ── Measurements toggle (secondary) ──
+  measureToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    marginBottom: Spacing.md,
+  },
+  measureToggleText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.gray700,
   },
   footerNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
+    gap: 7,
     marginTop: Spacing.lg,
   },
   footerNoteText: {
     flex: 1,
-    fontSize: 11,
-    color: Colors.gray400,
+    fontSize: FontSize.xs,
+    color: Colors.gray600,
+    lineHeight: 17,
+  },
+
+  // ── Face Shape Analysis card ──
+  analysisCard: {
+    backgroundColor: Colors.gray50,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  confRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  confPill: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  confPillText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  confPct: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: -0.3,
+  },
+  analysisLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: Spacing.xs,
+  },
+  barRow: { gap: 5 },
+  barTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  barLabel: { fontSize: FontSize.sm, color: Colors.gray700, fontWeight: '600' },
+  barPct: { fontSize: FontSize.sm, fontWeight: '800' },
+  barTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.gray200,
+    overflow: 'hidden',
+  },
+  barFill: { height: '100%', borderRadius: 3 },
+  tileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  tile: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    padding: Spacing.sm + 2,
+  },
+  tileLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  tileValue: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: -0.3,
+  },
+  detCard: {
+    backgroundColor: 'rgba(45,189,126,0.10)',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(45,189,126,0.25)',
+    padding: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  detLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.black,
+    marginBottom: 2,
+  },
+  detValue: {
+    fontSize: 34,
+    fontWeight: '900',
+    color: Colors.success,
+    letterSpacing: -1,
+  },
+  detHint: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
     lineHeight: 16,
+    marginTop: 2,
+  },
+  // TEMPORARY — calibration panel. Remove with the FaceDebug plumbing.
+  dbgCard: {
+    backgroundColor: 'rgba(244,168,48,0.10)',
+    borderColor: 'rgba(244,168,48,0.45)',
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  dbgTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: '#B87A10',
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+  },
+  dbgRow: {
+    fontSize: FontSize.xs,
+    color: Colors.gray700,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 18,
   },
 });
 
@@ -3603,10 +3873,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   heroSub: {
-    fontSize: FontSize.sm,
-    color: Colors.gray500,
+    fontSize: FontSize.md,
+    color: Colors.gray700,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 23,
   },
   overlineLabel: {
     fontSize: FontSize.xs,
@@ -3665,8 +3935,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   featureIconBox: {
-    width: 40,
-    height: 40,
+    width: 46,
+    height: 46,
     borderRadius: BorderRadius.sm,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
@@ -3674,62 +3944,67 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   featureTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontSize: FontSize.md,
+    fontWeight: '800',
     color: Colors.black,
-    marginBottom: 2,
+    marginBottom: 3,
   },
-  featureDesc: { fontSize: FontSize.xs, color: Colors.gray500, lineHeight: 16 },
+  featureDesc: {
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+    lineHeight: 19,
+  },
 
   // Disclaimer
   disclaimerCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.04)',
+    gap: Spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.lg,
   },
   disclaimerText: {
     flex: 1,
-    fontSize: 11,
-    color: Colors.gray400,
-    lineHeight: 16,
+    fontSize: FontSize.sm,
+    color: Colors.gray600,
+    lineHeight: 19,
   },
 
   // Acuity / step shared
   stepHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
   },
   stepCounter: {
-    fontSize: FontSize.xs,
-    color: Colors.gray500,
-    fontWeight: '600',
-  },
-  stepCounterRight: {
-    fontSize: FontSize.xs,
-    color: Colors.primary,
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
     fontWeight: '700',
   },
+  stepCounterRight: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: '800',
+  },
   progressTrack: {
-    height: 4,
+    height: 10,
     backgroundColor: Colors.glassBorder,
-    borderRadius: 2,
+    borderRadius: 5,
     marginBottom: Spacing.lg,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: Colors.primary,
-    borderRadius: 2,
+    borderRadius: 5,
   },
   acuityCard: {
-    backgroundColor: Colors.glassSurfaceHigh,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.xl,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.glassBorderStrong,
     padding: Spacing.xl,
     alignItems: 'center',
@@ -3737,44 +4012,38 @@ const styles = StyleSheet.create({
     ...Shadow.md,
   },
   acuityInstruction: {
-    fontSize: FontSize.xs,
-    color: Colors.gray500,
+    fontSize: FontSize.md,
+    color: Colors.gray700,
     textAlign: 'center',
     marginBottom: Spacing.lg,
-    lineHeight: 18,
+    lineHeight: 22,
   },
   acuityLetterBox: {
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
-  acuityLetters: {
-    fontWeight: '700',
-    color: Colors.black,
-    letterSpacing: 4,
-    fontVariant: ['tabular-nums'],
-  },
   acuityLabel: {
-    marginTop: 6,
-    fontSize: 10,
-    color: Colors.gray400,
-    fontWeight: '600',
+    marginTop: 8,
+    fontSize: FontSize.xs,
+    color: Colors.gray600,
+    fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   acuityQuestion: {
-    fontSize: FontSize.sm,
-    color: Colors.gray700,
+    fontSize: FontSize.lg,
+    color: Colors.black,
     textAlign: 'center',
-    fontWeight: '600',
-    lineHeight: 20,
+    fontWeight: '700',
+    lineHeight: 24,
   },
 
   // Frames grid
   sectionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.gray400,
-    letterSpacing: 0.8,
+    fontSize: FontSize.sm,
+    fontWeight: '800',
+    color: Colors.gray600,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginBottom: Spacing.sm,
   },
@@ -3828,51 +4097,59 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
 
-  // Buttons
+  // Buttons — sized for easy one-thumb tapping (min ~58px tall)
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
+    gap: 10,
+    minHeight: 58,
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.lg,
-    paddingVertical: 15,
+    paddingVertical: 16,
+    paddingHorizontal: Spacing.md,
     ...Shadow.md,
   },
   primaryBtnText: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.lg,
     fontWeight: '800',
     color: Colors.white,
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
   outlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 13,
+    gap: 8,
+    minHeight: 58,
+    paddingVertical: 16,
+    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: Colors.primaryGlow,
     backgroundColor: Colors.primaryLight,
   },
   outlineBtnText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
+    fontSize: FontSize.md,
+    fontWeight: '800',
     color: Colors.primary,
+    textAlign: 'center',
   },
 
   // Face scan — scanning
   cancelArea: { position: 'absolute', top: 0, left: 0, right: 0 },
   cancelBtn: {
-    margin: Spacing.md,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(12,16,20,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.sm,
   },
 });
 
@@ -3901,21 +4178,214 @@ const rfStyles = StyleSheet.create({
     position: 'absolute',
   },
 
-  // Near vision text box
-  nearTextBox: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    padding: Spacing.md,
-    marginVertical: Spacing.md,
-    width: '100%',
+  // Direction compass (Landolt C acuity test) — sized for 16 buttons
+  compassContainer: {
+    width: 284,
+    height: 284,
+    alignSelf: 'center',
+    marginVertical: Spacing.lg,
   },
-  nearText: {
-    fontSize: 13,
-    color: Colors.black,
+  compassBtn: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorderStrong,
+    ...Shadow.sm,
+  },
+  compassBtnCorrect: {
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
+  },
+  compassBtnWrong: {
+    backgroundColor: Colors.error,
+    borderColor: Colors.error,
+  },
+
+  // Countdown bar — shared by timed steps
+  timerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: Spacing.sm,
+  },
+  timerTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: Colors.glassBorder,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  timerFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 3,
+  },
+  timerFillDanger: {
+    backgroundColor: Colors.error,
+  },
+  timerText: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: Colors.gray500,
+    minWidth: 24,
+    textAlign: 'right',
+  },
+  timerTextDanger: {
+    color: Colors.error,
+  },
+
+  // One-hand usage banner (intro)
+  oneHandBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryGlow,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+    alignSelf: 'stretch',
+  },
+  oneHandBannerText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.primaryDark,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+
+  // Cover-eye reminder banner (per test step)
+  coverEyeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryGlow,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  coverEyeBannerText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+    fontWeight: '600',
     lineHeight: 20,
-    fontWeight: '400',
+  },
+  coverEyeBold: {
+    fontSize: FontSize.sm,
+    fontWeight: '900',
+    color: Colors.primaryDark,
+    textTransform: 'capitalize',
+  },
+
+  // Answer buttons — colour-coded so a Yes/No choice reads at a glance
+  answerYesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 58,
+    paddingVertical: 16,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.success,
+    ...Shadow.md,
+  },
+  answerYesBtnText: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.white,
+    textAlign: 'center',
+  },
+  answerNoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 58,
+    paddingVertical: 16,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: Colors.error,
+    backgroundColor: Colors.errorLight,
+    marginTop: Spacing.sm,
+  },
+  answerNoBtnText: {
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.error,
+    textAlign: 'center',
+  },
+
+  // Result — specialist referral card
+  specialistCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorderStrong,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+    ...Shadow.sm,
+  },
+  specialistText: {
+    fontSize: FontSize.md,
+    color: Colors.gray700,
+    lineHeight: 22,
+  },
+
+  // Result — accordion list
+  accordionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorder,
+    overflow: 'hidden',
+    ...Shadow.sm,
+  },
+  accordionRow: {
+    paddingHorizontal: Spacing.md,
+  },
+  accordionRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md + 2,
+    minHeight: 64,
+  },
+  faceCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  accordionLabel: {
+    flex: 1,
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: Colors.black,
+  },
+  accordionDetail: {
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+    lineHeight: 20,
+    paddingBottom: Spacing.md,
+    paddingLeft: 44 + Spacing.md,
   },
 
   // Risk card (result)
@@ -3928,64 +4398,39 @@ const rfStyles = StyleSheet.create({
     gap: Spacing.xs,
   },
   riskLabel: {
-    fontSize: FontSize.xl,
+    fontSize: FontSize.xxl,
     fontWeight: '900',
     letterSpacing: -0.3,
     marginTop: Spacing.xs,
   },
   riskSummary: {
-    fontSize: FontSize.sm,
-    color: Colors.gray600,
+    fontSize: FontSize.md,
+    color: Colors.gray700,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
-
-  // Per-check row
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.md,
-    backgroundColor: Colors.glassSurface,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  checkIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  checkLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.black,
-    marginBottom: 2,
-  },
-  checkDetail: { fontSize: FontSize.xs, color: Colors.gray500, lineHeight: 16 },
 
   // Advice card
   adviceCard: {
-    backgroundColor: Colors.glassSurfaceHigh,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.lg,
-    borderLeftWidth: 4,
-    padding: Spacing.md,
-    marginVertical: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.glassBorder,
+    borderLeftWidth: 5,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    ...Shadow.sm,
   },
   adviceTitle: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,
     marginBottom: 6,
   },
   adviceText: {
-    fontSize: FontSize.sm,
-    color: Colors.gray600,
-    lineHeight: 20,
+    fontSize: FontSize.md,
+    color: Colors.gray700,
+    lineHeight: 22,
   },
 
   // Ishihara plate
@@ -3996,6 +4441,8 @@ const rfStyles = StyleSheet.create({
     overflow: 'hidden',
     alignSelf: 'center',
     marginVertical: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.gray300,
   },
   plateWebView: {
     width: 260,
@@ -4007,14 +4454,14 @@ const rfStyles = StyleSheet.create({
   footerNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
+    gap: 7,
     marginTop: Spacing.lg,
   },
   footerNoteText: {
     flex: 1,
-    fontSize: 11,
-    color: Colors.gray400,
-    lineHeight: 16,
+    fontSize: FontSize.xs,
+    color: Colors.gray600,
+    lineHeight: 17,
   },
 });
 

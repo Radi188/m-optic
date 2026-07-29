@@ -21,6 +21,7 @@ import PrescriptionDetailScreen from '../screens/PrescriptionDetailScreen';
 import GlassesListScreen from '../screens/GlassesListScreen';
 import SearchResultScreen from '../screens/SearchResultScreen';
 import SearchScreen from '../screens/SearchScreen';
+import ScanScreen from '../screens/ScanScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -136,6 +137,14 @@ const RootStackNavigator: React.FC = () => {
               animation: 'slide_from_right',
             }}
           />
+          <Stack.Screen
+            name="Scan"
+            component={ScanScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
         </>
       ) : (
         // ── Unauthenticated stack — Splash → Main, Login reachable from Profile
@@ -172,6 +181,14 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="GlassesList"
             component={GlassesListScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="Scan"
+            component={ScanScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_right',
