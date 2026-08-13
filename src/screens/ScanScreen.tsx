@@ -38,11 +38,14 @@ type Tab = 'face' | 'refraction';
 type FaceScanStage = 'idle' | 'countdown' | 'scanning' | 'selecting';
 type RefractionStage =
   | 'intro'
+  | 'acuityIntro'
   | 'acuityLeftReady'
   | 'acuityLeft'
   | 'acuityRightReady'
   | 'acuityRight'
+  | 'colorIntro'
   | 'colorVision'
+  | 'astigmatismIntro'
   | 'astigmatismLeftReady'
   | 'astigmatismLeft'
   | 'astigmatismRightReady'
@@ -150,46 +153,65 @@ function shuffle<T>(arr: T[]): T[] {
 const pick = <T,>(arr: T[], n: number): T[] => shuffle(arr).slice(0, n);
 
 // Landolt C — a ring with a gap; the gap direction is the thing being tested.
-// 16 directions around the clock, spaced 22.5° apart, 0 = gap pointing up —
-// a fine enough step that guessing is unreliable.
-const LANDOLT_ANGLES = Array.from({ length: 16 }, (_, i) => i * 22.5);
-const LANDOLT_DIRECTIONS: { angle: number; label: string }[] =
-  LANDOLT_ANGLES.map(angle => ({ angle, label: `${angle}°` }));
-
-type AcuityRow = { size: number; angle: number; label: string };
-
-// Sizes/labels are fixed (they define the acuity line); only the gap angle
-// varies. Eight shrinking levels — reaching the bottom requires seven
-// consecutive correct reads under the timer.
-const ACUITY_SPEC = [
-  { size: 64, label: '20/200' },
-  { size: 50, label: '20/100' },
-  { size: 40, label: '20/70' },
-  { size: 32, label: '20/50' },
-  { size: 26, label: '20/40' },
-  { size: 21, label: '20/30' },
-  { size: 17, label: '20/20' },
-  { size: 14, label: '20/15' },
+// 8 directions around the clock, spaced 45° apart, 0 = gap pointing up. The
+// coarser step keeps the choice unambiguous on a phone-sized target.
+const LANDOLT_ANGLES = Array.from({ length: 8 }, (_, i) => i * 45);
+const LANDOLT_LABELS = [
+  'Up',
+  'Up-right',
+  'Right',
+  'Down-right',
+  'Down',
+  'Down-left',
+  'Left',
+  'Up-left',
 ];
-const genAcuityRows = (): AcuityRow[] =>
-  ACUITY_SPEC.map(s => ({
-    size: s.size,
-    label: s.label,
-    angle: LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)],
-  }));
+const LANDOLT_DIRECTIONS: { angle: number; label: string }[] =
+  LANDOLT_ANGLES.map((angle, i) => ({ angle, label: LANDOLT_LABELS[i] }));
 
-// Seconds allowed to answer each ring before it's auto-marked wrong.
-const ACUITY_TIME_LIMIT = 4;
+// The size ladder, biggest first. A correct read steps one rung down (smaller),
+// a miss steps one rung back up (bigger), clamped at both ends — so a wrong
+// answer never ends the test, it just makes the next ring easier to read.
+// Sizes bottom out at 8dp: below that the gap is thinner than the ring's own
+// anti-aliasing and the answer becomes a coin flip rather than a vision test.
+const ACUITY_LADDER = [
+  { size: 48, label: '20/200' },
+  { size: 38, label: '20/100' },
+  { size: 30, label: '20/70' },
+  { size: 24, label: '20/50' },
+  { size: 20, label: '20/40' },
+  { size: 16, label: '20/30' },
+  { size: 13, label: '20/20' },
+  { size: 11, label: '20/15' },
+  { size: 9, label: '20/13' },
+  { size: 8, label: '20/10' },
+];
+// Deliberately starts near the bottom of the ladder: the first ring already
+// takes real effort to focus on. Five rungs above it absorb early misses, and
+// the four below are exactly enough for a clean run of ACUITY_TRIALS.
+const ACUITY_START_LEVEL = 5; // 20/30 — 16dp
+// Every eye gets exactly this many rings, right or wrong.
+const ACUITY_TRIALS = 5;
+
+// Only the gap direction is pre-rolled; the size comes from wherever the
+// staircase has walked to by that trial.
+const genAcuityAngles = (): number[] =>
+  Array.from(
+    { length: ACUITY_TRIALS },
+    () => LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)],
+  );
 
 function computeRisk(
   acuityPassCount: number,
   astigmatism: 'equal' | 'unequal',
   colorVision: ColorResult,
 ): RiskLevel {
+  // Correct reads out of ACUITY_TRIALS (5) — every eye always attempts all
+  // five, so this is a straight hit count on a self-adjusting size ladder.
   let score = 0;
-  if (acuityPassCount <= 1) score += 4;
-  else if (acuityPassCount <= 3) score += 2;
-  else if (acuityPassCount === 4) score += 1;
+  if (acuityPassCount === 0) score += 4;
+  else if (acuityPassCount <= 2) score += 2;
+  else if (acuityPassCount <= ACUITY_TRIALS - 1) score += 1;
   if (astigmatism === 'unequal') score += 2;
   if (colorVision === 'deficient') score += 3;
   else if (colorVision === 'mild') score += 1;
@@ -535,9 +557,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #retakeBtn{background:rgba(12,16,20,0.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);color:#fff}
 #analyzeBtn{background:#6FE3AE;color:#06120c;border-color:transparent;box-shadow:0 8px 22px rgba(111,227,174,0.45)}
 
-/* Shape-detected reveal badge — pops in once the measurement animation lands */
+/* Analyzing state — strips the live-scan chrome (HUD readouts, brackets,
+   animated mesh/beam, glowing guide frame) so the captured photo is clean and
+   only the reveal outline and the result badge remain. */
+#overlay.analyzing .hud,
+#overlay.analyzing .bracket,
+#overlay.analyzing .oval-clip,
+#overlay.analyzing .topbar,
+#overlay.analyzing #captureHint{opacity:0;transition:opacity .3s ease;pointer-events:none}
+#overlay.analyzing .guide-oval{border-color:rgba(255,255,255,0.14);box-shadow:0 0 0 2000px rgba(6,10,14,0.5)}
+#overlay.analyzing .guide-oval::after{animation:none;opacity:0}
+
+/* Shape-detected reveal badge — pops in once the reveal outline lands */
 #shapeBadge{
-  position:absolute;left:50%;top:16%;z-index:9;pointer-events:none;
+  position:absolute;left:50%;top:11%;z-index:9;pointer-events:none;
   transform:translate(-50%,-50%) scale(.7);opacity:0;
   display:flex;align-items:center;gap:8px;
   background:rgba(45,189,126,0.95);border:1px solid rgba(255,255,255,0.32);
@@ -597,6 +630,7 @@ if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='functi
   return;
 }
 
+var overlay=document.getElementById('overlay');
 var oval=document.getElementById('oval'),hint=document.getElementById('hint');
 var hudStatus=document.getElementById('hudStatus'),hudCoord=document.getElementById('hudCoord');
 var captureBtn=document.getElementById('captureBtn'),captureHint=document.getElementById('captureHint');
@@ -744,49 +778,29 @@ function setCaptureEnabled(v){
 }
 
 // ── Captured-face reveal animation ───────────────────────────────────────────
-// Snapshots the mirrored frame once, then runs a timed sequence over it:
-// mesh fades in -> a scan sweep -> each measurement line draws in with a
-// label -> a pulsing outline + badge confirms the detected shape. Everything
-// is drawn fresh each frame from the frozen photo so nothing flickers.
+// Deliberately minimal: the frozen photo stays fully visible. One soft sweep
+// says "working", then a thin contour traces the jaw/hairline edge — nothing
+// is drawn across the eyes, nose or mouth, and there are no labels or mesh
+// covering the face. The result itself is reported by the badge above it.
 function easeOut(t){return 1-Math.pow(1-t,3);}
 
-function roundRect(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);
-  ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);
-  ctx.arcTo(x,y,x+w,y,r);
-  ctx.closePath();
+var SWEEP_END=900,CONTOUR_START=250,CONTOUR_END=1150,BADGE_AT=1300,REVEAL_END=2000;
+
+// FACEMESH_FACE_OVAL is an unordered list of [a,b] index pairs; chain them into
+// one ordered loop so the outline can be drawn as a single traced path.
+var ovalOrder=null;
+function faceOvalOrder(){
+  if(ovalOrder)return ovalOrder;
+  if(typeof FACEMESH_FACE_OVAL==='undefined')return null;
+  var next={};
+  for(var i=0;i<FACEMESH_FACE_OVAL.length;i++){next[FACEMESH_FACE_OVAL[i][0]]=FACEMESH_FACE_OVAL[i][1];}
+  var start=FACEMESH_FACE_OVAL[0][0];
+  var order=[start],cur=next[start],guard=0;
+  while(cur!==undefined&&cur!==start&&guard++<FACEMESH_FACE_OVAL.length){order.push(cur);cur=next[cur];}
+  ovalOrder=order;
+  return order;
 }
 
-function drawMeasureLabel(ctx,x,y,text,color,canvasW){
-  var fontSize=Math.max(15,Math.round(canvasW/30));
-  ctx.font='700 '+fontSize+'px -apple-system,BlinkMacSystemFont,sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  var padX=13,padY=8;
-  var tw=ctx.measureText(text).width;
-  var bw=tw+padX*2,bh=fontSize+padY*2;
-  var bx=x-bw/2,by=y-bh-16;
-  ctx.fillStyle='rgba(6,10,14,0.8)';
-  roundRect(ctx,bx,by,bw,bh,bh/2);ctx.fill();
-  ctx.strokeStyle=color;ctx.lineWidth=1.3;
-  roundRect(ctx,bx,by,bw,bh,bh/2);ctx.stroke();
-  ctx.fillStyle='#fff';
-  ctx.fillText(text,x,by+bh/2+1);
-}
-
-var MEASURES=[
-  {a:54,b:284,color:'#6FE3AE',label:'Forehead'},
-  {a:234,b:454,color:'#F4A830',label:'Cheekbones'},
-  {a:172,b:397,color:'#E86AD8',label:'Jawline'},
-  {a:10,b:152,color:'#5FE9FF',label:'Face length'}
-];
-var MESH_END=480,SWEEP_END=740,LINE_DUR=320,LINE_GAP=60,LINE_LABEL_FADE=220;
-
-// photo is the already-frozen, mirrored snapshot taken at capture time (see
-// freezeFrame) — replayed every animation frame instead of re-sampling video,
-// since by this point the camera preview is hidden and paused anyway.
 function runCaptureAnimation(lm,shapeName,photo,onDone){
   var w=photo.width,h=photo.height;
   snapCanvas.width=w;snapCanvas.height=h;
@@ -795,22 +809,12 @@ function runCaptureAnimation(lm,shapeName,photo,onDone){
   function px(i){return w-lm[i].x*w;}
   function py(i){return lm[i].y*h;}
 
-  var lineStart=[];
-  for(var i=0;i<MEASURES.length;i++) lineStart.push(SWEEP_END+120+i*(LINE_DUR+LINE_GAP));
-  var linesEnd=lineStart[lineStart.length-1]+LINE_DUR;
-  var badgeStart=linesEnd+240;
-  var badgeDur=450;
-  var totalDur=badgeStart+badgeDur+650;
-
+  var order=faceOvalOrder();
   var hints=[
-    {t:0,text:'Mapping facial structure…'},
-    {t:SWEEP_END+40,text:'Measuring proportions…'},
-    {t:badgeStart-160,text:'Analyzing shape…'},
-    {t:badgeStart,text:'Shape detected!'}
+    {t:0,text:'Analyzing your face…'},
+    {t:BADGE_AT,text:'Analysis complete'}
   ];
-  var hintIdx=-1;
-  var badgeShown=false;
-  var t0=null;
+  var hintIdx=-1,badgeShown=false,t0=null;
 
   function frame(ts){
     if(t0===null)t0=ts;
@@ -825,80 +829,41 @@ function runCaptureAnimation(lm,shapeName,photo,onDone){
     ctx.clearRect(0,0,w,h);
     ctx.drawImage(photo,0,0,w,h);
 
-    // Mesh fades in over the frozen photo.
-    var meshT=Math.min(1,t/MESH_END);
-    if(meshT>0 && window.drawConnectors){
-      ctx.save();
-      ctx.globalAlpha=easeOut(meshT);
-      var thin={color:'rgba(95,233,255,0.30)',lineWidth:1};
-      var bold={color:'rgba(95,233,255,0.95)',lineWidth:2.5};
-      if(typeof FACEMESH_TESSELATION!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_TESSELATION,thin);
-      if(typeof FACEMESH_FACE_OVAL!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_FACE_OVAL,bold);
-      if(typeof FACEMESH_LEFT_EYEBROW!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_LEFT_EYEBROW,bold);
-      if(typeof FACEMESH_RIGHT_EYEBROW!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_RIGHT_EYEBROW,bold);
-      if(typeof FACEMESH_LIPS!=='undefined') window.drawConnectors(ctx,lm,FACEMESH_LIPS,bold);
-      ctx.restore();
-    }
-
-    // A light sweep crosses the face once, reinforcing "actively scanning".
+    // A single soft sweep passes down the photo once — the only moving part.
     if(t<SWEEP_END){
-      var sweepT=Math.min(1,t/SWEEP_END);
-      var sy=sweepT*h;
-      var grad=ctx.createLinearGradient(0,sy-46,0,sy+46);
-      grad.addColorStop(0,'rgba(95,233,255,0)');
-      grad.addColorStop(0.5,'rgba(95,233,255,0.4)');
-      grad.addColorStop(1,'rgba(95,233,255,0)');
+      var sy=easeOut(t/SWEEP_END)*h;
+      var band=h*0.06;
+      var grad=ctx.createLinearGradient(0,sy-band,0,sy+band);
+      grad.addColorStop(0,'rgba(111,227,174,0)');
+      grad.addColorStop(0.5,'rgba(111,227,174,0.20)');
+      grad.addColorStop(1,'rgba(111,227,174,0)');
       ctx.fillStyle=grad;
-      ctx.fillRect(0,sy-46,w,92);
+      ctx.fillRect(0,sy-band,w,band*2);
     }
 
-    // Measurement lines draw in one at a time, each with a glowing leading
-    // dot, then leave a label once complete.
-    for(var mi=0;mi<MEASURES.length;mi++){
-      var m=MEASURES[mi];
-      var lt=(t-lineStart[mi])/LINE_DUR;
-      if(lt<=0)continue;
-      lt=Math.min(1,lt);
-      var et=easeOut(lt);
-      var ax=px(m.a),ay=py(m.a),bx=px(m.b),by=py(m.b);
-      var cx=ax+(bx-ax)*et,cy=ay+(by-ay)*et;
-      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(cx,cy);
-      ctx.strokeStyle=m.color;ctx.lineWidth=3;ctx.lineCap='round';ctx.stroke();
-      ctx.beginPath();ctx.arc(ax,ay,4.5,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
-      if(lt<1){
-        ctx.save();
-        ctx.shadowColor=m.color;ctx.shadowBlur=12;
-        ctx.beginPath();ctx.arc(cx,cy,5.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
-        ctx.restore();
-      } else {
-        ctx.beginPath();ctx.arc(bx,by,4.5,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
-        var labelT=Math.min(1,(t-(lineStart[mi]+LINE_DUR))/LINE_LABEL_FADE);
-        if(labelT>0){
-          ctx.save();
-          ctx.globalAlpha=easeOut(labelT);
-          drawMeasureLabel(ctx,(ax+bx)/2,Math.min(ay,by),m.label,m.color,w);
-          ctx.restore();
-        }
-      }
-    }
-
-    // Final pulsing outline confirms the detected shape.
-    var bt=(t-badgeStart)/badgeDur;
-    if(bt>0 && window.drawConnectors && typeof FACEMESH_FACE_OVAL!=='undefined'){
-      var pulse=easeOut(Math.min(1,bt));
+    // Thin outline traced around the face edge, then held steady.
+    if(order && t>CONTOUR_START){
+      var ct=Math.min(1,(t-CONTOUR_START)/(CONTOUR_END-CONTOUR_START));
+      var count=Math.max(2,Math.round(order.length*easeOut(ct)));
       ctx.save();
-      ctx.globalAlpha=0.9;
-      ctx.shadowColor='#6FE3AE';ctx.shadowBlur=14*pulse;
-      window.drawConnectors(ctx,lm,FACEMESH_FACE_OVAL,{color:'#6FE3AE',lineWidth:3+pulse*1.5});
+      ctx.strokeStyle='rgba(111,227,174,0.9)';
+      ctx.lineWidth=Math.max(2,w/260);
+      ctx.lineJoin='round';ctx.lineCap='round';
+      ctx.beginPath();
+      ctx.moveTo(px(order[0]),py(order[0]));
+      for(var i=1;i<count;i++)ctx.lineTo(px(order[i]),py(order[i]));
+      if(ct>=1)ctx.closePath();
+      ctx.stroke();
       ctx.restore();
     }
-    if(bt>0 && !badgeShown){
+
+    if(t>=BADGE_AT && !badgeShown){
       badgeShown=true;
-      shapeBadgeText.textContent=shapeName+' Face Detected';
+      shapeBadgeText.textContent=shapeName+' Face';
       shapeBadge.classList.add('show');
     }
 
-    if(t<totalDur){
+    if(t<REVEAL_END){
       requestAnimationFrame(frame);
     } else {
       onDone();
@@ -952,6 +917,8 @@ retakeBtn.addEventListener('click',function(){
   captureBtn.disabled=true;
   captureBtn.classList.remove('enabled');
   captureHint.style.display='';
+  overlay.classList.remove('analyzing');
+  shapeBadge.classList.remove('show');
   oval.className='guide-oval';
   hint.className='';
   hint.textContent='Position your face in the frame';
@@ -962,6 +929,8 @@ retakeBtn.addEventListener('click',function(){
 analyzeBtn.addEventListener('click',function(){
   if(!capturedLm||!capturedPhoto)return;
   reviewRow.classList.remove('show');
+  // Clear the scanning HUD so the reveal happens over a clean photo.
+  overlay.classList.add('analyzing');
 
   // Compute the result now, from the buffered samples, so the reveal
   // animation shows the shape that actually gets sent to RN.
@@ -1948,7 +1917,7 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
       {
         icon: 'compass-outline',
         title: 'Visual Acuity',
-        desc: 'Cover one eye at a time and pick which direction the gap in each ring is facing.',
+        desc: `Cover one eye at a time and tap where the gap is on each of ${ACUITY_TRIALS} rings. No time limit.`,
       },
       {
         icon: 'color-palette-outline',
@@ -1983,6 +1952,119 @@ const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
         eye examination by a qualified optometrist.
       </AppText>
     </View>
+  </ScrollView>
+);
+
+// ─── Refraction — Per-Test Instructions ──────────────────────────────────────
+// Shown immediately before each of the three tests (so the user learns what
+// they're about to do right when it's relevant, rather than all at once up
+// front): what the test looks for, then how to answer it.
+
+type TestInfo = {
+  stepNum: string;
+  name: string;
+  icon: string;
+  purpose: string;
+  steps: string[];
+  note: string;
+};
+
+const TEST_INFO: Record<'acuity' | 'color' | 'astigmatism', TestInfo> = {
+  acuity: {
+    stepNum: '1',
+    name: 'Visual Acuity',
+    icon: 'compass-outline',
+    purpose:
+      'Measures how much fine detail your eye can resolve — the sharpness of your sight. Trouble here often points to short- or long-sightedness.',
+    steps: [
+      'Cover one eye with your free hand — each eye is tested on its own.',
+      "Hold the phone at arm's length and look at the small broken ring (a “C”).",
+      'Tap the spot on the big ring below where you saw the gap.',
+      `You'll do this ${ACUITY_TRIALS} times per eye. Get one right and the next ring shrinks; get one wrong and it grows back.`,
+    ],
+    note: "There's no timer — take as long as you need on each ring.",
+  },
+  color: {
+    stepNum: '2',
+    name: 'Colour Vision',
+    icon: 'color-palette-outline',
+    purpose:
+      'Checks how well you tell colours apart, especially reds and greens. This is an Ishihara-style test, the standard screen for colour vision deficiency.',
+    steps: [
+      'Both eyes stay open for this one — nothing to cover.',
+      'Each plate is a circle of coloured dots with a number hidden inside.',
+      `Tap the number you can see. If no number stands out, tap “${CANT_SEE}”.`,
+      'Keep your screen brightness up and avoid strong coloured lighting.',
+    ],
+    note: 'Answer with your first impression — guessing at a blurry plate is fine, and there is no timer.',
+  },
+  astigmatism: {
+    stepNum: '3',
+    name: 'Astigmatism Check',
+    icon: 'radio-button-off-outline',
+    purpose:
+      'Looks for an unevenly curved cornea, which makes some directions focus more sharply than others. It shows up as lines that look darker or blurrier in one direction.',
+    steps: [
+      'Cover one eye with your free hand — again, one eye at a time.',
+      "Hold the phone at arm's length and look at the centre dot of the fan.",
+      'Let your eyes relax and notice the spokes with your side vision.',
+      'Tell us whether all the lines look equally sharp, or some stand out.',
+    ],
+    note: 'Some lines looking bolder than others is exactly what this test is designed to catch — answer honestly.',
+  },
+};
+
+const TestInstructions: React.FC<{
+  info: TestInfo;
+  onStart: () => void;
+}> = ({ info, onStart }) => (
+  <ScrollView
+    contentContainerStyle={styles.contentPad}
+    showsVerticalScrollIndicator={false}
+  >
+    <View style={styles.stepHeader}>
+      <AppText style={styles.stepCounter}>
+        Step {info.stepNum} of 3 — {info.name}
+      </AppText>
+    </View>
+
+    <View style={styles.heroCard}>
+      <View style={styles.heroIconRing}>
+        <Ionicons name={info.icon as any} size={56} color={Colors.primary} />
+      </View>
+      <AppText style={styles.heroTitle}>{info.name}</AppText>
+      <AppText style={styles.heroSub}>{info.purpose}</AppText>
+    </View>
+
+    <AppText style={styles.sectionLabel}>How it works</AppText>
+    {info.steps.map((step, i) => (
+      <View key={step} style={styles.featureRow}>
+        <View style={styles.featureIconBox}>
+          <AppText style={rfStyles.instructionStepNum}>{i + 1}</AppText>
+        </View>
+        <View style={{ flex: 1 }}>
+          <AppText style={styles.featureDesc}>{step}</AppText>
+        </View>
+      </View>
+    ))}
+
+    <View style={rfStyles.oneHandBanner}>
+      <Ionicons
+        name="information-circle-outline"
+        size={20}
+        color={Colors.primaryDark}
+      />
+      <AppText style={rfStyles.oneHandBannerText}>{info.note}</AppText>
+    </View>
+
+    <TouchableOpacity
+      style={[styles.primaryBtn, { marginTop: Spacing.lg }]}
+      onPress={onStart}
+      activeOpacity={0.82}
+    >
+      <Ionicons name="play-outline" size={20} color={Colors.white} />
+      <AppText style={styles.primaryBtnText}>Start {info.name}</AppText>
+    </TouchableOpacity>
   </ScrollView>
 );
 
@@ -2056,7 +2138,10 @@ const LandoltC: React.FC<{ size: number; angle: number }> = ({
   size,
   angle,
 }) => {
-  const stroke = size * 0.22;
+  // Snap the stroke to a half-pixel so the smallest rings stay crisp instead
+  // of smearing across a subpixel boundary — the ring must read as small, not
+  // as blurry, or the gap becomes unfindable for the wrong reason.
+  const stroke = Math.round(size * 0.22 * 2) / 2;
   const gapWidth = stroke * 1.2;
   return (
     <View
@@ -2089,128 +2174,107 @@ const LandoltC: React.FC<{ size: number; angle: number }> = ({
   );
 };
 
-// A compass of 8 direction buttons arranged in a circle around the ring
-// preview, so the user can pick the angle the gap is facing.
+// A big, gapless "O" with 8 tap targets sitting on the ring itself: the user
+// answers by touching the point on the O where the C's gap was, instead of
+// reading an arrow. Targets land on the ring's stroke midline so the tap and
+// the answer are literally the same place on the circle.
+const PICKER_BOX = 284;
+const PICKER_RING = 208; // outer diameter of the O
+const PICKER_STROKE = 18;
+const PICKER_SLOT = 46;
+
 const DirectionPicker: React.FC<{
   selected: number | null;
   correctAngle: number;
   onSelect: (angle: number) => void;
-}> = ({ selected, correctAngle, onSelect }) => (
-  <View style={rfStyles.compassContainer}>
-    {LANDOLT_DIRECTIONS.map(dir => {
-      const rad = (dir.angle * Math.PI) / 180;
-      const half = rfStyles.compassBtn.width! / 2;
-      const radius = rfStyles.compassContainer.width! / 2 - half - 4;
-      const x =
-        rfStyles.compassContainer.width! / 2 - half + radius * Math.sin(rad);
-      const y =
-        rfStyles.compassContainer.height! / 2 - half - radius * Math.cos(rad);
-      const isSelected = selected === dir.angle;
-      const revealCorrect = selected !== null && dir.angle === correctAngle;
-      const showWrong = isSelected && dir.angle !== correctAngle;
-      const highlighted = revealCorrect || showWrong;
-      return (
-        <TouchableOpacity
-          key={dir.angle}
-          accessibilityLabel={dir.label}
-          disabled={selected !== null}
-          style={[
-            rfStyles.compassBtn,
-            { left: x, top: y },
-            revealCorrect && rfStyles.compassBtnCorrect,
-            showWrong && rfStyles.compassBtnWrong,
-          ]}
-          onPress={() => onSelect(dir.angle)}
-          activeOpacity={0.75}
-        >
-          <Ionicons
-            name="arrow-up"
-            size={15}
-            color={highlighted ? Colors.white : Colors.gray600}
-            style={{ transform: [{ rotate: `${dir.angle}deg` }] }}
-          />
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-);
-
-// Shared countdown bar — used by every timed step to keep the pressure on.
-const CountdownBar: React.FC<{ timeLeft: number; timeLimit: number }> = ({
-  timeLeft,
-  timeLimit,
-}) => {
-  const danger = timeLeft <= Math.min(1, timeLimit);
+}> = ({ selected, correctAngle, onSelect }) => {
+  const center = PICKER_BOX / 2;
+  // Midline of the ring's stroke — where the gap in a real C would sit.
+  const radius = (PICKER_RING - PICKER_STROKE) / 2;
   return (
-    <View style={rfStyles.timerRow}>
-      <Ionicons
-        name="timer-outline"
-        size={16}
-        color={danger ? Colors.error : Colors.gray500}
-      />
-      <View style={rfStyles.timerTrack}>
-        <View
-          style={[
-            rfStyles.timerFill,
-            { width: `${Math.max(0, (timeLeft / timeLimit) * 100)}%` },
-            danger && rfStyles.timerFillDanger,
-          ]}
-        />
-      </View>
-      <AppText style={[rfStyles.timerText, danger && rfStyles.timerTextDanger]}>
-        {Math.max(0, timeLeft)}s
-      </AppText>
+    <View style={rfStyles.pickerContainer}>
+      <View style={rfStyles.pickerRing} />
+      <AppText style={rfStyles.pickerHint}>Tap the gap</AppText>
+      {LANDOLT_DIRECTIONS.map(dir => {
+        const rad = (dir.angle * Math.PI) / 180;
+        const x = center - PICKER_SLOT / 2 + radius * Math.sin(rad);
+        const y = center - PICKER_SLOT / 2 - radius * Math.cos(rad);
+        const isSelected = selected === dir.angle;
+        const revealCorrect = selected !== null && dir.angle === correctAngle;
+        const showWrong = isSelected && dir.angle !== correctAngle;
+        return (
+          <TouchableOpacity
+            key={dir.angle}
+            accessibilityLabel={dir.label}
+            disabled={selected !== null}
+            style={[
+              rfStyles.pickerSlot,
+              { left: x, top: y },
+              revealCorrect && rfStyles.pickerSlotCorrect,
+              showWrong && rfStyles.pickerSlotWrong,
+            ]}
+            onPress={() => onSelect(dir.angle)}
+            activeOpacity={0.7}
+          >
+            {/* Once answered, the chosen/correct slot punches a visible gap
+                in the O; before that it's just a subtle dot to aim at. */}
+            {revealCorrect || showWrong ? (
+              <Ionicons
+                name={revealCorrect ? 'checkmark' : 'close'}
+                size={20}
+                color={Colors.white}
+              />
+            ) : (
+              <View style={rfStyles.pickerSlotDot} />
+            )}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
 
+
 const AcuityStep: React.FC<{
   eye: 'left' | 'right';
-  rows: AcuityRow[];
+  angles: number[];
   onComplete: (passCount: number) => void;
-}> = ({ eye, rows, onComplete }) => {
-  const [rowIndex, setRowIndex] = useState(0);
+}> = ({ eye, angles, onComplete }) => {
+  const [trialIndex, setTrialIndex] = useState(0);
+  const [levelIndex, setLevelIndex] = useState(ACUITY_START_LEVEL);
   const [passCount, setPassCount] = useState(0);
   const [selectedAngle, setSelectedAngle] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(ACUITY_TIME_LIMIT);
 
-  const row = rows[rowIndex];
+  const level = ACUITY_LADDER[levelIndex];
+  const correctAngle = angles[trialIndex];
 
-  // Staircase: the ring gets smaller after every correct answer. The test
-  // ends as soon as one is missed (or the smallest ring is read correctly).
+  // Untimed two-way staircase: correct → the next ring is one step smaller,
+  // wrong → one step bigger, and either way the user is asked again until all
+  // ACUITY_TRIALS rings are done. A miss never ends the test early.
   const handleSelect = (angle: number) => {
+    if (selectedAngle !== null) return;
     setSelectedAngle(angle);
-    const isCorrect = angle === row.angle;
+    const isCorrect = angle === correctAngle;
     const newCount = isCorrect ? passCount + 1 : passCount;
     setTimeout(() => {
-      if (!isCorrect || rowIndex + 1 >= rows.length) {
+      if (trialIndex + 1 >= ACUITY_TRIALS) {
         onComplete(newCount);
-      } else {
-        setPassCount(newCount);
-        setSelectedAngle(null);
-        setRowIndex(prev => prev + 1);
+        return;
       }
-    }, 500);
+      setPassCount(newCount);
+      setLevelIndex(prev =>
+        Math.min(
+          ACUITY_LADDER.length - 1,
+          Math.max(0, prev + (isCorrect ? 1 : -1)),
+        ),
+      );
+      setSelectedAngle(null);
+      setTrialIndex(prev => prev + 1);
+      // Long enough to read the green tick / red cross before the next ring.
+    }, 900);
   };
 
-  // Reset the clock every time a new ring appears.
-  useEffect(() => {
-    setTimeLeft(ACUITY_TIME_LIMIT);
-  }, [rowIndex]);
-
-  // Tick the clock; running out counts as a wrong (auto-fail) answer.
-  useEffect(() => {
-    if (selectedAngle !== null) return;
-    if (timeLeft <= 0) {
-      handleSelect(-1);
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, selectedAngle, rowIndex]);
-
-  const progress = (rowIndex / rows.length) * 100;
+  const progress = (trialIndex / ACUITY_TRIALS) * 100;
   const coverEye = eye === 'left' ? 'right' : 'left';
   const stepNum = eye === 'left' ? '1a' : '1b';
 
@@ -2226,7 +2290,7 @@ const AcuityStep: React.FC<{
           {eye === 'left' ? 'Left' : 'Right'} Eye)
         </AppText>
         <AppText style={styles.stepCounterRight}>
-          Row {rowIndex + 1}/{rows.length}
+          Ring {trialIndex + 1}/{ACUITY_TRIALS}
         </AppText>
       </View>
       <View style={styles.progressTrack}>
@@ -2247,22 +2311,21 @@ const AcuityStep: React.FC<{
 
       <View style={styles.acuityCard}>
         <AppText style={styles.acuityInstruction}>
-          Hold the phone at arm's length. Find the gap in the ring below.
+          Hold the phone at arm's length. Find the gap in the ring below — take
+          as long as you need.
         </AppText>
         <View style={styles.acuityLetterBox}>
-          <LandoltC size={row.size} angle={row.angle} />
-          <AppText style={styles.acuityLabel}>{row.label} line</AppText>
+          <LandoltC size={level.size} angle={correctAngle} />
+          <AppText style={styles.acuityLabel}>{level.label} line</AppText>
         </View>
         <AppText style={styles.acuityQuestion}>
-          Which direction is the gap facing?
+          Tap the spot on the ring below where you saw the gap.
         </AppText>
       </View>
 
-      <CountdownBar timeLeft={timeLeft} timeLimit={ACUITY_TIME_LIMIT} />
-
       <DirectionPicker
         selected={selectedAngle}
-        correctAngle={row.angle}
+        correctAngle={correctAngle}
         onSelect={handleSelect}
       />
     </ScrollView>
@@ -2271,9 +2334,7 @@ const AcuityStep: React.FC<{
 
 // ─── Refraction — Step 2: Astigmatism ────────────────────────────────────────
 
-// Seconds allowed to answer before it's auto-marked as unequal (fail-safe:
-// running out of time reads as "couldn't tell", the stricter outcome).
-const ASTIGMATISM_TIME_LIMIT = 5;
+// Untimed — the user answers at their own pace.
 // 36 spokes at 5° spacing — finer than the eye can lazily eyeball at a glance.
 const ASTIGMATISM_SPOKES = 36;
 
@@ -2282,7 +2343,6 @@ const AstigmatismStep: React.FC<{
   onComplete: (result: 'equal' | 'unequal') => void;
 }> = ({ eye, onComplete }) => {
   const [answered, setAnswered] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(ASTIGMATISM_TIME_LIMIT);
   const coverEye = eye === 'left' ? 'right' : 'left';
   const stepNum = eye === 'left' ? '3a' : '3b';
 
@@ -2291,17 +2351,6 @@ const AstigmatismStep: React.FC<{
     setAnswered(true);
     onComplete(result);
   };
-
-  useEffect(() => {
-    if (answered) return;
-    if (timeLeft <= 0) {
-      handleAnswer('unequal');
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, answered]);
 
   return (
     <ScrollView
@@ -2334,8 +2383,6 @@ const AstigmatismStep: React.FC<{
           eye with your free hand, hold the phone at arm's length.
         </AppText>
       </View>
-
-      <CountdownBar timeLeft={timeLeft} timeLimit={ASTIGMATISM_TIME_LIMIT} />
 
       <View style={styles.acuityCard}>
         <AppText style={styles.acuityInstruction}>
@@ -2394,8 +2441,7 @@ const AstigmatismStep: React.FC<{
 
 // ─── Refraction — Step 2: Colour Vision ──────────────────────────────────────
 
-// Seconds allowed per plate before it's auto-marked wrong.
-const COLOR_TIME_LIMIT = 5;
+// No time limit here — plates are untimed so answers aren't rushed.
 
 const ColorVisionStep: React.FC<{
   plates: CvPlate[];
@@ -2404,7 +2450,6 @@ const ColorVisionStep: React.FC<{
   const [plateIndex, setPlateIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [answered, setAnswered] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(COLOR_TIME_LIMIT);
 
   const plate = plates[plateIndex];
 
@@ -2428,21 +2473,6 @@ const ColorVisionStep: React.FC<{
     }, 300);
   };
 
-  useEffect(() => {
-    setTimeLeft(COLOR_TIME_LIMIT);
-  }, [plateIndex]);
-
-  useEffect(() => {
-    if (answered) return;
-    if (timeLeft <= 0) {
-      handleAnswer('');
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, answered, plateIndex]);
-
   const progress = (plateIndex / plates.length) * 100;
 
   return (
@@ -2461,8 +2491,6 @@ const ColorVisionStep: React.FC<{
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
-
-      <CountdownBar timeLeft={timeLeft} timeLimit={COLOR_TIME_LIMIT} />
 
       <View style={[styles.acuityCard, { paddingBottom: Spacing.md }]}>
         <AppText style={styles.acuityInstruction}>{plate.hint}</AppText>
@@ -3000,8 +3028,8 @@ const RefractionFlow: React.FC = () => {
   const [runId, setRunId] = useState(0);
   const testSet = useMemo(
     () => ({
-      acuityRowsLeft: genAcuityRows(),
-      acuityRowsRight: genAcuityRows(),
+      acuityAnglesLeft: genAcuityAngles(),
+      acuityAnglesRight: genAcuityAngles(),
       cvPlates: genCvPlates(5),
     }),
     [runId],
@@ -3014,12 +3042,12 @@ const RefractionFlow: React.FC = () => {
 
   const handleAcuityRightDone = (passCount: number) => {
     setAcuityRightPass(passCount);
-    setStage('colorVision');
+    setStage('colorIntro');
   };
 
   const handleColorVisionDone = (result: ColorResult) => {
     setColorVision(result);
-    setStage('astigmatismLeftReady');
+    setStage('astigmatismIntro');
   };
 
   const handleAstigmatismLeftDone = (result: 'equal' | 'unequal') => {
@@ -3043,7 +3071,14 @@ const RefractionFlow: React.FC = () => {
   };
 
   if (stage === 'intro')
-    return <RefractionIntro onStart={() => setStage('acuityLeftReady')} />;
+    return <RefractionIntro onStart={() => setStage('acuityIntro')} />;
+  if (stage === 'acuityIntro')
+    return (
+      <TestInstructions
+        info={TEST_INFO.acuity}
+        onStart={() => setStage('acuityLeftReady')}
+      />
+    );
   if (stage === 'acuityLeftReady')
     return (
       <EyeCoverStep
@@ -3057,7 +3092,7 @@ const RefractionFlow: React.FC = () => {
     return (
       <AcuityStep
         eye="left"
-        rows={testSet.acuityRowsLeft}
+        angles={testSet.acuityAnglesLeft}
         onComplete={handleAcuityLeftDone}
       />
     );
@@ -3074,8 +3109,15 @@ const RefractionFlow: React.FC = () => {
     return (
       <AcuityStep
         eye="right"
-        rows={testSet.acuityRowsRight}
+        angles={testSet.acuityAnglesRight}
         onComplete={handleAcuityRightDone}
+      />
+    );
+  if (stage === 'colorIntro')
+    return (
+      <TestInstructions
+        info={TEST_INFO.color}
+        onStart={() => setStage('colorVision')}
       />
     );
   if (stage === 'colorVision')
@@ -3083,6 +3125,13 @@ const RefractionFlow: React.FC = () => {
       <ColorVisionStep
         plates={testSet.cvPlates}
         onComplete={handleColorVisionDone}
+      />
+    );
+  if (stage === 'astigmatismIntro')
+    return (
+      <TestInstructions
+        info={TEST_INFO.astigmatism}
+        onStart={() => setStage('astigmatismLeftReady')}
       />
     );
   if (stage === 'astigmatismLeftReady')
@@ -4178,18 +4227,32 @@ const rfStyles = StyleSheet.create({
     position: 'absolute',
   },
 
-  // Direction compass (Landolt C acuity test) — sized for 16 buttons
-  compassContainer: {
-    width: 284,
-    height: 284,
+  // Answer picker (Landolt C acuity test) — a full "O" with 8 tap targets
+  pickerContainer: {
+    width: PICKER_BOX,
+    height: PICKER_BOX,
     alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginVertical: Spacing.lg,
   },
-  compassBtn: {
+  pickerRing: {
     position: 'absolute',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: PICKER_RING,
+    height: PICKER_RING,
+    borderRadius: PICKER_RING / 2,
+    borderWidth: PICKER_STROKE,
+    borderColor: Colors.gray200,
+  },
+  pickerHint: {
+    fontSize: 13,
+    color: Colors.gray400,
+  },
+  pickerSlot: {
+    position: 'absolute',
+    width: PICKER_SLOT,
+    height: PICKER_SLOT,
+    borderRadius: PICKER_SLOT / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
@@ -4197,46 +4260,27 @@ const rfStyles = StyleSheet.create({
     borderColor: Colors.glassBorderStrong,
     ...Shadow.sm,
   },
-  compassBtnCorrect: {
+  pickerSlotDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.gray400,
+  },
+  pickerSlotCorrect: {
     backgroundColor: Colors.success,
     borderColor: Colors.success,
   },
-  compassBtnWrong: {
+  pickerSlotWrong: {
     backgroundColor: Colors.error,
     borderColor: Colors.error,
   },
 
-  // Countdown bar — shared by timed steps
-  timerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.sm,
-  },
-  timerTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: Colors.glassBorder,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  timerFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
-  },
-  timerFillDanger: {
-    backgroundColor: Colors.error,
-  },
-  timerText: {
-    fontSize: FontSize.xs,
-    fontWeight: '800',
-    color: Colors.gray500,
-    minWidth: 24,
-    textAlign: 'right',
-  },
-  timerTextDanger: {
-    color: Colors.error,
+
+  // Numbered badge in the per-test instruction list
+  instructionStepNum: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 
   // One-hand usage banner (intro)
