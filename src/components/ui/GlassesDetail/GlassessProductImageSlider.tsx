@@ -68,32 +68,33 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
     );
   };
 
-  if (!validImages.length) {
-    return (
-      <View style={[styles.container, styles.emptyContainer]}>
-        <AppText style={styles.emptyText}>{t('NoImageAvailable')}</AppText>
-      </View>
-    );
-  }
-
+  // NOTE: the AR / 3-D buttons below must render even when the product has no
+  // photos — they open the shared default model, which does not depend on the
+  // product's imagery. Returning early here used to hide both entry points.
   return (
     <View style={styles.container}>
-      <FlatList
-        ref={flatListRef}
-        data={validImages}
-        keyExtractor={(item, index) => `${item}-${index}`}
-        renderItem={renderItem}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleScrollEnd}
-        bounces={false}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
-        })}
-      />
+      {validImages.length ? (
+        <FlatList
+          ref={flatListRef}
+          data={validImages}
+          keyExtractor={(item, index) => `${item}-${index}`}
+          renderItem={renderItem}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScrollEnd}
+          bounces={false}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+        />
+      ) : (
+        <View style={[styles.slide, styles.emptyContainer]}>
+          <AppText style={styles.emptyText}>{t('NoImageAvailable')}</AppText>
+        </View>
+      )}
 
       {validImages.length > 1 && (
         <View style={styles.pagination}>

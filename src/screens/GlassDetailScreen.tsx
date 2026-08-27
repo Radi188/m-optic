@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { Colors, Spacing, FontSize, BorderRadius, Shadow } from '../theme';
-import type { RootStackParamList } from '../types/navigation';
+import type { GlassItem, RootStackParamList } from '../types/navigation';
 import GlassModelScene from '../ar/GlassModelScene';
 import GlassTryOnScene from '../ar/GlassTryOnScene';
 import GlassesSpecSection from '../components/ui/GlassesDetail/GlassessSpecSection';
@@ -236,7 +236,7 @@ type ViewMode = '3d' | 'tryon';
 interface ViewerModalProps {
   visible: boolean;
   mode: ViewMode;
-  glass: RootStackParamList['GlassDetail']['glass'];
+  glass: GlassItem;
   onClose: () => void;
 }
 
@@ -348,12 +348,43 @@ const GlassDetailScreen: React.FC = () => {
 
   const { t } = useTranslation();
 
-  const images =
-    product?.assets && product?.assets?.length > 0
-      ? product.assets.map(asset => asset.url)
-      : product?.image
-      ? [product.image]
-      : [];
+  const images = useMemo(
+    () =>
+      product?.assets && product?.assets?.length > 0
+        ? product.assets.map(asset => asset.url)
+        : product?.image
+        ? [product.image]
+        : [],
+    [product],
+  );
+
+  // The AR / 3-D scenes take a GlassItem, but the detail endpoint returns the
+  // richer API `Product` (brand/frame_shape are objects, not strings). Passing
+  // the raw product through rendered the brand as "[object Object]".
+  const viewerGlass = useMemo<GlassItem | null>(() => {
+    if (!product) {
+      return null;
+    }
+    const stockType = (product.stock_type ?? '').toLowerCase();
+    return {
+      id: String(product.id),
+      name: product.name ?? product.item_name ?? '',
+      brand: product.brand?.name ?? '',
+      price: Number(product.price ?? product.item_price ?? 0),
+      stock: 0,
+      status:
+        stockType.includes('out')
+          ? 'Out of Stock'
+          : stockType.includes('low')
+          ? 'Low Stock'
+          : 'In Stock',
+      image: images[0] ?? product.image ?? '',
+      frameShape: (product.frame_shape?.name ?? 'rectangle')
+        .toLowerCase()
+        .replace(/\s+/g, '-') as GlassItem['frameShape'],
+      description: product.description ?? undefined,
+    };
+  }, [product, images]);
 
   const handleOpenTelegram = async () => {
     if (!inquiryLink) {
@@ -589,7 +620,7 @@ const GlassDetailScreen: React.FC = () => {
           {/* 3D Model button */}
           <TouchableOpacity
             style={styles.floatBtn3d}
-            onPress={() => handleOpenTelegram}
+            onPress={handleOpenTelegram}
             activeOpacity={0.88}
           >
             <View style={styles.floatBtn3dHighlight} pointerEvents="none" />
@@ -619,11 +650,11 @@ const GlassDetailScreen: React.FC = () => {
       </View>
 
       {/* ── Viewer Modal ─────────────────────────────────────────────────────── */}
-      {viewerMode !== null && (
+      {viewerMode !== null && viewerGlass && (
         <ViewerModal
-          visible={viewerMode !== null}
+          visible
           mode={viewerMode}
-          glass={product}
+          glass={viewerGlass}
           onClose={closeViewer}
         />
       )}

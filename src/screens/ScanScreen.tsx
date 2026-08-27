@@ -22,8 +22,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+import Svg, { Path } from 'react-native-svg';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -73,7 +76,13 @@ type FaceMetrics = {
 // TEMPORARY — raw classifier features surfaced on-screen for debugging.
 // Safe to remove; classification no longer depends on tuning against these.
 type FaceDebug = {
-  raw: { aspect: number; fVc: number; jVc: number; jawDeg: number } | null;
+  raw: {
+    aspect: number;
+    fVc: number;
+    jVc: number;
+    chinTaper: number;
+    jawDeg: number;
+  } | null;
   scores: Record<string, number> | null;
   samples: number;
 };
@@ -172,46 +181,71 @@ const LANDOLT_DIRECTIONS: { angle: number; label: string }[] =
 // The size ladder, biggest first. A correct read steps one rung down (smaller),
 // a miss steps one rung back up (bigger), clamped at both ends — so a wrong
 // answer never ends the test, it just makes the next ring easier to read.
-// Sizes bottom out at 8dp: below that the gap is thinner than the ring's own
-// anti-aliasing and the answer becomes a coin flip rather than a vision test.
+//
+// Every rung is smaller than it used to be, and two intermediate Snellen lines
+// (20/125, 20/25) were added so the staircase has somewhere to go across the
+// longer run. Labels keep their old meaning — only the pixel sizes moved.
+//
+// Sizes bottom out at 7dp: the gap is a fifth of the ring, so 7dp puts it at
+// 1.5dp — three physical pixels on a 2x screen. Below that the gap is thinner
+// than the ring's own anti-aliasing and the answer becomes a coin flip rather
+// than a vision test.
 const ACUITY_LADDER = [
-  { size: 48, label: '20/200' },
-  { size: 38, label: '20/100' },
-  { size: 30, label: '20/70' },
-  { size: 24, label: '20/50' },
-  { size: 20, label: '20/40' },
-  { size: 16, label: '20/30' },
-  { size: 13, label: '20/20' },
-  { size: 11, label: '20/15' },
-  { size: 9, label: '20/13' },
-  { size: 8, label: '20/10' },
+  { size: 38, label: '20/200' },
+  { size: 31, label: '20/125' },
+  { size: 26, label: '20/100' },
+  { size: 22, label: '20/70' },
+  { size: 18, label: '20/50' },
+  { size: 15, label: '20/40' },
+  { size: 13, label: '20/30' },
+  { size: 11, label: '20/25' },
+  { size: 10, label: '20/20' },
+  { size: 9, label: '20/15' },
+  { size: 8, label: '20/13' },
+  { size: 7, label: '20/10' },
 ];
-// Deliberately starts near the bottom of the ladder: the first ring already
-// takes real effort to focus on. Five rungs above it absorb early misses, and
-// the four below are exactly enough for a clean run of ACUITY_TRIALS.
-const ACUITY_START_LEVEL = 5; // 20/30 — 16dp
+// Starts on the same 20/30 line as before, now 13dp rather than 16dp. Six
+// rungs above it absorb early misses. Five sit below, so a flawless run reaches
+// the smallest ring with trials to spare and simply holds there — which is
+// exactly what "reads the 20/10 line" means.
+const ACUITY_START_LEVEL = 6; // 20/30 — 13dp
 // Every eye gets exactly this many rings, right or wrong.
-const ACUITY_TRIALS = 5;
+const ACUITY_TRIALS = 8;
+// Correct reads needed for an eye to count as passing, and the level at or
+// below which an eye counts as struggling. Derived from ACUITY_TRIALS so the
+// bar moves with the trial count instead of drifting out of date.
+const ACUITY_PASS_MARK = Math.ceil(ACUITY_TRIALS * 0.75); // 6 of 8
+const ACUITY_POOR_MARK = Math.floor(ACUITY_TRIALS * 0.4); // 3 of 8
 
 // Only the gap direction is pre-rolled; the size comes from wherever the
 // staircase has walked to by that trial.
-const genAcuityAngles = (): number[] =>
-  Array.from(
-    { length: ACUITY_TRIALS },
-    () => LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)],
-  );
+//
+// A direction never repeats back to back. Over a run this long a repeat is more
+// likely than not, and "same as last time" is a guess that pays off without
+// seeing anything — which is the one thing the test must not reward.
+const genAcuityAngles = (): number[] => {
+  const out: number[] = [];
+  for (let i = 0; i < ACUITY_TRIALS; i++) {
+    let angle = LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)];
+    while (i > 0 && angle === out[i - 1]) {
+      angle = LANDOLT_ANGLES[randInt(LANDOLT_ANGLES.length)];
+    }
+    out.push(angle);
+  }
+  return out;
+};
 
 function computeRisk(
   acuityPassCount: number,
   astigmatism: 'equal' | 'unequal',
   colorVision: ColorResult,
 ): RiskLevel {
-  // Correct reads out of ACUITY_TRIALS (5) — every eye always attempts all
-  // five, so this is a straight hit count on a self-adjusting size ladder.
+  // Correct reads out of ACUITY_TRIALS — every eye always attempts all of
+  // them, so this is a straight hit count on a self-adjusting size ladder.
   let score = 0;
   if (acuityPassCount === 0) score += 4;
-  else if (acuityPassCount <= 2) score += 2;
-  else if (acuityPassCount <= ACUITY_TRIALS - 1) score += 1;
+  else if (acuityPassCount <= ACUITY_POOR_MARK) score += 2;
+  else if (acuityPassCount < ACUITY_TRIALS) score += 1;
   if (astigmatism === 'unequal') score += 2;
   if (colorVision === 'deficient') score += 3;
   else if (colorVision === 'mild') score += 1;
@@ -476,7 +510,9 @@ const SCAN_HTML = `<!DOCTYPE html>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* Only the front camera is mirrored — the back camera shows the scene as-is. */
+#video.mirrored{transform:scaleX(-1)}
 #snapCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
 #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 
@@ -486,6 +522,21 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 .topchip .pulse{width:7px;height:7px;border-radius:50%;background:#5FE9FF;box-shadow:0 0 10px #5FE9FF;animation:blink 1.4s ease-in-out infinite}
 .topchip span{color:rgba(255,255,255,0.96);font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Camera flip — lets one person hold the phone and scan someone else's face
+   with the (usually higher quality) back camera. */
+#flipBtn{
+  position:absolute;top:max(30px,calc(env(safe-area-inset-top) + 16px));right:18px;z-index:9;
+  pointer-events:auto;width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(12,16,20,0.5);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(95,233,255,0.22);box-shadow:0 6px 22px rgba(0,0,0,0.28);
+  transition:transform .3s ease,opacity .25s ease
+}
+#flipBtn svg{width:20px;height:20px;fill:none;stroke:rgba(255,255,255,0.92);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#flipBtn.busy{opacity:.5}
+#flipBtn.spin{transform:rotate(180deg)}
+#overlay.analyzing #flipBtn{opacity:0;pointer-events:none}
 
 /* Corner HUD readouts — clearly below the chip */
 .hud{position:absolute;z-index:7;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:9.5px;letter-spacing:1.4px;color:rgba(95,233,255,0.72);text-transform:uppercase;text-shadow:0 0 8px rgba(95,233,255,0.35)}
@@ -554,8 +605,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #reviewRow.show{display:flex}
 .reviewBtn{padding:14px 26px;border-radius:100px;font-size:14px;font-weight:700;letter-spacing:0.3px;border:1px solid rgba(255,255,255,0.22);transition:transform .15s ease}
 .reviewBtn:active{transform:scale(0.96)}
-#retakeBtn{background:rgba(12,16,20,0.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);color:#fff}
-#analyzeBtn{background:#6FE3AE;color:#06120c;border-color:transparent;box-shadow:0 8px 22px rgba(111,227,174,0.45)}
+#retakeBtn,#rescanBtn{background:rgba(12,16,20,0.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);color:#fff}
+#analyzeBtn,#continueBtn{background:#6FE3AE;color:#06120c;border-color:transparent;box-shadow:0 8px 22px rgba(111,227,174,0.45)}
+
+/* Result hold — the traced photo and its shape badge stay on screen after the
+   reveal finishes, so the user reads the result before the recommendations
+   modal takes over. Nothing is posted to RN until Continue is tapped. */
+#resultRow{position:relative;z-index:8;margin-top:26px;display:none;flex-direction:column;align-items:center;gap:14px;pointer-events:auto;opacity:0;transition:opacity .35s ease}
+#resultRow.show{display:flex}
+#resultRow.visible{opacity:1}
+#resultBtns{display:flex;gap:14px}
 
 /* Analyzing state — strips the live-scan chrome (HUD readouts, brackets,
    animated mesh/beam, glowing guide frame) so the captured photo is clean and
@@ -593,7 +652,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 <video id="video" autoplay playsinline muted></video>
 <canvas id="snapCanvas"></canvas>
 <div id="overlay">
-  <div class="topbar"><div class="topchip"><span class="pulse"></span><span>Biometric Face Scan</span></div></div>
+  <div class="topbar"><div class="topchip"><span class="pulse"></span><span id="topchipText">Biometric Face Scan</span></div></div>
+  <button id="flipBtn" aria-label="Switch camera">
+    <svg viewBox="0 0 24 24"><path d="M3 8.5V7a3 3 0 0 1 3-3h9"/><path d="m12.5 1.5 3 2.5-3 2.5"/><path d="M21 15.5V17a3 3 0 0 1-3 3H9"/><path d="m11.5 22.5-3-2.5 3-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>
+  </button>
 
   <div class="hud hud-tl">Mesh &middot; 468 pts</div>
   <div class="hud hud-tr searching" id="hudStatus">&#9679; Searching</div>
@@ -611,6 +673,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
   <div id="reviewRow">
     <button id="retakeBtn" class="reviewBtn">Retake</button>
     <button id="analyzeBtn" class="reviewBtn">Analyze</button>
+  </div>
+  <div id="resultRow">
+    <div id="resultBtns">
+      <button id="rescanBtn" class="reviewBtn">Rescan</button>
+      <button id="continueBtn" class="reviewBtn">Continue</button>
+    </div>
   </div>
 </div>
 <div id="shapeBadge"><span class="ic">&#10003;</span><span id="shapeBadgeText"></span></div>
@@ -635,7 +703,9 @@ var oval=document.getElementById('oval'),hint=document.getElementById('hint');
 var hudStatus=document.getElementById('hudStatus'),hudCoord=document.getElementById('hudCoord');
 var captureBtn=document.getElementById('captureBtn'),captureHint=document.getElementById('captureHint');
 var reviewRow=document.getElementById('reviewRow'),retakeBtn=document.getElementById('retakeBtn'),analyzeBtn=document.getElementById('analyzeBtn');
+var resultRow=document.getElementById('resultRow'),rescanBtn=document.getElementById('rescanBtn'),continueBtn=document.getElementById('continueBtn');
 var snapCanvas=document.getElementById('snapCanvas');
+var flipBtn=document.getElementById('flipBtn'),topchipText=document.getElementById('topchipText');
 var shapeBadge=document.getElementById('shapeBadge'),shapeBadgeText=document.getElementById('shapeBadgeText');
 
 // ── Single-shot capture flow: hold still facing forward, tap to capture ─────
@@ -648,8 +718,17 @@ var MAX_SAMPLES=30;
 // camera can warm up behind the countdown overlay without capturing anything.
 var armed=false;
 window.armScan=function(){armed=true;};
-var MIRROR=true;           // front-camera preview is mirrored
+// Which physical camera is live. 'user' = selfie (mirrored preview),
+// 'environment' = rear camera, used when someone else scans your face — or you
+// scan a friend's — which is both easier to aim and usually a better sensor.
+var facing='user';
+var MIRROR=true;           // front-camera preview is mirrored; rear is not
 var FRONT_MAX=0.10;        // max yaw to count as "looking straight"
+
+// The rear camera is almost always pointed at somebody else, so the coaching
+// copy switches from first to second person along with it.
+function faceWord(){return facing==='user'?'your face':'the face';}
+function idleHint(){return 'Position '+faceWord()+' in the frame';}
 
 // ── Landmark helpers ────────────────────────────────────────────────────────
 function dist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
@@ -665,69 +744,275 @@ function angleAt(c,a,b,W,H){
   var dot=ax*bx+ay*by,mg=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by)||1;
   return Math.acos(Math.max(-1,Math.min(1,dot/mg)))*180/Math.PI;
 }
-function computeMetrics(lm){
-  var W=(video&&video.videoWidth)||640, H=(video&&video.videoHeight)||480;
-  function pd(a,b){var dx=(a.x-b.x)*W,dy=(a.y-b.y)*H;return Math.sqrt(dx*dx+dy*dy);}
-  var faceL=pd(lm[10],lm[152]);      // forehead top → chin
-  var cheekW=pd(lm[234],lm[454]);    // cheekbone (widest) width
-  var jawW=pd(lm[172],lm[397]);      // jaw width
-  var fhW=pd(lm[54],lm[284]);        // forehead width
-  if(faceL<1)return null;
-  var jawDeg=angleAt(lm[152],lm[172],lm[397],W,H); // chin / jaw angle
-  return {
-    faceL:faceL,cheekW:cheekW,jawW:jawW,fhW:fhW,jawDeg:jawDeg,
-    aspect:faceL/cheekW, fVc:fhW/cheekW, jVc:jawW/cheekW,
-    pFaceWidth:mapPct(cheekW/faceL,0.62,0.98),
-    pFaceLength:mapPct(faceL/cheekW,1.02,1.62),
-    pJawAngle:mapPct(jawDeg,78,148),
-    pForehead:mapPct(fhW/cheekW,0.72,1.02),
-    pCheekbone:mapPct(cheekW/faceL,0.62,0.98),
-    pJawline:mapPct(jawW/cheekW,0.68,1.0)
-  };
+function angleP(c,a,b){
+  var ax=a.x-c.x,ay=a.y-c.y,bx=b.x-c.x,by=b.y-c.y;
+  var dot=ax*bx+ay*by,mg=Math.sqrt(ax*ax+ay*ay)*Math.sqrt(bx*bx+by*by)||1;
+  return Math.acos(Math.max(-1,Math.min(1,dot/mg)))*180/Math.PI;
 }
-// ── 7-way classification via percentile decision tree ────────────────────────
-// v1 scored against 7 "ideal" profiles with a gaussian similarity (biased to
-// whichever profile sat nearest the population average — collapsed almost
-// everyone to one shape). v2 replaced that with AND-conditions on absolute
-// ratio cutoffs (e.g. fVc>=0.92 && jVc<=0.82) — but cheekbones (lm 234/454)
-// are the widest points on nearly every face, so fVc/jVc cluster in a narrow
-// band and rarely clear BOTH halves of a tight AND at once. Almost every scan
-// fell through to the Oval default, and since the identical bug also ran on
-// every single frame, agreement-based confidence pegged near max (~98%) too.
-// v3: classify off the pFaceLength/pForehead/pJawline/pJawAngle percentiles
-// that computeMetrics already derives (0..100, scaled against the same
-// assumed real-face ranges used for the on-screen bars) and compare them
-// relative to each other with modest margins, instead of absolute ratio
-// cutoffs — this tracks the shape of each individual face rather than requiring
-// it to clear fixed thresholds that most real faces never reach.
-function classify(m){
-  if(!m)return 'Oval';
-  var len=m.pFaceLength,fh=m.pForehead,jw=m.pJawline,ang=m.pJawAngle;
 
-  // Face is notably longer than wide — dominates regardless of width shape.
-  if(len>=68) return 'Oblong';
+// ── Measurement method (v4) ─────────────────────────────────────────────────
+// The reference used here is the standard four-measurement face-shape method
+// from facial anthropometry, the same one optical dispensing guides use:
+//
+//   1. Face length   — hairline/forehead top → chin (trichion → gnathion)
+//   2. Forehead width — across the widest part of the forehead
+//   3. Cheekbone width — bizygomatic, the widest point across the cheekbones
+//   4. Jawline width  — across the jaw angles (bigonial)
+//   + the gonial angle, i.e. how sharp vs rounded the jaw corner is
+//
+// Everything is then expressed relative to the cheekbone width (the facial
+// index and the two width ratios), which is what makes the result independent
+// of camera distance and head size.
+//
+// The earlier versions took each of those from ONE hardcoded landmark pair
+// (e.g. forehead = 54↔284, jaw = 172↔397). That is where the accuracy went:
+// those points sit at fixed positions in the mesh topology, not at the place
+// on a given face where that measurement is actually widest, and 234/454 sit
+// out at the ears so they beat every real cheekbone — which is why the width
+// ratios all bunched up and nearly everything fell through to Oval.
+//
+// v4 measures off the face-oval contour instead. The contour is roll-corrected
+// (rotated so the eye line is horizontal), then the face's width is sampled at
+// many heights, and each of the four measurements is taken from the band where
+// it anatomically belongs, anchored to real features (brow, eye line, mouth
+// line, chin) rather than to fixed fractions of the frame. The cheekbone
+// measurement is the widest width found in the zygomatic band, so it is a real
+// maximum for that face — the ratios then genuinely mean "how far inside the
+// cheekbones does the forehead/jaw sit".
 
-  var diff=fh-jw; // + : forehead relatively wider than jaw; - : jaw relatively wider
+// Rotate the face-oval contour into a roll-corrected pixel space where +y runs
+// down the face's own vertical axis, so widths are measured across the face
+// even when the head is tilted.
+function ovalFrame(lm,W,H){
+  var order=faceOvalOrder();
+  if(!order||order.length<8)return null;
+  var eL=lm[33],eR=lm[263];
+  var th=Math.atan2((eR.y-eL.y)*H,(eR.x-eL.x)*W);
+  var ca=Math.cos(-th),sa=Math.sin(-th);
+  function rot(p){var x=p.x*W,y=p.y*H;return {x:x*ca-y*sa,y:x*sa+y*ca};}
+  function unrot(p){return {x:p.x*ca+p.y*sa,y:-p.x*sa+p.y*ca};}
+  var pts=[],i;
+  for(i=0;i<order.length;i++)pts.push(rot(lm[order[i]]));
 
-  // Forehead clearly wider than the jaw, tapering to a narrower chin.
-  if(diff>=16 && fh>=45) return 'Heart';
-
-  // Jaw as wide or wider than the forehead — widest point is at the chin.
-  if(diff<=-16 && jw>=45) return 'Triangle';
-
-  // Both forehead and jaw pull in well short of the cheekbones.
-  if(fh<=35 && jw<=35) return 'Diamond';
-
-  // Forehead, cheekbones and jaw all close in width, face isn't long —
-  // classic Round vs Square split, decided by how angular the jaw is.
-  if(fh>=40 && jw>=40 && len<=45){
-    return ang<=40 ? 'Square' : 'Round';
+  // ── Hairline extrapolation ────────────────────────────────────────────────
+  // MediaPipe's face oval stops at landmark 10, which sits partway UP the
+  // forehead, not at the hairline — the mesh has no hairline points at all.
+  // Left as-is the traced outline visibly cuts the forehead in half, and worse,
+  // every face-length and forehead-width reading is taken on a face that is
+  // missing its top third.
+  //
+  // The classical facial-thirds rule gives us the missing point: the face
+  // divides into three near-equal parts — trichion (hairline) → glabella
+  // (between the brows) → subnasale (base of the nose) → gnathion (chin). So
+  // the hairline sits one glabella→subnasale step above the glabella. We
+  // extend the arc above the brow line up to that estimated trichion, with a
+  // slight inward taper since the hairline is a touch narrower than the
+  // mid-forehead. The stretch factor is clamped in case a bad frame puts the
+  // nose or brow landmarks somewhere implausible.
+  var glab=rot(lm[9]),sub=rot(lm[2]);
+  var third=sub.y-glab.y;
+  var yTop=pts[0].y;
+  for(i=1;i<pts.length;i++)if(pts[i].y<yTop)yTop=pts[i].y;
+  var span=glab.y-yTop;
+  if(third>1&&span>1){
+    var f=(third)/span;
+    if(f<1)f=1;
+    if(f>2.2)f=2.2;
+    var cx=(rot(lm[234]).x+rot(lm[454]).x)/2;
+    var newTop=glab.y-span*f;
+    var denom=(glab.y-newTop)||1;
+    for(i=0;i<pts.length;i++){
+      if(pts[i].y>=glab.y)continue;
+      var ny=glab.y-(glab.y-pts[i].y)*f;
+      var t=(glab.y-ny)/denom;
+      pts[i]={x:cx+(pts[i].x-cx)*(1-0.06*t*t),y:ny};
+    }
   }
 
-  // Balanced proportions, gently tapering — the fallback bucket.
-  return 'Oval';
+  // Same contour mapped back to image space, for drawing over the photo.
+  var img=[];
+  for(i=0;i<pts.length;i++)img.push(unrot(pts[i]));
+  return {pts:pts,img:img,rot:rot};
 }
-function computeShape(lm){return classify(computeMetrics(lm));}
+
+// Horizontal slice through the contour polygon at height y → its left and
+// right edge and the width between them.
+function sliceAt(pts,y){
+  var xs=[],i,a,b,t;
+  for(i=0;i<pts.length;i++){
+    a=pts[i];b=pts[(i+1)%pts.length];
+    if((a.y<=y&&b.y>=y)||(b.y<=y&&a.y>=y)){
+      if(Math.abs(b.y-a.y)<1e-6)continue;
+      t=(y-a.y)/(b.y-a.y);
+      xs.push(a.x+t*(b.x-a.x));
+    }
+  }
+  if(xs.length<2)return null;
+  var mn=xs[0],mx=xs[0];
+  for(i=1;i<xs.length;i++){if(xs[i]<mn)mn=xs[i];if(xs[i]>mx)mx=xs[i];}
+  if(mx-mn<=0)return null;
+  return {l:mn,r:mx,w:mx-mn,y:y};
+}
+
+// Widest slice within a vertical band — used for the measurements that are
+// defined as "the widest point across X" rather than a fixed height.
+function widestIn(pts,y0,y1,steps){
+  var best=null,i,s;
+  for(i=0;i<=steps;i++){
+    s=sliceAt(pts,y0+(y1-y0)*i/steps);
+    if(s&&(!best||s.w>best.w))best=s;
+  }
+  return best;
+}
+
+function computeMetrics(lm){
+  var W=(video&&video.videoWidth)||640, H=(video&&video.videoHeight)||480;
+  var fr=ovalFrame(lm,W,H);
+  if(!fr)return null;
+  var pts=fr.pts;
+
+  // Feature anchors, in the same roll-corrected space as the contour.
+  var chin=fr.rot(lm[152]);            // gnathion
+  var brow=fr.rot(lm[9]);              // glabella, between the brows
+  var eyeY=(fr.rot(lm[33]).y+fr.rot(lm[263]).y)/2;
+  var mouthY=(fr.rot(lm[61]).y+fr.rot(lm[291]).y)/2;
+
+  var yTop=pts[0].y,i;
+  for(i=1;i<pts.length;i++)if(pts[i].y<yTop)yTop=pts[i].y;
+  var faceL=chin.y-yTop;               // face length
+  if(faceL<8)return null;
+
+  // Forehead: measured mid-way between the top of the face and the brow line,
+  // which is where the forehead is at its widest on essentially every face.
+  var fhS=widestIn(pts,yTop+0.35*(brow.y-yTop),yTop+0.75*(brow.y-yTop),6);
+  // Cheekbone: widest point in the zygomatic band around the eye line.
+  var ckS=widestIn(pts,eyeY-0.06*faceL,eyeY+0.20*faceL,14);
+  // Jaw: widest point between the mouth line and the chin — the jaw angles.
+  var jwS=widestIn(pts,mouthY,mouthY+0.62*(chin.y-mouthY),12);
+  // Chin: width just above the chin point, i.e. how pointed the chin is.
+  var cnS=sliceAt(pts,chin.y-0.13*faceL);
+  if(!fhS||!ckS||!jwS||!cnS||ckS.w<8)return null;
+
+  // Gonial angle — measured on the contour at the jaw's widest point, between
+  // the cheekbone above it and the chin below. Averaged across both sides.
+  var gonL=angleP({x:jwS.l,y:jwS.y},{x:ckS.l,y:ckS.y},chin);
+  var gonR=angleP({x:jwS.r,y:jwS.y},{x:ckS.r,y:ckS.y},chin);
+  var jawDeg=(gonL+gonR)/2;
+
+  var FI=faceL/ckS.w;                  // facial index (length ÷ cheekbone)
+  var FHc=fhS.w/ckS.w;                 // forehead ÷ cheekbone
+  var JWc=jwS.w/ckS.w;                 // jaw ÷ cheekbone
+  var CHj=cnS.w/jwS.w;                 // chin ÷ jaw — low = pointed chin
+
+  return {
+    faceL:faceL,cheekW:ckS.w,jawW:jwS.w,fhW:fhS.w,chinW:cnS.w,jawDeg:jawDeg,
+    aspect:FI, fVc:FHc, jVc:JWc, chinTaper:CHj,
+    pFaceWidth:mapPct(1/FI,0.62,0.92),
+    pFaceLength:mapPct(FI,1.08,1.58),
+    pJawAngle:mapPct(jawDeg,104,152),
+    pForehead:mapPct(FHc,0.68,1.04),
+    pCheekbone:mapPct(1/FI,0.62,0.92),
+    pJawline:mapPct(JWc,0.70,1.06)
+  };
+}
+// ── 7-way classification ─────────────────────────────────────────────────────
+// The definitions below are the standard ones (as used in optical dispensing
+// guidance), expressed against the four measurements above:
+//
+//   Oval     length clearly greater than width, forehead a touch wider than the
+//            jaw, everything tapering smoothly — no single dominant feature
+//   Round    length ≈ width, soft rounded jaw, full lower face
+//   Square   length ≈ width, forehead / cheek / jaw all near-equal, sharp jaw
+//   Oblong   length markedly greater than width, the three widths near-equal
+//   Heart    forehead the widest, jaw distinctly narrow, chin pointed
+//   Diamond  cheekbones the widest by a clear margin, narrow forehead AND jaw
+//   Triangle jaw the widest, forehead the narrowest
+//
+// Scoring rather than a decision tree. Every shape gets a 0..1 score from soft
+// membership ramps, and the highest wins. Two earlier attempts failed here for
+// opposite reasons: v1 scored distance to seven "ideal" profiles, which always
+// favoured whichever profile sat closest to the population average; v2/v3 used
+// hard AND-ed cutoffs, so a face that missed one threshold by a hair fell all
+// the way through to the default. Soft ramps degrade gracefully instead, and
+// the shape-defining trait is a multiplicative gate, so nothing can win on
+// supporting evidence alone.
+//
+// The two width ratios are self-normalising (they compare parts of the same
+// face), so they need no calibration. Face length and jaw angle do not have
+// that property, so they are anchored to these two reference constants —
+// the population-average value of that measurement for this landmark set.
+// They are the ONLY numbers to touch if results skew: the sheet's calibration
+// panel prints the measured aspect / jawDeg for exactly this purpose.
+// FI_REF is derived from published anthropometry: physiognomic face height
+// (trichion→gnathion, which is what we now measure thanks to the hairline
+// extrapolation) averages ~186mm, against a face-contour width at ear level of
+// ~148mm — call it 1.30, nudged up slightly for the contour's inward taper.
+// VERIFY THIS ON REAL FACES: scan a few people, read "aspect" off the sheet's
+// calibration panel, and set FI_REF to the average you see. It is the one
+// number that can systematically skew every result long or short.
+var FI_REF=1.32;    // typical face length ÷ cheekbone width
+var GON_REF=131;    // typical gonial angle, degrees
+
+function up(v,a,b){return v<=a?0:(v>=b?1:(v-a)/(b-a));}
+function down(v,a,b){return 1-up(v,a,b);}
+function band(v,a,b,c,d){return Math.min(up(v,a,b),down(v,c,d));}
+function wsum(terms){
+  var w=0,s=0,i;
+  for(i=0;i<terms.length;i++){w+=terms[i][0];s+=terms[i][0]*terms[i][1];}
+  return w?s/w:0;
+}
+
+// Full score table — kept separate from classify() so confidence can read the
+// margin between the winner and the runner-up.
+function scoreShapes(m){
+  var FI=m.aspect,FHc=m.fVc,JWc=m.jVc,CHj=m.chinTaper,gon=m.jawDeg;
+
+  // Length axis, relative to the reference facial index.
+  var lenShort=down(FI,FI_REF*0.96,FI_REF*1.04);
+  var lenMid  =band(FI,FI_REF*0.92,FI_REF*1.00,FI_REF*1.10,FI_REF*1.18);
+  var lenLong =up(FI,FI_REF*1.10,FI_REF*1.22);
+
+  // Width profile. dFJ compares two parts of the same face, so it is a true
+  // relative measure and needs no reference constant.
+  var dFJ=FHc-JWc;
+  var foreheadWidest=up(dFJ,0.03,0.13);
+  var jawWidest=up(-dFJ,0.03,0.11);
+  var balanced=band(dFJ,-0.07,-0.02,0.02,0.07);
+  var cheeksWidest=down(FHc>JWc?FHc:JWc,0.84,0.95);
+  var widthsFull=up(FHc<JWc?FHc:JWc,0.84,0.94);
+
+  // Jaw and chin character.
+  var chinPointed=down(CHj,0.50,0.70);
+  var chinFull=up(CHj,0.52,0.72);
+  var jawSharp=down(gon,GON_REF*0.93,GON_REF*1.04);
+  var jawSoft=up(gon,GON_REF*0.96,GON_REF*1.07);
+
+  return {
+    // Oval is the "no dominant feature" bucket. Its gate is the absence of a
+    // dominant width, so a face with a clearly wider forehead or jaw can't be
+    // swallowed by Oval on the strength of its length alone — that shadowing
+    // is what made the previous versions answer Oval for nearly everyone.
+    Oval:     (1-0.7*(foreheadWidest>jawWidest?foreheadWidest:jawWidest))*
+              wsum([[3,lenMid],[2,band(dFJ,-0.04,0.00,0.06,0.11)],[2,down(cheeksWidest,0.3,0.8)]]),
+    Oblong:   lenLong*wsum([[2,1],[2,balanced],[1,down(cheeksWidest,0.3,0.8)]]),
+    Round:    lenShort*wsum([[2,1],[2,jawSoft],[2,chinFull],[1,widthsFull]]),
+    Square:   lenShort*wsum([[2,1],[3,jawSharp],[2,widthsFull],[1,chinFull]]),
+    Heart:    foreheadWidest*wsum([[3,1],[2,chinPointed],[1,down(JWc,0.78,0.92)]]),
+    Diamond:  cheeksWidest*wsum([[3,1],[2,lenMid>lenLong?lenMid:lenLong],[1,chinPointed]]),
+    Triangle: jawWidest*wsum([[3,1],[2,up(JWc,0.90,1.02)],[1,chinFull]])
+  };
+}
+
+function bestOf(scores){
+  var name='Oval',top=-1,second=0,k;
+  for(k in scores){if(scores[k]>top){second=top;top=scores[k];name=k;}else if(scores[k]>second)second=scores[k];}
+  return {shape:name,top:top,second:second<0?0:second};
+}
+
+function classify(m){
+  if(!m)return 'Oval';
+  return bestOf(scoreShapes(m)).shape;
+}
 // Average the per-frame display metrics for a stable readout.
 function avgMetrics(arr){
   if(!arr.length)return null;
@@ -739,20 +1024,9 @@ function avgMetrics(arr){
 // "[FaceScan DBG]" for reference/debugging.
 function avgRaw(arr){
   if(!arr.length)return null;
-  var k=['aspect','fVc','jVc','jawDeg'],o={},i,n=arr.length;
+  var k=['aspect','fVc','jVc','chinTaper','jawDeg'],o={},i,n=arr.length;
   for(var x=0;x<k.length;x++){var s=0;for(i=0;i<n;i++)s+=arr[i][k[x]];o[k[x]]=+(s/n).toFixed(3);}
   return o;
-}
-
-// Most frequent shape across sampled frames — smooths single-frame noise.
-function modeOf(arr){
-  if(!arr.length)return null;
-  var counts={},best=arr[0],bestN=0;
-  for(var i=0;i<arr.length;i++){
-    counts[arr[i]]=(counts[arr[i]]||0)+1;
-    if(counts[arr[i]]>bestN){bestN=counts[arr[i]];best=arr[i];}
-  }
-  return best;
 }
 
 function faceSize(lm){return dist(lm[10],lm[152]);}
@@ -788,10 +1062,13 @@ var SWEEP_END=900,CONTOUR_START=250,CONTOUR_END=1150,BADGE_AT=1300,REVEAL_END=20
 
 // FACEMESH_FACE_OVAL is an unordered list of [a,b] index pairs; chain them into
 // one ordered loop so the outline can be drawn as a single traced path.
+// The same loop, hardcoded — the measurement pass depends on this contour, so
+// it must not go dark if the drawing_utils CDN script fails to load.
+var FACE_OVAL_FALLBACK=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 var ovalOrder=null;
 function faceOvalOrder(){
   if(ovalOrder)return ovalOrder;
-  if(typeof FACEMESH_FACE_OVAL==='undefined')return null;
+  if(typeof FACEMESH_FACE_OVAL==='undefined'){ovalOrder=FACE_OVAL_FALLBACK;return ovalOrder;}
   var next={};
   for(var i=0;i<FACEMESH_FACE_OVAL.length;i++){next[FACEMESH_FACE_OVAL[i][0]]=FACEMESH_FACE_OVAL[i][1];}
   var start=FACEMESH_FACE_OVAL[0][0];
@@ -801,15 +1078,19 @@ function faceOvalOrder(){
   return order;
 }
 
-function runCaptureAnimation(lm,shapeName,photo,onDone){
+function runCaptureAnimation(lm,shapeName,photo,mirrored,onDone){
   var w=photo.width,h=photo.height;
   snapCanvas.width=w;snapCanvas.height=h;
   var ctx=snapCanvas.getContext('2d');
 
-  function px(i){return w-lm[i].x*w;}
-  function py(i){return lm[i].y*h;}
-
-  var order=faceOvalOrder();
+  // Trace the same hairline-extended contour the measurements are taken from,
+  // so what the user sees outlined is exactly what was measured. Points are in
+  // raw (unmirrored) frame space, so x only needs flipping when the stored
+  // photo was mirrored for the selfie camera.
+  var fr=ovalFrame(lm,w,h);
+  var order=fr?fr.img:null;
+  function px(p){return mirrored?w-p.x:p.x;}
+  function py(p){return p.y;}
   var hints=[
     {t:0,text:'Analyzing your face…'},
     {t:BADGE_AT,text:'Analysis complete'}
@@ -872,8 +1153,26 @@ function runCaptureAnimation(lm,shapeName,photo,onDone){
   requestAnimationFrame(frame);
 }
 
+// The analyzed frame, downscaled, as a data URL to hand to RN so the results
+// sheet can show the user the photo their result came from. This crosses the
+// WebView bridge as a string, so it is capped — but it has to stay big enough
+// to survive the sheet's full-screen pinch-zoom preview.
+function snapshotDataUrl(maxW){
+  try{
+    var sw=snapCanvas.width,sh=snapCanvas.height;
+    if(!sw||!sh)return null;
+    var sc=Math.min(1,maxW/sw);
+    var c=document.createElement('canvas');
+    c.width=Math.round(sw*sc);c.height=Math.round(sh*sc);
+    c.getContext('2d').drawImage(snapCanvas,0,0,c.width,c.height);
+    return c.toDataURL('image/jpeg',0.8);
+  }catch(e){return null;}
+}
+
 // ── Capture → Review (Retake / Analyze) → Analyze flow ──────────────────────
-var capturedPhoto=null,capturedLm=null;
+var capturedPhoto=null,capturedLm=null,capturedMirror=true;
+// The analyzed result, held until the user taps Continue.
+var pendingResult=null;
 
 // Freeze the current frame into a still photo and show it for review, without
 // running any analysis yet — the user decides whether to keep it or retake.
@@ -883,9 +1182,11 @@ function freezeFrame(lm){
   var photo=document.createElement('canvas');
   photo.width=w;photo.height=h;
   var pctx=photo.getContext('2d');
-  pctx.save();pctx.translate(w,0);pctx.scale(-1,1);pctx.drawImage(video,0,0,w,h);pctx.restore();
+  if(MIRROR){pctx.save();pctx.translate(w,0);pctx.scale(-1,1);pctx.drawImage(video,0,0,w,h);pctx.restore();}
+  else{pctx.drawImage(video,0,0,w,h);}
   capturedPhoto=photo;
   capturedLm=lm;
+  capturedMirror=MIRROR;
 
   snapCanvas.width=w;snapCanvas.height=h;
   snapCanvas.getContext('2d').drawImage(photo,0,0);
@@ -899,14 +1200,19 @@ captureBtn.addEventListener('click',function(){
   freezeFrame(lastLm);
   captureBtn.style.display='none';
   captureHint.style.display='none';
+  flipBtn.style.display='none';
   oval.className='guide-oval locked';
   hint.className='success';
   hint.textContent='Nice! Retake or analyze this photo';
   reviewRow.classList.add('show');
 });
 
-retakeBtn.addEventListener('click',function(){
+// Back to a live, unanalyzed scan — shared by Retake (before analysis) and
+// Rescan (from the result hold).
+function resetScan(){
   reviewRow.classList.remove('show');
+  resultRow.classList.remove('show');resultRow.classList.remove('visible');
+  pendingResult=null;
   capturedPhoto=null;capturedLm=null;
   recentMetrics=[];recentShapes=[];
   lastLm=null;
@@ -917,13 +1223,26 @@ retakeBtn.addEventListener('click',function(){
   captureBtn.disabled=true;
   captureBtn.classList.remove('enabled');
   captureHint.style.display='';
+  flipBtn.style.display='';
   overlay.classList.remove('analyzing');
   shapeBadge.classList.remove('show');
   oval.className='guide-oval';
   hint.className='';
-  hint.textContent='Position your face in the frame';
+  hint.textContent=idleHint();
   done=false;
   aligned=false;
+}
+
+retakeBtn.addEventListener('click',resetScan);
+rescanBtn.addEventListener('click',resetScan);
+
+// Hand the finished result over to RN — only ever from the Continue tap.
+continueBtn.addEventListener('click',function(){
+  if(!pendingResult)return;
+  var r=pendingResult;
+  pendingResult=null;
+  continueBtn.disabled=true;
+  post(r);
 });
 
 analyzeBtn.addEventListener('click',function(){
@@ -934,20 +1253,39 @@ analyzeBtn.addEventListener('click',function(){
 
   // Compute the result now, from the buffered samples, so the reveal
   // animation shows the shape that actually gets sent to RN.
-  var modal=modeOf(recentShapes)||computeShape(capturedLm)||'Oval';
+  // Classify once on the average of the buffered measurements rather than
+  // voting per frame — averaging the measurements first cancels tracker jitter
+  // that a per-frame vote would just carry into the tally.
+  var rawAvg=avgRaw(recentMetrics)||computeMetrics(capturedLm);
+  var result=rawAvg?bestOf(scoreShapes(rawAvg)):null;
+  var modal=result?result.shape:'Oval';
+
+  // Confidence blends how cleanly this face fits one shape (margin over the
+  // runner-up) with how steady the reading was across frames. The old version
+  // used agreement alone, which read ~98% even when every frame agreed on a
+  // shape only because they all shared the same measurement bug.
+  var margin=result&&result.top>0?(result.top-result.second)/result.top:0;
   var agreeN=0;
   for(var i=0;i<recentShapes.length;i++){if(recentShapes[i]===modal)agreeN++;}
-  var agree=recentShapes.length?agreeN/recentShapes.length:0.8;
-  var confidence=Math.max(62,Math.min(98,Math.round(agree*100)));
-  var rawAvg=avgRaw(recentMetrics);
+  var agree=recentShapes.length?agreeN/recentShapes.length:0.7;
+  var confidence=Math.max(58,Math.min(97,
+    Math.round((0.55*agree+0.45*Math.min(1,margin*1.8))*100)));
   var metricsAvg=avgMetrics(recentMetrics);
 
-  runCaptureAnimation(capturedLm,modal,capturedPhoto,function(){
-    post({
+  runCaptureAnimation(capturedLm,modal,capturedPhoto,capturedMirror,function(){
+    // Hold on the traced photo with the shape badge visible. The result is
+    // parked here until the user taps Continue.
+    pendingResult={
       type:'faceShape',shape:modal,confidence:confidence,
       metrics:metricsAvg,
-      debug:{raw:rawAvg,scores:null,samples:recentShapes.length}
-    });
+      photo:snapshotDataUrl(900),
+      debug:{raw:rawAvg,scores:result?scoreShapes(rawAvg):null,samples:recentShapes.length}
+    };
+    hint.className='success';
+    hint.textContent=modal+' face detected · '+confidence+'% match';
+    continueBtn.disabled=false;
+    resultRow.classList.add('show');
+    requestAnimationFrame(function(){resultRow.classList.add('visible');});
   });
 });
 
@@ -964,7 +1302,7 @@ faceMesh.onResults(function(results){
     setCaptureEnabled(false);
     oval.className='guide-oval';
     hint.className='';
-    hint.textContent='Position your face in the frame';
+    hint.textContent=idleHint();
     if(hudStatus){hudStatus.textContent='Searching';hudStatus.className='hud hud-tr searching';}
     if(hudCoord){hudCoord.textContent='Yaw --  Sz --';}
     return;
@@ -992,12 +1330,12 @@ faceMesh.onResults(function(results){
   if(!centeredEnough(lm)){
     setCaptureEnabled(false);
     oval.className='guide-oval';hint.className='warn';
-    hint.textContent='Center your face in the frame';return;
+    hint.textContent='Center '+faceWord()+' in the frame';return;
   }
   if(Math.abs(yaw)>FRONT_MAX){
     setCaptureEnabled(false);
     oval.className='guide-oval';hint.className='warn';
-    hint.textContent='Look straight at the camera';return;
+    hint.textContent=facing==='user'?'Look straight at the camera':'Ask them to look straight at the camera';return;
   }
 
   setCaptureEnabled(true);
@@ -1014,16 +1352,79 @@ faceMesh.onResults(function(results){
 
 // ── Start camera ─────────────────────────────────────────────────────────────
 var video=document.getElementById('video');
-var cam=new Camera(video,{
-  onFrame:async function(){await faceMesh.send({image:video});},
-  width:640,height:480,facingMode:'user'
-});
-cam.start()
-  .then(function(){document.getElementById('loading').style.display='none';})
+var loading=document.getElementById('loading');
+var cam=null,switching=false;
+
+// Keep everything that depends on which lens is live in one place: the preview
+// mirror, the yaw sign (via MIRROR) and the header copy.
+function applyFacing(){
+  MIRROR=(facing==='user');
+  if(MIRROR)video.classList.add('mirrored');else video.classList.remove('mirrored');
+  topchipText.textContent=MIRROR?'Biometric Face Scan':'Rear Camera Scan';
+}
+
+function stopCamera(){
+  try{if(cam&&cam.stop)cam.stop();}catch(e){}
+  var s=video.srcObject;
+  if(s&&s.getTracks){var tr=s.getTracks();for(var i=0;i<tr.length;i++){try{tr[i].stop();}catch(e2){}}}
+  video.srcObject=null;
+  cam=null;
+}
+
+function startCamera(){
+  applyFacing();
+  cam=new Camera(video,{
+    onFrame:async function(){await faceMesh.send({image:video});},
+    width:640,height:480,facingMode:facing
+  });
+  return cam.start();
+}
+
+startCamera()
+  .then(function(){loading.style.display='none';})
   .catch(function(err){
     post({type:'cameraError',reason:String(err)});
-    document.getElementById('loading').innerHTML='<p style="color:rgba(255,255,255,.7);padding:20px;text-align:center">Camera access denied.<br>Please allow camera permission and try again.</p>';
+    loading.innerHTML='<p style="color:rgba(255,255,255,.7);padding:20px;text-align:center">Camera access denied.<br>Please allow camera permission and try again.</p>';
   });
+
+// ── Front / rear camera toggle ───────────────────────────────────────────────
+// Switching lenses invalidates the sample buffer (different focal length and
+// mirroring), so alignment restarts from scratch. If the requested camera can't
+// be opened — no rear lens, or it's held by another app — we fall back to the
+// one that was already working instead of leaving a dead preview.
+flipBtn.addEventListener('click',function(){
+  if(done||switching)return;
+  switching=true;
+  flipBtn.classList.add('busy');
+  flipBtn.classList.toggle('spin');
+
+  var prev=facing;
+  facing=(facing==='user')?'environment':'user';
+
+  recentMetrics=[];recentShapes=[];lastLm=null;
+  setCaptureEnabled(false);
+  oval.className='guide-oval';
+  hint.className='';
+  loading.style.display='';
+  loading.innerHTML='<div class="spinner"></div>Switching camera…';
+
+  stopCamera();
+  startCamera().then(function(){
+    loading.style.display='none';
+    hint.textContent=idleHint();
+    switching=false;flipBtn.classList.remove('busy');
+  }).catch(function(){
+    facing=prev;
+    stopCamera();
+    startCamera().then(function(){loading.style.display='none';}).catch(function(e){
+      post({type:'cameraError',reason:String(e)});
+    });
+    flipBtn.classList.toggle('spin');
+    hint.className='warn';
+    hint.textContent='That camera is unavailable';
+    switching=false;flipBtn.classList.remove('busy');
+  });
+});
 })();
 </script>
 </body>
@@ -1170,6 +1571,7 @@ const FaceScanCamera: React.FC<{
     confidence: number,
     metrics: FaceMetrics | null,
     debug: FaceDebug | null,
+    photo: string | null,
   ) => void;
   onCameraError: () => void;
   onCancel: () => void;
@@ -1194,6 +1596,7 @@ const FaceScanCamera: React.FC<{
             typeof d.confidence === 'number' ? d.confidence : 90,
             (d.metrics as FaceMetrics) || null,
             (d.debug as FaceDebug) || null,
+            typeof d.photo === 'string' ? d.photo : null,
           );
         } else if (d.type === 'cameraError') {
           onCameraError();
@@ -1553,11 +1956,13 @@ const GlassesBottomSheet: React.FC<{
   confidence?: number | null;
   metrics?: FaceMetrics | null;
   debug?: FaceDebug | null;
+  photo?: string | null;
   onClose: () => void;
-}> = ({ visible, shape, confidence, metrics, debug, onClose }) => {
+}> = ({ visible, shape, confidence, metrics, debug, photo, onClose }) => {
   const navigation = useNavigation<any>();
   const info = FACE_SHAPE_INFO[shape];
   const [showMeasure, setShowMeasure] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -1578,6 +1983,8 @@ const GlassesBottomSheet: React.FC<{
         }),
       ]).start();
     } else {
+      // Don't leave the preview armed for the next scan's sheet.
+      setPhotoPreview(false);
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: SCREEN_HEIGHT,
@@ -1638,15 +2045,35 @@ const GlassesBottomSheet: React.FC<{
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* Hero — face shape + confidence, compact */}
+          {/* Hero — face shape + confidence, compact. The scan itself sits in
+              place of the generic shape icon when we have it, so the user can
+              see the photo the result came from. */}
           <View style={gsStyles.heroCard}>
-            <View style={gsStyles.heroIcon}>
-              <Ionicons
-                name={info.icon as any}
-                size={26}
-                color={Colors.primary}
-              />
-            </View>
+            {photo ? (
+              <TouchableOpacity
+                onPress={() => setPhotoPreview(true)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="View scan photo full screen"
+              >
+                <Image
+                  source={{ uri: photo }}
+                  style={gsStyles.heroPhoto}
+                  resizeMode="cover"
+                />
+                <View style={gsStyles.heroPhotoExpand}>
+                  <Ionicons name="expand" size={11} color={Colors.white} />
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={gsStyles.heroIcon}>
+                <Ionicons
+                  name={info.icon as any}
+                  size={26}
+                  color={Colors.primary}
+                />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <AppText style={gsStyles.heroOverline}>YOUR FACE SHAPE</AppText>
               <AppText style={gsStyles.heroShape}>{shape}</AppText>
@@ -1836,8 +2263,21 @@ const GlassesBottomSheet: React.FC<{
                 jVc (jaw/cheek) : {debug.raw.jVc.toFixed(3)}
               </AppText>
               <AppText style={gsStyles.dbgRow}>
-                jawDeg : {debug.raw.jawDeg.toFixed(1)}
+                chinTaper (chin/jaw): {debug.raw.chinTaper?.toFixed(3)}
               </AppText>
+              <AppText style={gsStyles.dbgRow}>
+                jawDeg (gonial) : {debug.raw.jawDeg.toFixed(1)}
+              </AppText>
+              {debug.scores && (
+                <AppText style={gsStyles.dbgRow}>
+                  scores :{' '}
+                  {Object.entries(debug.scores)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([k, v]) => `${k} ${v.toFixed(2)}`)
+                    .join('  ')}
+                </AppText>
+              )}
               <AppText style={gsStyles.dbgRow}>
                 picked : {shape} ({debug.samples} frames)
               </AppText>
@@ -1868,6 +2308,57 @@ const GlassesBottomSheet: React.FC<{
           </View>
         </ScrollView>
       </Animated.View>
+
+      {/* Full-screen scan preview. Nested inside the sheet's own Modal so the
+          sheet stays mounted underneath and is still there on dismiss.
+          GestureHandlerRootView is required for pinch/pan to reach ImageZoom —
+          a RN Modal renders outside the root view the app wraps in App.tsx. */}
+      {photo && (
+        <Modal
+          visible={photoPreview}
+          transparent={false}
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setPhotoPreview(false)}
+        >
+          <GestureHandlerRootView style={gsStyles.previewRoot}>
+            <ImageZoom
+              uri={photo}
+              minScale={1}
+              maxScale={4}
+              doubleTapScale={2.5}
+              isDoubleTapEnabled
+              isPanEnabled
+              isPinchEnabled
+              resizeMode="contain"
+              style={gsStyles.previewImage}
+            />
+            <SafeAreaView style={gsStyles.previewBar} pointerEvents="box-none">
+              <TouchableOpacity
+                style={gsStyles.previewClose}
+                onPress={() => setPhotoPreview(false)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Close preview"
+              >
+                <Ionicons name="close" size={22} color={Colors.white} />
+              </TouchableOpacity>
+            </SafeAreaView>
+            <SafeAreaView
+              style={gsStyles.previewCaptionWrap}
+              pointerEvents="none"
+            >
+              <AppText style={gsStyles.previewCaption}>
+                {shape} face
+                {typeof confidence === 'number' ? ` · ${confidence}% match` : ''}
+              </AppText>
+              <AppText style={gsStyles.previewHint}>
+                Pinch or double-tap to zoom
+              </AppText>
+            </SafeAreaView>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
     </Modal>
   );
 };
@@ -2142,7 +2633,10 @@ const LandoltC: React.FC<{ size: number; angle: number }> = ({
   // of smearing across a subpixel boundary — the ring must read as small, not
   // as blurry, or the gap becomes unfindable for the wrong reason.
   const stroke = Math.round(size * 0.22 * 2) / 2;
-  const gapWidth = stroke * 1.2;
+  // A standard Landolt C is built on a 5-unit grid: 1 unit of stroke and a gap
+  // exactly as wide as the stroke. The gap used to be 1.2x the stroke, which
+  // made it easier to spot than the optotype it is modelled on.
+  const gapWidth = stroke;
   return (
     <View
       style={{
@@ -2174,14 +2668,53 @@ const LandoltC: React.FC<{ size: number; angle: number }> = ({
   );
 };
 
-// A big, gapless "O" with 8 tap targets sitting on the ring itself: the user
-// answers by touching the point on the O where the C's gap was, instead of
-// reading an arrow. Targets land on the ring's stroke midline so the tap and
-// the answer are literally the same place on the circle.
-const PICKER_BOX = 284;
-const PICKER_RING = 208; // outer diameter of the O
-const PICKER_STROKE = 18;
-const PICKER_SLOT = 46;
+// Answer picker — a black ring cut into the 8 Landolt directions. The wedge
+// sitting where the C's gap was IS the button, so the tap and the answer are
+// literally the same place on the circle: no arrows, no labels to read, and a
+// target big enough to hit with the phone held at arm's length.
+const PICKER_BOX = 260;
+const PICKER_R_OUT = 120;
+const PICKER_R_IN = 66;
+// The wedges meet edge to edge; a hairline stroke is all that divides them.
+// Strokes are centred on the path, so neighbours each contribute half and the
+// seam between any two reads as one even line.
+const PICKER_DIVIDER = 2;
+// Touch targets are plain RN views laid over the drawing rather than SVG press
+// handlers: hit-testing a <Path> is the sort of thing that quietly stops
+// working on one platform, and a broken answer button breaks the whole test.
+const PICKER_HIT = 60;
+
+// Angle convention matches LANDOLT_ANGLES and the LandoltC ring itself:
+// 0 = up, growing clockwise.
+const polarPoint = (cx: number, cy: number, r: number, deg: number) => {
+  const rad = (deg * Math.PI) / 180;
+  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+};
+
+// One wedge of the donut: out along the outer arc, in across, back along the
+// inner arc. Sweep flags are 1 then 0 because the return trip runs the other
+// way round the circle.
+const wedgePath = (
+  cx: number,
+  cy: number,
+  rOut: number,
+  rIn: number,
+  deg: number,
+  span: number,
+) => {
+  const a0 = deg - span / 2;
+  const a1 = deg + span / 2;
+  const o0 = polarPoint(cx, cy, rOut, a0);
+  const o1 = polarPoint(cx, cy, rOut, a1);
+  const i1 = polarPoint(cx, cy, rIn, a1);
+  const i0 = polarPoint(cx, cy, rIn, a0);
+  return (
+    `M ${o0.x} ${o0.y} ` +
+    `A ${rOut} ${rOut} 0 0 1 ${o1.x} ${o1.y} ` +
+    `L ${i1.x} ${i1.y} ` +
+    `A ${rIn} ${rIn} 0 0 0 ${i0.x} ${i0.y} Z`
+  );
+};
 
 const DirectionPicker: React.FC<{
   selected: number | null;
@@ -2189,44 +2722,69 @@ const DirectionPicker: React.FC<{
   onSelect: (angle: number) => void;
 }> = ({ selected, correctAngle, onSelect }) => {
   const center = PICKER_BOX / 2;
-  // Midline of the ring's stroke — where the gap in a real C would sit.
-  const radius = (PICKER_RING - PICKER_STROKE) / 2;
+  const span = 360 / LANDOLT_DIRECTIONS.length;
+  // Middle of the wedge's thickness — where the touch target and the
+  // correct/wrong icon sit.
+  const hitRadius = (PICKER_R_OUT + PICKER_R_IN) / 2;
+
   return (
     <View style={rfStyles.pickerContainer}>
-      <View style={rfStyles.pickerRing} />
+      <Svg width={PICKER_BOX} height={PICKER_BOX}>
+        {LANDOLT_DIRECTIONS.map(dir => {
+          const isSelected = selected === dir.angle;
+          const revealCorrect = selected !== null && dir.angle === correctAngle;
+          const showWrong = isSelected && dir.angle !== correctAngle;
+          const fill = revealCorrect
+            ? Colors.success
+            : showWrong
+            ? Colors.error
+            : Colors.black;
+          return (
+            <Path
+              key={dir.angle}
+              d={wedgePath(
+                center,
+                center,
+                PICKER_R_OUT,
+                PICKER_R_IN,
+                dir.angle,
+                span,
+              )}
+              fill={fill}
+              stroke={Colors.white}
+              strokeWidth={PICKER_DIVIDER}
+            />
+          );
+        })}
+      </Svg>
+
       <AppText style={rfStyles.pickerHint}>Tap the gap</AppText>
+
       {LANDOLT_DIRECTIONS.map(dir => {
-        const rad = (dir.angle * Math.PI) / 180;
-        const x = center - PICKER_SLOT / 2 + radius * Math.sin(rad);
-        const y = center - PICKER_SLOT / 2 - radius * Math.cos(rad);
+        const pt = polarPoint(center, center, hitRadius, dir.angle);
         const isSelected = selected === dir.angle;
         const revealCorrect = selected !== null && dir.angle === correctAngle;
         const showWrong = isSelected && dir.angle !== correctAngle;
         return (
           <TouchableOpacity
             key={dir.angle}
+            accessibilityRole="button"
             accessibilityLabel={dir.label}
             disabled={selected !== null}
             style={[
-              rfStyles.pickerSlot,
-              { left: x, top: y },
-              revealCorrect && rfStyles.pickerSlotCorrect,
-              showWrong && rfStyles.pickerSlotWrong,
+              rfStyles.pickerHit,
+              { left: pt.x - PICKER_HIT / 2, top: pt.y - PICKER_HIT / 2 },
             ]}
             onPress={() => onSelect(dir.angle)}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
           >
-            {/* Once answered, the chosen/correct slot punches a visible gap
-                in the O; before that it's just a subtle dot to aim at. */}
             {revealCorrect || showWrong ? (
               <Ionicons
                 name={revealCorrect ? 'checkmark' : 'close'}
-                size={20}
+                size={22}
                 color={Colors.white}
               />
-            ) : (
-              <View style={rfStyles.pickerSlotDot} />
-            )}
+            ) : null}
           </TouchableOpacity>
         );
       })}
@@ -2843,7 +3401,8 @@ const RefractionResult: React.FC<{
   const [showBooking, setShowBooking] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const acuityOk = acuityLeftPass >= 4 && acuityRightPass >= 4;
+  const acuityOk =
+    acuityLeftPass >= ACUITY_PASS_MARK && acuityRightPass >= ACUITY_PASS_MARK;
   const colorOk = colorVision === 'normal';
   const astigmatismOk = astigmatism === 'equal';
 
@@ -2854,8 +3413,10 @@ const RefractionResult: React.FC<{
         label: 'Visual Acuity',
         ok: acuityOk,
         detail: `Left eye: ${
-          acuityLeftPass >= 4 ? 'Good' : 'Needs attention'
-        }. Right eye: ${acuityRightPass >= 4 ? 'Good' : 'Needs attention'}. ${
+          acuityLeftPass >= ACUITY_PASS_MARK ? 'Good' : 'Needs attention'
+        }. Right eye: ${
+          acuityRightPass >= ACUITY_PASS_MARK ? 'Good' : 'Needs attention'
+        }. ${
           acuityOk
             ? 'Both eyes read the chart clearly.'
             : 'One or both eyes had difficulty reading the smaller lines.'
@@ -3188,6 +3749,9 @@ const ScanScreen: React.FC = () => {
   const [confidence, setConfidence] = useState<number | null>(null);
   const [metrics, setMetrics] = useState<FaceMetrics | null>(null);
   const [debug, setDebug] = useState<FaceDebug | null>(null);
+  // The analyzed frame, kept so the results sheet can show the user the photo
+  // the recommendation was actually derived from.
+  const [scanPhoto, setScanPhoto] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const isScanning =
@@ -3221,17 +3785,20 @@ const ScanScreen: React.FC = () => {
     conf: number,
     m: FaceMetrics | null,
     dbg: FaceDebug | null,
+    photo: string | null,
   ) => {
     setFaceShape(shape);
     setConfidence(conf);
     setMetrics(m);
     setDebug(dbg);
-    // Brief pause so the user sees "Scan complete!" in the camera view,
-    // then transition: close camera, open bottom sheet.
+    setScanPhoto(photo);
+    // The scanner already holds on the result until the user taps Continue,
+    // so this only needs long enough for the button press to register before
+    // the camera closes and the recommendations sheet opens.
     setTimeout(() => {
       setFaceScanStage('idle');
       setSheetVisible(true);
-    }, 600);
+    }, 180);
   };
 
   const handleSheetClose = () => {
@@ -3239,6 +3806,7 @@ const ScanScreen: React.FC = () => {
     setFaceShape(null);
     setConfidence(null);
     setMetrics(null);
+    setScanPhoto(null);
     setFaceScanStage('idle');
   };
 
@@ -3298,6 +3866,7 @@ const ScanScreen: React.FC = () => {
               confidence={confidence}
               metrics={metrics}
               debug={debug}
+              photo={scanPhoto}
               onClose={handleSheetClose}
             />
           )}
@@ -3462,6 +4031,67 @@ const gsStyles = StyleSheet.create({
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroPhoto: {
+    width: 56,
+    height: 68,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.gray200,
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  heroPhotoExpand: {
+    position: 'absolute',
+    right: 3,
+    bottom: 3,
+    width: 19,
+    height: 19,
+    borderRadius: 10,
+    backgroundColor: 'rgba(10,14,18,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  previewImage: {
+    flex: 1,
+    width: '100%',
+  },
+  previewBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'flex-start',
+    padding: Spacing.md,
+  },
+  previewClose: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewCaptionWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingBottom: Spacing.lg,
+  },
+  previewCaption: {
+    color: Colors.white,
+    fontSize: FontSize.md,
+    fontWeight: '700',
+  },
+  previewHint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FontSize.sm,
+    marginTop: 3,
   },
   heroOverline: {
     fontSize: 10,
@@ -4227,7 +4857,9 @@ const rfStyles = StyleSheet.create({
     position: 'absolute',
   },
 
-  // Answer picker (Landolt C acuity test) — a full "O" with 8 tap targets
+  // Answer picker (Landolt C acuity test) — a segmented ring, one wedge per
+  // direction. The wedges themselves are drawn in SVG; these are the frame,
+  // the centre hint, and the invisible touch targets laid over each wedge.
   pickerContainer: {
     width: PICKER_BOX,
     height: PICKER_BOX,
@@ -4236,45 +4868,18 @@ const rfStyles = StyleSheet.create({
     justifyContent: 'center',
     marginVertical: Spacing.lg,
   },
-  pickerRing: {
-    position: 'absolute',
-    width: PICKER_RING,
-    height: PICKER_RING,
-    borderRadius: PICKER_RING / 2,
-    borderWidth: PICKER_STROKE,
-    borderColor: Colors.gray200,
-  },
   pickerHint: {
+    position: 'absolute',
     fontSize: 13,
     color: Colors.gray400,
   },
-  pickerSlot: {
+  pickerHit: {
     position: 'absolute',
-    width: PICKER_SLOT,
-    height: PICKER_SLOT,
-    borderRadius: PICKER_SLOT / 2,
+    width: PICKER_HIT,
+    height: PICKER_HIT,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.white,
-    borderWidth: 1.5,
-    borderColor: Colors.glassBorderStrong,
-    ...Shadow.sm,
   },
-  pickerSlotDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.gray400,
-  },
-  pickerSlotCorrect: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
-  },
-  pickerSlotWrong: {
-    backgroundColor: Colors.error,
-    borderColor: Colors.error,
-  },
-
 
   // Numbered badge in the per-test instruction list
   instructionStepNum: {
