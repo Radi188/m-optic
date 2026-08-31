@@ -75,6 +75,19 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
           font-family:-apple-system,sans-serif;font-size:11px;color:${STUDIO.inkFaint}}
     #boot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;
           font-family:-apple-system,sans-serif;font-size:13px;color:${STUDIO.inkSoft};line-height:1.8}
+    /* Floating controls, bottom-left — the exploded-view toggle. */
+    #tools{position:absolute;left:18px;bottom:26px;display:flex;flex-direction:column;gap:12px;z-index:20}
+    .tool{width:46px;height:46px;border-radius:23px;border:none;padding:0;
+          display:flex;align-items:center;justify-content:center;
+          background:rgba(43,37,35,0.08);border:1px solid rgba(43,37,35,0.14);
+          color:${STUDIO.ink};cursor:pointer;-webkit-tap-highlight-color:transparent;
+          transition:background .25s,color .25s}
+    .tool.on{background:${STUDIO.ink};color:#F6F3EF;border-color:${STUDIO.ink}}
+    .tool svg{width:22px;height:22px;display:block}
+    #toolLabel{position:absolute;left:74px;bottom:37px;z-index:20;pointer-events:none;
+               font-family:-apple-system,sans-serif;font-size:12px;font-weight:600;
+               color:${STUDIO.inkSoft};opacity:0;transition:opacity .3s}
+    #toolLabel.show{opacity:1}
     .spinner{width:32px;height:32px;border:3px solid rgba(43,37,35,.14);
              border-top-color:rgba(43,37,35,.55);border-radius:50%;
              animation:spin .8s linear infinite;margin:0 auto 10px}
@@ -89,6 +102,24 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
 </div>
 <div id="info">Drag to rotate · Pinch to zoom</div>
 <div id="boot"><div class="spinner"></div>Loading 3D model…</div>
+<div id="tools">
+  <button id="spinBtn" class="tool" aria-label="Auto-rotate">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/>
+      <path d="M20.6 4.2v4.4h-4.4"/>
+    </svg>
+  </button>
+  <button id="explodeBtn" class="tool" aria-label="Exploded view">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2.5 19 6v.2L12 9.8 5 6.2V6z"/>
+      <path d="M4 13.2 8.5 15.5 4 17.8 -0.5 15.5z" transform="translate(2.5,0)"/>
+      <path d="M20 13.2 24.5 15.5 20 17.8 15.5 15.5z" transform="translate(-2.5,0)"/>
+    </svg>
+  </button>
+</div>
+<div id="toolLabel">Exploded view</div>
 ${GLB_SCRIPT_TAGS}
 <script>
 (function(){
@@ -201,14 +232,27 @@ var FILL = 0.86;
 var PERSPECTIVE_BULGE = 1.35;
 
 var modelPivot = null;
-var modelSpin  = 1;   // max(size.x, size.z) of the loaded model
+var modelSpin  = 1;   // max(size.x, size.z) of the loaded model, assembled
+
+// ── Exploded view ────────────────────────────────────────────────────────────
+var explodeParts = [];
+var explodeSpin  = 1;   // the same measure with the parts fully apart
+var explodeT     = 0;   // animated 0 → 1
+var explodeTarget = 0;
+// Where the frame turns to when it comes apart. Side-on: the parts separate
+// along the temple axis, so face-on they would just line up behind each other.
+var EXPLODE_VIEW_ROT_Y = Math.PI / 2;
+var EXPLODE_VIEW_ROT_X = 0.06;
 
 function fitModelToView() {
   if (!modelPivot) { return; }
   var vFOV   = camera.fov * Math.PI / 180;
   var worldH = 2 * Math.tan(vFOV / 2) * camera.position.z;
   var worldW = worldH * camera.aspect;
-  modelPivot.scale.setScalar((FILL * worldW) / (modelSpin * PERSPECTIVE_BULGE));
+  // Blend towards the exploded extent as the parts separate, so the view pulls
+  // back in step with them instead of letting them run off the edges.
+  var spin = modelSpin + (explodeSpin - modelSpin) * explodeT;
+  modelPivot.scale.setScalar((FILL * worldW) / (spin * PERSPECTIVE_BULGE));
 }
 
 loadGlassesGLB(GLB_DATA_URI).then(function (root) {
@@ -217,6 +261,15 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   var centred = centreGlasses(root, 'bounds');
   modelPivot  = centred.pivot;
   modelSpin   = Math.max(centred.size.x, centred.size.z);
+
+  explodeParts = collectExplodeParts(root, centred.size.x);
+  explodeSpin  = measureExplodedSpan(root, explodeParts) || modelSpin;
+  if (!explodeParts.length) {
+    // Nothing to take apart — hide that one control rather than offer a dead
+    // button. Only the explode button: auto-rotate works on any model.
+    document.getElementById('explodeBtn').style.display = 'none';
+  }
+
   fitModelToView();
 
   scene.add(modelPivot);
@@ -228,13 +281,19 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
 });
 
 // ── Touch controls ────────────────────────────────────────────────────────────
-var dragging = false, autoRot = true;
+// The frame rests still by default and stays wherever the user leaves it. The
+// spin is opt-in, from the auto-rotate button — a product that will not hold
+// still is hard to actually look at.
+var dragging = false, autoRot = false;
 var lastX = 0, lastY = 0, velX = 0, velY = 0;
 var rotX = 0.18, rotY = 0, lastPinch = 0;
+var AUTO_ROT_SPEED = 0.007;   // radians per frame, about the vertical axis
+var bobAmp = 0;               // idle float, eased in only while spinning
 
 renderer.domElement.addEventListener('touchstart', function (e) {
   if (e.touches.length === 1) {
-    dragging = true; autoRot = false;
+    dragging = true;
+    setAutoRotate(false);
     lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
   } else if (e.touches.length === 2) {
     lastPinch = Math.hypot(
@@ -265,21 +324,85 @@ renderer.domElement.addEventListener('touchmove', function (e) {
 
 renderer.domElement.addEventListener('touchend', function () { dragging = false; });
 
+// ── Tool buttons ──────────────────────────────────────────────────────────────
+var explodeBtn = document.getElementById('explodeBtn');
+var spinBtn    = document.getElementById('spinBtn');
+var toolLabel  = document.getElementById('toolLabel');
+var labelTimer = null;
+
+function showToolLabel(text) {
+  toolLabel.textContent = text;
+  toolLabel.classList.add('show');
+  clearTimeout(labelTimer);
+  labelTimer = setTimeout(function () {
+    toolLabel.classList.remove('show');
+  }, 1400);
+}
+
+// Single place that owns the spin state, so the button, the explode toggle and
+// a drag can all turn it off without their button styling drifting apart.
+function setAutoRotate(on) {
+  autoRot = on;
+  spinBtn.classList.toggle('on', on);
+  if (on) { velX = 0; velY = 0; }   // drop leftover flick momentum
+}
+
+spinBtn.addEventListener('click', function () {
+  setAutoRotate(!autoRot);
+  showToolLabel(autoRot ? 'Auto-rotate on' : 'Auto-rotate off');
+});
+
+explodeBtn.addEventListener('click', function () {
+  var on = explodeTarget < 0.5;
+  explodeTarget = on ? 1 : 0;
+  explodeBtn.classList.toggle('on', on);
+
+  if (on) {
+    // Turn side-on so the separation is actually visible, and stop the spin —
+    // a rotating exploded diagram is unreadable. Collapsing does NOT turn it
+    // back on: the spin is the user's to switch, not ours.
+    setAutoRotate(false);
+    rotY = EXPLODE_VIEW_ROT_Y;
+    rotX = EXPLODE_VIEW_ROT_X;
+  }
+
+  showToolLabel(on ? 'Exploded view' : 'Assembled');
+});
+
 // ── Animate ───────────────────────────────────────────────────────────────────
 var t = 0;
 (function animate() {
   requestAnimationFrame(animate);
   t += 0.016;
-  if (autoRot) {
-    rotY += 0.007;
-  } else {
-    velX *= 0.88; velY *= 0.88;
-    if (Math.abs(velX) < 0.0005 && Math.abs(velY) < 0.0005) autoRot = true;
+
+  // Ease towards the target rather than snapping, and re-fit every frame while
+  // moving so the zoom-out tracks the parts as they travel.
+  if (Math.abs(explodeTarget - explodeT) > 0.0005) {
+    explodeT += (explodeTarget - explodeT) * 0.09;
+    setExplode(explodeParts, explodeT * explodeT * (3 - 2 * explodeT));
+    fitModelToView();
   }
+
+  if (autoRot) {
+    rotY += AUTO_ROT_SPEED;   // horizontal, about the vertical axis
+  } else if (!dragging) {
+    // Carry a flick on and ease it out. This used to only count down to
+    // re-enabling the spin by itself; now it is the actual glide, and it ends
+    // with the frame parked wherever it came to rest.
+    if (Math.abs(velX) > 0.00005 || Math.abs(velY) > 0.00005) {
+      rotX = Math.max(-0.8, Math.min(0.8, rotX + velX));
+      rotY += velY;
+      velX *= 0.92; velY *= 0.92;
+    }
+  }
+
   if (modelPivot) {
     modelPivot.rotation.x = rotX;
     modelPivot.rotation.y = rotY;
-    modelPivot.position.y = Math.sin(t * 0.55) * 0.06;
+    // The idle float belongs to the spin: a frame that is meant to be standing
+    // still should not bob.
+    bobAmp += ((autoRot ? 1 : 0) - bobAmp) * 0.06;
+    modelPivot.position.y = Math.sin(t * 0.55) * 0.06 * bobAmp;
   }
   aLight.intensity = 0.40 + Math.sin(t * 1.1) * 0.10;
   renderer.render(scene, camera);
@@ -301,7 +424,9 @@ window.addEventListener('resize', function () {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const GlassModelScene: React.FC<Props> = ({ glass }) => {
-  const { dataUri, error } = useGlassesGlb();
+  // The product's own .glb when the shop has uploaded one; the bundled
+  // essilor.glb otherwise.
+  const { dataUri, error } = useGlassesGlb(glass.modelUrl);
 
   const html = useMemo(
     () => (dataUri ? buildHtml(glass, dataUri) : null),

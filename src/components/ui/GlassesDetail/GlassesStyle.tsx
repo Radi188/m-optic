@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  useWindowDimensions,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import RenderHTML from 'react-native-render-html';
@@ -13,6 +19,12 @@ import {
 } from '../../../theme';
 import AppText from '../../AppText';
 
+export interface ColorSwatch {
+  id: string;
+  hex: string;
+  label: string;
+}
+
 interface Props {
   brand: string;
   size: string;
@@ -21,6 +33,13 @@ interface Props {
   colorHex?: string;
   colorName?: string;
   descriptionHtml: string;
+  /** Frame dimensions as "53–17–140", when the API has them. */
+  measurementLabel?: string | null;
+  materials?: string | null;
+  /** One swatch per colourway. With fewer than two, a single colour is shown. */
+  colorOptions?: ColorSwatch[];
+  selectedColorId?: string | null;
+  onSelectColor?: (id: string) => void;
 }
 
 const GlassesStyleSection: React.FC<Props> = ({
@@ -31,6 +50,11 @@ const GlassesStyleSection: React.FC<Props> = ({
   colorHex = '#D1D5DB',
   colorName = 'Default',
   descriptionHtml,
+  measurementLabel = null,
+  materials = null,
+  colorOptions = [],
+  selectedColorId = null,
+  onSelectColor,
 }) => {
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
@@ -42,12 +66,35 @@ const GlassesStyleSection: React.FC<Props> = ({
       >
         <AppText style={styles.sectionTitleColor}>{t('glassColor')}</AppText>
 
-        <View style={styles.singleColorCard}>
-          <View style={[styles.colorCircle, { backgroundColor: colorHex }]} />
-          <AppText style={styles.colorText}>
-            {colorName || t('commonDefault')}
-          </AppText>
-        </View>
+        {colorOptions.length > 1 ? (
+          <View style={styles.swatchRow}>
+            {colorOptions.map(option => {
+              const active = option.id === selectedColorId;
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  onPress={() => onSelectColor?.(option.id)}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={option.label || 'Colour option'}
+                  style={[styles.swatch, active && styles.swatchActive]}
+                >
+                  <View
+                    style={[styles.swatchDot, { backgroundColor: option.hex }]}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.singleColorCard}>
+            <View style={[styles.colorCircle, { backgroundColor: colorHex }]} />
+            <AppText style={styles.colorText}>
+              {colorName || t('commonDefault')}
+            </AppText>
+          </View>
+        )}
       </View>
 
       <AppText style={styles.sectionTitle}>{t('glassFrameDetails')}</AppText>
@@ -96,6 +143,42 @@ const GlassesStyleSection: React.FC<Props> = ({
             <AppText style={styles.infoValue}>{gender}</AppText>
           </View>
         </View>
+
+        {/* Only rendered when the API actually carries the values — an empty
+            card reads as missing data rather than as a spec. */}
+        {measurementLabel ? (
+          <View style={styles.infoCard}>
+            <View style={styles.iconWrap}>
+              <Ionicons
+                name="swap-horizontal"
+                size={18}
+                color={Colors.primary}
+              />
+            </View>
+            <View style={styles.infoContent}>
+              <AppText style={styles.infoLabel}>
+                {t('glassMeasurements')}
+              </AppText>
+              <AppText style={styles.infoValue}>{measurementLabel}</AppText>
+            </View>
+          </View>
+        ) : null}
+
+        {materials ? (
+          <View style={styles.infoCard}>
+            <View style={styles.iconWrap}>
+              <Ionicons
+                name="layers-outline"
+                size={18}
+                color={Colors.primary}
+              />
+            </View>
+            <View style={styles.infoContent}>
+              <AppText style={styles.infoLabel}>{t('glassMaterial')}</AppText>
+              <AppText style={styles.infoValue}>{materials}</AppText>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.descriptionWrap}>
@@ -123,7 +206,7 @@ export default GlassesStyleSection;
 
 const styles = StyleSheet.create({
   section: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
   sectionTitle: {
     fontSize: FontSize.md,
@@ -145,6 +228,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textSecondary || '#6B7280',
     marginBottom: Spacing.sm,
+  },
+
+  swatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginLeft: 'auto',
+  },
+  swatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  swatchActive: {
+    borderColor: Colors.primary,
+  },
+  swatchDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.gray300,
   },
 
   singleColorCard: {

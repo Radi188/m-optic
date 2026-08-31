@@ -415,7 +415,11 @@ else window.addEventListener('load', initFaceMesh);
 
 const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const webviewRef = useRef<WebView>(null);
-  const { dataUri, error } = useGlassesGlb();
+  // Same per-product model as the 3-D viewer, so the frame being tried on is
+  // the one being sold. Every tuning constant below is a fraction of the model's
+  // own width or the measured face width, so nothing here is calibrated to one
+  // particular GLB.
+  const { dataUri, error } = useGlassesGlb(glass.modelUrl);
 
   const html = useMemo(
     () => (dataUri ? buildHtml(glass, dataUri) : null),

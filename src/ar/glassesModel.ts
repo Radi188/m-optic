@@ -1,5 +1,5 @@
 /**
- * glassesModel — shared loading pipeline for the default glasses GLB.
+ * glassesModel — shared loading pipeline for a glasses GLB.
  *
  * `essilor.glb` is a binary glTF, so (unlike the old .obj path) it cannot be
  * embedded in the WebView HTML as text. Instead it is fetched once from the
@@ -8,8 +8,15 @@
  * same-origin for the WebView, so this works in dev and in release builds on
  * both platforms without any CORS/file-access configuration.
  *
- * The result is cached module-wide, so the 3-D viewer and the AR try-on share a
- * single fetch + encode.
+ * The result is cached module-wide PER URL, so the 3-D viewer and the AR try-on
+ * share a single fetch + encode for the same model.
+ *
+ * Products carry their own .glb (assets[type='3d_model']). Those are fetched the
+ * same way rather than handed to GLTFLoader as a plain https URL, because the
+ * WebView runs on a 'http://localhost' origin and the asset host sends no
+ * Access-Control-Allow-Origin — a direct load would be blocked by CORS. RN's
+ * own fetch has no such restriction, so the bytes come across here and go in as
+ * a data: URI. `essilor.glb` remains the fallback when a product has no model.
  */
 import { useEffect, useState } from 'react';
 import { Image } from 'react-native';
@@ -47,8 +54,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 /* eslint-enable no-bitwise */
 
 /** Native path: Blob -> FileReader.readAsDataURL (no big JS string math). */
-async function viaBlob(): Promise<string> {
-  const res = await fetch(GLB_URI);
+async function viaBlob(url: string): Promise<string> {
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
@@ -67,8 +74,8 @@ async function viaBlob(): Promise<string> {
 }
 
 /** Fallback path: ArrayBuffer -> manual base64. Re-fetches (body is consumed). */
-async function viaArrayBuffer(): Promise<string> {
-  const res = await fetch(GLB_URI);
+async function viaArrayBuffer(url: string): Promise<string> {
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
@@ -76,36 +83,53 @@ async function viaArrayBuffer(): Promise<string> {
   return bytesToBase64(new Uint8Array(buf));
 }
 
-let cached: Promise<string> | null = null;
+const cache = new Map<string, Promise<string>>();
 
-/** Fetches + encodes the GLB once; subsequent callers reuse the same promise. */
-export function loadGlbDataUri(): Promise<string> {
-  if (!cached) {
-    cached = (async () => {
-      let base64: string;
-      try {
-        base64 = await viaBlob();
-      } catch (e) {
-        console.warn('[glassesModel] Blob path failed, retrying as ArrayBuffer:', e);
-        base64 = await viaArrayBuffer();
-      }
-      return `data:model/gltf-binary;base64,${base64}`;
-    })().catch(e => {
-      cached = null; // allow a retry on the next mount
-      throw e;
-    });
+/**
+ * Fetches + encodes a GLB once per URL; subsequent callers reuse the promise.
+ * Omit `url` for the bundled fallback model.
+ */
+export function loadGlbDataUri(url?: string | null): Promise<string> {
+  const src = url || GLB_URI;
+  const hit = cache.get(src);
+  if (hit) {
+    return hit;
   }
-  return cached;
+
+  const pending = (async () => {
+    let base64: string;
+    try {
+      base64 = await viaBlob(src);
+    } catch (e) {
+      console.warn('[glassesModel] Blob path failed, retrying as ArrayBuffer:', e);
+      base64 = await viaArrayBuffer(src);
+    }
+    return `data:model/gltf-binary;base64,${base64}`;
+  })().catch(e => {
+    cache.delete(src); // allow a retry on the next mount
+    throw e;
+  });
+
+  cache.set(src, pending);
+  return pending;
 }
 
-/** Hook wrapper: `{ dataUri, error }`, both null while loading. */
-export function useGlassesGlb(): { dataUri: string | null; error: Error | null } {
+/**
+ * Hook wrapper: `{ dataUri, error }`, both null while loading.
+ * Pass the product's own model URL; omit it to get the bundled fallback.
+ */
+export function useGlassesGlb(url?: string | null): {
+  dataUri: string | null;
+  error: Error | null;
+} {
   const [dataUri, setDataUri] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let alive = true;
-    loadGlbDataUri()
+    setDataUri(null);
+    setError(null);
+    loadGlbDataUri(url)
       .then(uri => {
         if (alive) {
           setDataUri(uri);
@@ -120,7 +144,7 @@ export function useGlassesGlb(): { dataUri: string | null; error: Error | null }
     return () => {
       alive = false;
     };
-  }, []);
+  }, [url]);
 
   return { dataUri, error };
 }

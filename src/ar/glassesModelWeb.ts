@@ -28,6 +28,9 @@ export const GLB_SCRIPT_TAGS = `
  *   updateHeadOccluder(mesh, pose, cfg)
  *   hideFaceShadow(root)
  *   simplifyLenses(root, opacity)
+ *   collectExplodeParts(root, modelWidth) -> parts[]
+ *   setExplode(parts, t)               t = 0 assembled … 1 apart
+ *   measureExplodedSpan(root, parts)   -> widest extent when apart
  */
 export const GLB_HELPERS_JS = `
 // Named nodes authored into essilor.glb (glTF-Transform / Luxottica export).
@@ -182,6 +185,72 @@ function updateHeadOccluder(mesh, pose, cfg) {
   mesh.position.copy(pose.position)
     .addScaledVector(pose.zAxis, -cfg.back * fw)
     .addScaledVector(pose.yAxis, -cfg.down * fw);
+}
+
+// ── Exploded view ────────────────────────────────────────────────────────────
+// Separates the frame into its parts along the temple axis, the way an optician
+// lays a frame out: temples pulled back off the hinges, lenses lifted forward
+// out of the rims, the front left in place as the anchor.
+//
+// The offsets are fractions of the model's own width, so they hold whatever
+// frame is loaded. Every node here is part of the Luxottica naming convention
+// the supplier exports (verified on both the bundled essilor.glb and the
+// per-product .glb files the API serves) — and each one is optional, so a model
+// missing a part simply contributes nothing.
+//
+// Offsets are applied to node.position, which is in the PARENT's space. All of
+// these nodes hang off identity-transform parents (Root_Glasses_GRP, Lens_GRP),
+// so the offsets act along the model's own axes: +X wearer's left, +Y up,
+// +Z out of the face.
+var EXPLODE_PARTS = [
+  // Lenses lift forward, staggered so they do not overlap side-on.
+  { name: 'Lens_L_GEO', offset: [0, 0, 0.90] },
+  { name: 'Lens_R_GEO', offset: [0, 0, 0.62] },
+  { name: 'LogoLens_L_GEO', offset: [0, 0, 0.90] },
+  { name: 'LogoLens_R_GEO', offset: [0, 0, 0.62] },
+  // Temples slide back off their hinges, offset vertically so both stay
+  // readable when the frame is viewed from the side.
+  { name: 'Temple_L_Locator_GRP', offset: [0, 0.17, -0.78] },
+  { name: 'Temple_R_Locator_GRP', offset: [0, -0.17, -1.20] }
+];
+
+function collectExplodeParts(root, modelWidth) {
+  var parts = [];
+  for (var i = 0; i < EXPLODE_PARTS.length; i++) {
+    var spec = EXPLODE_PARTS[i];
+    var node = root.getObjectByName(spec.name);
+    if (!node) { continue; }        // frame does not have this part
+    parts.push({
+      node: node,
+      home: node.position.clone(),
+      delta: new THREE.Vector3(
+        spec.offset[0] * modelWidth,
+        spec.offset[1] * modelWidth,
+        spec.offset[2] * modelWidth
+      )
+    });
+  }
+  return parts;
+}
+
+/** t = 0 assembled, 1 fully apart. */
+function setExplode(parts, t) {
+  for (var i = 0; i < parts.length; i++) {
+    parts[i].node.position.copy(parts[i].home).addScaledVector(parts[i].delta, t);
+  }
+}
+
+// Widest on-screen extent when fully apart. Measured by actually exploding the
+// model and boxing it, rather than derived from the offsets — the parts have
+// real size, so the arithmetic would understate it and the view would overflow.
+function measureExplodedSpan(root, parts) {
+  if (!parts.length) { return 0; }
+  setExplode(parts, 1);
+  root.updateWorldMatrix(true, true);
+  var size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+  setExplode(parts, 0);
+  root.updateWorldMatrix(true, true);
+  return Math.max(size.x, size.z);
 }
 
 // KHR_materials_transmission lenses sample Three's transmission render target,

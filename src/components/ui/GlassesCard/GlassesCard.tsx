@@ -10,9 +10,19 @@ type Props = {
   item: Product;
   onPress: () => void;
   onTryOn: () => void;
+  /** Hide the price behind a blur (signed-out browsers, past the free preview). */
+  priceLocked?: boolean;
+  /** Tapping the locked price sends the user to sign in. */
+  onRequestLogin?: () => void;
 };
 
-const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
+const GlassCard: React.FC<Props> = ({
+  item,
+  onPress,
+  onTryOn,
+  priceLocked = false,
+  onRequestLogin,
+}) => {
   // State to track whether the heart is filled or not
   const [isLiked, setIsLiked] = useState(false);
 
@@ -55,7 +65,28 @@ const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
         </AppText>
         <AppText style={styles.brand}>{brand}</AppText>
 
-        <AppText style={styles.price}>${price}</AppText>
+        {priceLocked ? (
+          // The digits are rendered transparent with a shadow spread under
+          // them, which smears the real glyphs into an unreadable smudge. Done
+          // this way rather than with a BlurView because it behaves identically
+          // on both platforms and needs no native view over the text.
+          <TouchableOpacity
+            onPress={onRequestLogin}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Log in to see the price"
+          >
+            <AppText style={[styles.price, styles.priceBlurred]}>
+              ${price}
+            </AppText>
+            <AppText style={styles.priceLockHint}>
+              <Ionicons name="lock-closed" size={11} color={Colors.primary} />{' '}
+              Log in to see price
+            </AppText>
+          </TouchableOpacity>
+        ) : (
+          <AppText style={styles.price}>${price}</AppText>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -126,6 +157,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#b09080',
     marginVertical: 4,
+  },
+
+  priceBlurred: {
+    color: 'transparent',
+    textShadowColor: 'rgba(176,144,128,0.85)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 9,
+    marginVertical: 0,
+  },
+
+  priceLockHint: {
+    fontSize: 11,
+    color: '#b09080',
+    marginBottom: 4,
   },
 
   tryOnBtn: {

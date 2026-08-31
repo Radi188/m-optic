@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { productController } from '../controller/productDetailController';
-import { Product, ProductResponse } from '../types/glasses';
+import { Product, ProductDetail } from '../types/glasses';
 
 interface UseProductDetailReturn {
   product: Product | null;
   related: Product[];
   inquiryLink: string;
-  raw: ProductResponse | null;
+  raw: ProductDetail | null;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -15,7 +15,7 @@ interface UseProductDetailReturn {
 export const useProductDetail = (
   id?: number | string,
 ): UseProductDetailReturn => {
-  const [raw, setRaw] = useState<ProductResponse | null>(null);
+  const [raw, setRaw] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +44,7 @@ export const useProductDetail = (
   }, [fetchProductDetail]);
 
   return {
-    product: raw?.data ?? null,
+    product: raw?.product ?? null,
     related: raw?.related ?? [],
     inquiryLink: raw?.telegram_inquiry_link ?? '',
     raw,

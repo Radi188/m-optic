@@ -22,7 +22,9 @@ import { AppModal, Input, GlassBackground } from '../components/ui';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import type { RootStackParamList, GlassItem } from '../types/navigation';
 
-import { useAppDispatch } from '../store';
+import { useAppDispatch, useAppSelector } from '../store';
+import { selectIsAuthenticated } from '../store/slices/authSlice';
+import { FREE_PRICE_PREVIEW, isPriceVisible } from '../utils/priceGate';
 import { addItem } from '../store/slices/glassSlice';
 import GlassCard from '../components/ui/GlassesCard/GlassesCard';
 import SearchTrigger from '../components/ui/Search/SearchBar';
@@ -63,6 +65,11 @@ const GlassesListScreen: React.FC = () => {
   const navigation = useNavigation<GlassesListNav>();
   const route = useRoute<GlassesListRoute>();
   const dispatch = useAppDispatch();
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+
+  const goToLogin = useCallback(() => {
+    navigation.navigate('Login');
+  }, [navigation]);
 
   const from = route.params?.from || 'brand';
   const initialBrandId = route.params?.brandId;
@@ -291,14 +298,18 @@ const GlassesListScreen: React.FC = () => {
     return newData;
   };
 
-  const renderCard = ({ item }: { item: Product }) => {
+  const renderCard = ({ item, index }: { item: Product; index: number }) => {
     if ((item as any).empty) {
       return <View style={[styles.card, { opacity: 0 }]} />;
     }
 
+    // formatData only pads the LAST row, so a real item's position in the
+    // padded list is still its position in `products`.
     return (
       <GlassCard
         item={item}
+        priceLocked={!isPriceVisible(isAuthenticated, index)}
+        onRequestLogin={goToLogin}
         onPress={() => navigation.navigate('GlassDetail', { id: item.id })}
         onTryOn={() => navigation.navigate('VirtualTryOn', { glass: item })}
       />
@@ -464,6 +475,21 @@ const GlassesListScreen: React.FC = () => {
           <AppText style={styles.countLine}>
             {products.length} frame{products.length !== 1 ? 's' : ''}
           </AppText>
+        )}
+
+        {/* Only worth showing once there is actually a hidden price to reveal. */}
+        {!isAuthenticated && products.length > FREE_PRICE_PREVIEW && (
+          <TouchableOpacity
+            style={styles.priceGateBanner}
+            activeOpacity={0.85}
+            onPress={goToLogin}
+          >
+            <Ionicons name="lock-closed" size={16} color={Colors.primary} />
+            <AppText style={styles.priceGateText}>
+              Log in to see the price on every frame.
+            </AppText>
+            <AppText style={styles.priceGateAction}>Log in</AppText>
+          </TouchableOpacity>
         )}
 
         {loading && products.length === 0 ? (
@@ -717,6 +743,28 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 999,
     backgroundColor: Colors.gray200,
+  },
+
+  priceGateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.gray100,
+  },
+  priceGateText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+  },
+  priceGateAction: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 
   countLine: {

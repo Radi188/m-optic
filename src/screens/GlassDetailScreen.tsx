@@ -26,10 +26,17 @@ import type { GlassItem, RootStackParamList } from '../types/navigation';
 import GlassModelScene from '../ar/GlassModelScene';
 import GlassTryOnScene from '../ar/GlassTryOnScene';
 import GlassesSpecSection from '../components/ui/GlassesDetail/GlassessSpecSection';
-import GlassesImageDescription from '../components/ui/GlassesDetail/GlassesImageDescription';
 import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
 import { useProductDetail } from '../hook/useProductDetail';
+import {
+  colorOptions,
+  frameSizeName,
+  galleryImages,
+  measurementLabel,
+  modelUrl,
+  variationPrice,
+} from '../utils/productMedia';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
@@ -348,14 +355,41 @@ const GlassDetailScreen: React.FC = () => {
 
   const { t } = useTranslation();
 
-  const images = useMemo(
-    () =>
-      product?.assets && product?.assets?.length > 0
-        ? product.assets.map(asset => asset.url)
-        : product?.image
-        ? [product.image]
-        : [],
-    [product],
+  // Colourways. The parent product carries no colour and an empty gallery — the
+  // media a shopper sees comes from whichever variation is selected.
+  const colors = useMemo(() => colorOptions(product), [product]);
+
+  const [selectedColorId, setSelectedColorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Default to the first colourway whenever the product changes.
+    setSelectedColorId(colors.length ? colors[0].id : null);
+  }, [colors]);
+
+  const selectedColor = useMemo(
+    () => colors.find(c => c.id === selectedColorId) ?? colors[0] ?? null,
+    [colors, selectedColorId],
+  );
+
+  // A variation's own gallery wins; without one, fall back to the parent's.
+  // galleryImages() filters out the 3-D model, which shares the assets array.
+  const images = useMemo(() => {
+    const fromVariation = galleryImages(selectedColor?.variation);
+    return fromVariation.length ? fromVariation : galleryImages(product);
+  }, [product, selectedColor]);
+
+  const price = useMemo(
+    () => (product ? variationPrice(product, selectedColor?.variation) : 0),
+    [product, selectedColor],
+  );
+
+  // Measurements live on the parent and are shared by every colourway.
+  const measurements = product?.measurements ?? null;
+
+  // Per-product 3-D model, when the shop has uploaded one for this colourway.
+  const productModelUrl = useMemo(
+    () => modelUrl(selectedColor?.variation) ?? modelUrl(product),
+    [product, selectedColor],
   );
 
   // The AR / 3-D scenes take a GlassItem, but the detail endpoint returns the
@@ -370,21 +404,21 @@ const GlassDetailScreen: React.FC = () => {
       id: String(product.id),
       name: product.name ?? product.item_name ?? '',
       brand: product.brand?.name ?? '',
-      price: Number(product.price ?? product.item_price ?? 0),
+      price,
       stock: 0,
-      status:
-        stockType.includes('out')
-          ? 'Out of Stock'
-          : stockType.includes('low')
-          ? 'Low Stock'
-          : 'In Stock',
+      status: stockType.includes('out')
+        ? 'Out of Stock'
+        : stockType.includes('low')
+        ? 'Low Stock'
+        : 'In Stock',
       image: images[0] ?? product.image ?? '',
       frameShape: (product.frame_shape?.name ?? 'rectangle')
         .toLowerCase()
         .replace(/\s+/g, '-') as GlassItem['frameShape'],
       description: product.description ?? undefined,
+      modelUrl: productModelUrl,
     };
-  }, [product, images]);
+  }, [product, images, price, productModelUrl]);
 
   const handleOpenTelegram = async () => {
     if (!inquiryLink) {
@@ -536,7 +570,7 @@ const GlassDetailScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.nameRow}>
             <AppText style={styles.frameName}>{product?.name}</AppText>
-            <AppText style={styles.framePrice}>${product?.price}</AppText>
+            <AppText style={styles.framePrice}>${price}</AppText>
           </View>
           {/* {glass.description ? (
             <AppText style={styles.description}>{glass.description}</AppText>
@@ -597,17 +631,19 @@ const GlassDetailScreen: React.FC = () => {
         )} */}
 
         <GlassesStyleSection
-          brand={product?.brand?.name || 'Ray-Ban'}
-          size={product?.size || 'Medium'}
+          brand={product?.brand?.name || '—'}
+          size={frameSizeName(measurements) || '—'}
           gender={product?.gender || 'Unisex'}
-          frameTypeName={product?.frame_shape?.name || 'Round'}
+          frameTypeName={product?.frame_shape?.name || '—'}
           descriptionHtml={product?.description || dummyHtml}
-          colorHex={product?.color?.hex_code || '#D1D5DB'}
-          colors={product?.color?.name || 'Black'}
+          measurementLabel={measurementLabel(measurements)}
+          materials={product?.materials?.map(m => m.name).join(', ') || null}
+          colorHex={selectedColor?.hex || product?.color?.hex_code || '#D1D5DB'}
+          colorName={selectedColor?.label || product?.color?.name || ''}
+          colorOptions={colors}
+          selectedColorId={selectedColor?.id ?? null}
+          onSelectColor={setSelectedColorId}
         />
-
-        {/* Glasses Image */}
-        <GlassesImageDescription images={images} />
       </ScrollView>
 
       {/* ── Floating Action Bar ──────────────────────────────────────────────── */}
@@ -753,7 +789,7 @@ const styles = StyleSheet.create({
 
   // Name + price
   section: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     marginBottom: Spacing.lg,
     marginTop: Spacing.md,
   },
@@ -782,7 +818,7 @@ const styles = StyleSheet.create({
   // Action buttons
   actionRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
   },
@@ -921,7 +957,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
     backgroundColor: Colors.glassSurfaceHigh,
     borderTopWidth: 1,
@@ -1004,7 +1040,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
 
   loadingCard: {

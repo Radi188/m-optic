@@ -81,6 +81,8 @@
   "glassBrand": "Brand",
   "glassSize": "Size",
   "glassGender": "Gender",
+  "glassMeasurements": "Measurements",
+  "glassMaterial": "Material",
   "commonDescription": "Description",
   "ContactTelegram": "Contact Telegram",
   "AddToFavorite": "Add to Favorites",

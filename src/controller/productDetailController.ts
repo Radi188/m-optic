@@ -1,10 +1,33 @@
 import api from '../services/api';
-import { ProductListFilters, ProductListResponse, ProductResponse } from '../types/glasses';
+import {
+  Product,
+  ProductDetail,
+  ProductListFilters,
+  ProductListResponse,
+  ProductResponse,
+} from '../types/glasses';
 
 export const productController = {
-  async getProductDetail(id: number | string): Promise<ProductResponse> {
+  // Normalises the envelope here so every caller sees one shape. See
+  // ProductResponse for the two layouts this has to cope with.
+  async getProductDetail(id: number | string): Promise<ProductDetail> {
     const response = await api.get<ProductResponse>(`/products/${id}`);
-    return response.data;
+    const body = response.data;
+    const inner = body?.data as ProductDetail | Product | undefined;
+
+    if (inner && 'product' in inner) {
+      return {
+        product: inner.product,
+        related: inner.related ?? [],
+        telegram_inquiry_link: inner.telegram_inquiry_link ?? '',
+      };
+    }
+
+    return {
+      product: inner as Product,
+      related: body?.related ?? [],
+      telegram_inquiry_link: body?.telegram_inquiry_link ?? '',
+    };
   },
 
   async getProducts(filters: ProductListFilters = {}): Promise<ProductListResponse> {

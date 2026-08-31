@@ -35,15 +35,24 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
-import { searchMOpticLocations, groupHours } from '../services/placesService';
-import type { PlaceLocation } from '../services/placesService';
+import { fetchBranches, groupHours } from '../services/branchService';
+import type { StoreLocation } from '../services/branchService';
 import AppText from '../components/AppText';
 
 const MARKER_LOGO = require('../assets/logo_icon_transparent.png');
 
 const todayIndex = () => (new Date().getDay() + 6) % 7;
 
-const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
+// Every branch is in or around Phnom Penh, so this is where the map opens when
+// no branch has coordinates to centre on.
+const PHNOM_PENH_REGION = {
+  latitude: 11.5564,
+  longitude: 104.9282,
+  latitudeDelta: 0.4,
+  longitudeDelta: 0.4,
+};
+
+const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
   const { t } = useTranslation();
   const today = todayIndex();
   const hours = groupHours(location.weekdayText);
@@ -78,7 +87,7 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
       160,
       withTiming(0, { duration: 280, easing: ease }),
     );
-  }, [location.placeId]);
+  }, [location.id]);
 
   const headerStyle = useAnimatedStyle(() => ({
     opacity: headerOpacity.value,
@@ -96,7 +105,14 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
   }));
 
   const openDirections = () => {
-    const q = encodeURIComponent(location.address);
+    // A branch that has coordinates ships its own Google Maps link; it points at
+    // the exact spot, whereas the address strings are often just "Phnom Penh".
+    if (location.mapsLink) {
+      Linking.openURL(location.mapsLink);
+      return;
+    }
+
+    const q = encodeURIComponent(location.address || location.name);
     const url =
       Platform.OS === 'ios'
         ? `maps://maps.apple.com/?q=${q}`
@@ -151,31 +167,42 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
               </View>
             )}
 
-            <View
-              style={[
-                s.statusPill,
-                location.isOpen ? s.statusOpen : s.statusClosed,
-              ]}
-            >
+            {/* A branch with no opening hours set reports 'Unknown'. Showing
+                that as "Closed" would be a claim the data does not support, so
+                the pill is omitted entirely instead. */}
+            {location.status !== 'unknown' && (
               <View
                 style={[
-                  s.statusDot,
-                  {
-                    backgroundColor: location.isOpen
-                      ? Colors.success
-                      : Colors.error,
-                  },
-                ]}
-              />
-              <AppText
-                style={[
-                  s.statusText,
-                  { color: location.isOpen ? Colors.success : Colors.error },
+                  s.statusPill,
+                  location.status === 'open' ? s.statusOpen : s.statusClosed,
                 ]}
               >
-                {location.isOpen ? t('OpenNow') : t('Closed')}
-              </AppText>
-            </View>
+                <View
+                  style={[
+                    s.statusDot,
+                    {
+                      backgroundColor:
+                        location.status === 'open'
+                          ? Colors.success
+                          : Colors.error,
+                    },
+                  ]}
+                />
+                <AppText
+                  style={[
+                    s.statusText,
+                    {
+                      color:
+                        location.status === 'open'
+                          ? Colors.success
+                          : Colors.error,
+                    },
+                  ]}
+                >
+                  {location.status === 'open' ? t('OpenNow') : t('Closed')}
+                </AppText>
+              </View>
+            )}
           </View>
         </View>
       </Animated.View>
@@ -274,7 +301,7 @@ const LocationSheet: React.FC<{ location: PlaceLocation }> = ({ location }) => {
 };
 
 const StoreMarker: React.FC<{
-  location: PlaceLocation;
+  location: StoreLocation;
   active: boolean;
   onPress: () => void;
 }> = ({ location, active, onPress }) => {
@@ -313,7 +340,7 @@ const StoreMarker: React.FC<{
 
 const StoreScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [locations, setLocations] = useState<PlaceLocation[]>([]);
+  const [locations, setLocations] = useState<StoreLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState('');
 
@@ -324,11 +351,12 @@ const StoreScreen: React.FC = () => {
   const tabsContainerW = useRef(0);
 
   useEffect(() => {
-    searchMOpticLocations()
+    fetchBranches()
       .then(locs => {
         setLocations(locs);
-        if (locs.length) setActiveId(locs[0].placeId);
+        if (locs.length) setActiveId(locs[0].id);
       })
+      .catch(err => console.warn('[Store] branches failed:', err.message))
       .finally(() => setLoading(false));
   }, []);
 
@@ -348,13 +376,22 @@ const StoreScreen: React.FC = () => {
   const snapPoints = useMemo(() => ['42%', '88%'], []);
 
   const activeLocation = locations.find(
-    location => location.placeId === activeId,
+    location => location.id === activeId,
+  );
+
+  // Most branches have no coordinates yet. They still get a tab and a details
+  // sheet — only the map has to leave them out.
+  const mappable = useMemo(
+    () => locations.filter(location => location.hasCoords),
+    [locations],
   );
 
   const initialRegion = useMemo(() => {
-    if (!locations.length) return undefined;
+    // Falls back to Phnom Penh rather than undefined: with no mappable branch
+    // the map would otherwise open on whatever region it defaults to.
+    if (!mappable.length) return PHNOM_PENH_REGION;
 
-    const firstLocation = locations[0];
+    const firstLocation = mappable[0];
 
     return {
       latitude: firstLocation.lat,
@@ -362,13 +399,13 @@ const StoreScreen: React.FC = () => {
       latitudeDelta: 0.4,
       longitudeDelta: 0.4,
     };
-  }, [locations]);
+  }, [mappable]);
 
   const fitToAll = useCallback(() => {
-    if (locations.length < 2) return;
+    if (mappable.length < 2) return;
 
     mapRef.current?.fitToCoordinates(
-      locations.map(location => ({
+      mappable.map(location => ({
         latitude: location.lat,
         longitude: location.lng,
       })),
@@ -377,17 +414,19 @@ const StoreScreen: React.FC = () => {
         animated: false,
       },
     );
-  }, [locations]);
+  }, [mappable]);
 
   const selectLocation = useCallback(
     (id: string) => {
       setActiveId(id);
 
       const selectedLocation = locations.find(
-        location => location.placeId === id,
+        location => location.id === id,
       );
 
-      if (selectedLocation) {
+      // Without coordinates there is nowhere to fly to; leave the map put and
+      // just open the sheet.
+      if (selectedLocation?.hasCoords) {
         mapRef.current?.animateToRegion(
           {
             latitude: selectedLocation.lat,
@@ -446,12 +485,12 @@ const StoreScreen: React.FC = () => {
         showsMyLocationButton={false}
         toolbarEnabled={false}
       >
-        {locations.map(location => (
+        {mappable.map(location => (
           <StoreMarker
-            key={location.placeId}
+            key={location.id}
             location={location}
-            active={location.placeId === activeId}
-            onPress={() => selectLocation(location.placeId)}
+            active={location.id === activeId}
+            onPress={() => selectLocation(location.id)}
           />
         ))}
       </MapView>
@@ -471,16 +510,16 @@ const StoreScreen: React.FC = () => {
             }}
           >
             {locations.map(location => {
-              const active = location.placeId === activeId;
+              const active = location.id === activeId;
 
               return (
                 <TouchableOpacity
-                  key={location.placeId}
-                  onPress={() => selectLocation(location.placeId)}
+                  key={location.id}
+                  onPress={() => selectLocation(location.id)}
                   activeOpacity={0.75}
                   style={[s.tab, active && s.tabActive]}
                   onLayout={event => {
-                    tabLayouts.current[location.placeId] = {
+                    tabLayouts.current[location.id] = {
                       x: event.nativeEvent.layout.x,
                       width: event.nativeEvent.layout.width,
                     };

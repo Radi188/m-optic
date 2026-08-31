@@ -19,7 +19,11 @@ export type GlassItem = {
   image: string;
   frameShape: FrameShape;
   description?: string;
-  
+  /**
+   * The product's own .glb (assets[type='3d_model']) for the selected
+   * colourway. The viewers fall back to the bundled model when absent.
+   */
+  modelUrl?: string | null;
 };
 
 export type RootStackParamList = {
