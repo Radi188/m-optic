@@ -237,12 +237,24 @@ var modelSpin  = 1;   // max(size.x, size.z) of the loaded model, assembled
 // ── Exploded view ────────────────────────────────────────────────────────────
 var explodeParts = [];
 var explodeSpin  = 1;   // the same measure with the parts fully apart
-var explodeT     = 0;   // animated 0 → 1
+var explodeT     = 0;   // animated 0 → 1, LINEAR
 var explodeTarget = 0;
-// Where the frame turns to when it comes apart. Side-on: the parts separate
-// along the temple axis, so face-on they would just line up behind each other.
-var EXPLODE_VIEW_ROT_Y = Math.PI / 2;
-var EXPLODE_VIEW_ROT_X = 0.06;
+// Constant-speed ramp rather than an exponential approach: the per-part easing
+// and the lead offsets in setExplode only read as a sequence if the timeline
+// itself advances evenly. ~45 frames, so about three quarters of a second.
+var EXPLODE_SPEED = 0.022;
+// Expanding does NOT move the camera. The frame stays exactly where the user
+// left it and the parts simply ease apart in place. Earlier versions snapped to
+// a fixed viewing angle, which yanked the model out from under whatever the
+// user was looking at.
+//
+// The parts still spread a little, so the framing is pulled in by the same
+// amount the layout grows — the net effect is that nothing changes size.
+var FILL_EXPLODED = 1.05;
+
+var modelRoot = null;       // the loaded scene graph, for the centring counter-shift
+var rootHome = null;
+var explodeShift = null;
 
 function fitModelToView() {
   if (!modelPivot) { return; }
@@ -252,7 +264,8 @@ function fitModelToView() {
   // Blend towards the exploded extent as the parts separate, so the view pulls
   // back in step with them instead of letting them run off the edges.
   var spin = modelSpin + (explodeSpin - modelSpin) * explodeT;
-  modelPivot.scale.setScalar((FILL * worldW) / (spin * PERSPECTIVE_BULGE));
+  var fill = FILL + (FILL_EXPLODED - FILL) * explodeT;
+  modelPivot.scale.setScalar((fill * worldW) / (spin * PERSPECTIVE_BULGE));
 }
 
 loadGlassesGLB(GLB_DATA_URI).then(function (root) {
@@ -263,7 +276,11 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   modelSpin   = Math.max(centred.size.x, centred.size.z);
 
   explodeParts = collectExplodeParts(root, centred.size.x);
-  explodeSpin  = measureExplodedSpan(root, explodeParts) || modelSpin;
+  var framing  = measureExplodedFraming(root, explodeParts);
+  explodeSpin  = framing.span || modelSpin;
+  explodeShift = framing.shift;
+  modelRoot    = root;
+  rootHome     = root.position.clone();
   if (!explodeParts.length) {
     // Nothing to take apart — hide that one control rather than offer a dead
     // button. Only the explode button: auto-rotate works on any model.
@@ -358,13 +375,12 @@ explodeBtn.addEventListener('click', function () {
   explodeBtn.classList.toggle('on', on);
 
   if (on) {
-    // Turn side-on so the separation is actually visible, and stop the spin —
-    // a rotating exploded diagram is unreadable. Collapsing does NOT turn it
-    // back on: the spin is the user's to switch, not ours.
+    // Stop the idle spin — a rotating exploded diagram is unreadable. The angle
+    // is left untouched. Collapsing does NOT turn the spin back on: it is the
+    // user's to switch, not ours.
     setAutoRotate(false);
-    rotY = EXPLODE_VIEW_ROT_Y;
-    rotX = EXPLODE_VIEW_ROT_X;
   }
+
 
   showToolLabel(on ? 'Exploded view' : 'Assembled');
 });
@@ -377,11 +393,20 @@ var t = 0;
 
   // Ease towards the target rather than snapping, and re-fit every frame while
   // moving so the zoom-out tracks the parts as they travel.
-  if (Math.abs(explodeTarget - explodeT) > 0.0005) {
-    explodeT += (explodeTarget - explodeT) * 0.09;
-    setExplode(explodeParts, explodeT * explodeT * (3 - 2 * explodeT));
+  if (explodeT !== explodeTarget) {
+    var d = explodeTarget - explodeT;
+    var step = Math.min(Math.abs(d), EXPLODE_SPEED);
+    explodeT += d > 0 ? step : -step;
+    setExplode(explodeParts, explodeT);
+
+    // Counter the drift: the parts do not travel symmetrically, so hold the
+    // exploded centre of mass on the pivot instead of letting it wander.
+    if (modelRoot && explodeShift) {
+      modelRoot.position.copy(rootHome).addScaledVector(explodeShift, -explodeT);
+    }
     fitModelToView();
   }
+
 
   if (autoRot) {
     rotY += AUTO_ROT_SPEED;   // horizontal, about the vertical axis

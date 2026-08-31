@@ -30,7 +30,7 @@ export const GLB_SCRIPT_TAGS = `
  *   simplifyLenses(root, opacity)
  *   collectExplodeParts(root, modelWidth) -> parts[]
  *   setExplode(parts, t)               t = 0 assembled … 1 apart
- *   measureExplodedSpan(root, parts)   -> widest extent when apart
+ *   measureExplodedFraming(root, parts) -> { span, shift } for framing it
  */
 export const GLB_HELPERS_JS = `
 // Named nodes authored into essilor.glb (glTF-Transform / Luxottica export).
@@ -202,17 +202,32 @@ function updateHeadOccluder(mesh, pose, cfg) {
 // these nodes hang off identity-transform parents (Root_Glasses_GRP, Lens_GRP),
 // so the offsets act along the model's own axes: +X wearer's left, +Y up,
 // +Z out of the face.
+//
+// Every part moves along ONE axis — the temple axis the frame is built on — and
+// nothing is pushed sideways or vertically, so the pieces stay in a straight
+// line with the frame instead of scattering. Small offsets: every neighbouring
+// pair clears by 4-6 mm on a ~145 mm frame — enough to show the frame is made
+// of separate pieces without throwing them apart. Solved against both the
+// bundled and the API model, because a lens that still intersects its rim on
+// one of them is the thing that reads as "not clean".
+//
+// lead = where the part starts moving on a 0-1 timeline: the temples come off
+// first and the lenses follow, so the frame reads as being taken apart rather
+// than everything sliding at once.
 var EXPLODE_PARTS = [
-  // Lenses lift forward, staggered so they do not overlap side-on.
-  { name: 'Lens_L_GEO', offset: [0, 0, 0.90] },
-  { name: 'Lens_R_GEO', offset: [0, 0, 0.62] },
-  { name: 'LogoLens_L_GEO', offset: [0, 0, 0.90] },
-  { name: 'LogoLens_R_GEO', offset: [0, 0, 0.62] },
-  // Temples slide back off their hinges, offset vertically so both stay
-  // readable when the frame is viewed from the side.
-  { name: 'Temple_L_Locator_GRP', offset: [0, 0.17, -0.78] },
-  { name: 'Temple_R_Locator_GRP', offset: [0, -0.17, -1.20] }
+  // Lenses lift forward out of the rims, the near one a little past the far one.
+  { name: 'Lens_L_GEO', offset: [0, 0, 0.175], lead: 0.28 },
+  { name: 'Lens_R_GEO', offset: [0, 0, 0.09], lead: 0.28 },
+  { name: 'LogoLens_L_GEO', offset: [0, 0, 0.175], lead: 0.28 },
+  { name: 'LogoLens_R_GEO', offset: [0, 0, 0.09], lead: 0.28 },
+  // Temples slide straight back off their hinges, staying on the frame's line.
+  { name: 'Temple_L_Locator_GRP', offset: [0, 0, -0.05], lead: 0 },
+  { name: 'Temple_R_Locator_GRP', offset: [0, 0, -0.10], lead: 0 }
 ];
+
+function explodeEase(t) {
+  return t * t * (3 - 2 * t);
+}
 
 function collectExplodeParts(root, modelWidth) {
   var parts = [];
@@ -223,6 +238,7 @@ function collectExplodeParts(root, modelWidth) {
     parts.push({
       node: node,
       home: node.position.clone(),
+      lead: spec.lead || 0,
       delta: new THREE.Vector3(
         spec.offset[0] * modelWidth,
         spec.offset[1] * modelWidth,
@@ -233,24 +249,47 @@ function collectExplodeParts(root, modelWidth) {
   return parts;
 }
 
-/** t = 0 assembled, 1 fully apart. */
+/**
+ * t = 0 assembled, 1 fully apart. Each part eases across its own slice of the
+ * timeline (see lead), so pass a plain linear t — the shaping happens here.
+ */
 function setExplode(parts, t) {
   for (var i = 0; i < parts.length; i++) {
-    parts[i].node.position.copy(parts[i].home).addScaledVector(parts[i].delta, t);
+    var p = parts[i];
+    var local = (t - p.lead) / (1 - p.lead);
+    local = local < 0 ? 0 : (local > 1 ? 1 : local);
+    p.node.position.copy(p.home).addScaledVector(p.delta, explodeEase(local));
   }
 }
 
-// Widest on-screen extent when fully apart. Measured by actually exploding the
-// model and boxing it, rather than derived from the offsets — the parts have
-// real size, so the arithmetic would understate it and the view would overflow.
-function measureExplodedSpan(root, parts) {
-  if (!parts.length) { return 0; }
+/**
+ * How the exploded model needs to be framed. Measured by actually exploding it
+ * and boxing the result, rather than derived from the offsets — the parts have
+ * real size, so the arithmetic would understate it and the view would overflow.
+ *
+ *   span  — widest extent when apart, for the fit
+ *   shift — how far the centre of mass moves. The pivot sits at the ASSEMBLED
+ *           centre, and the parts do not travel symmetrically (both temples go
+ *           back, both lenses forward but by less), so without countering this
+ *           the whole thing drifts off-centre as it opens.
+ */
+function measureExplodedFraming(root, parts) {
+  var zero = { span: 0, shift: new THREE.Vector3() };
+  if (!parts.length) { return zero; }
+
+  root.updateWorldMatrix(true, true);
+  var assembled = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+
   setExplode(parts, 1);
   root.updateWorldMatrix(true, true);
-  var size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+  var box = new THREE.Box3().setFromObject(root);
+  var size = box.getSize(new THREE.Vector3());
+  var centre = box.getCenter(new THREE.Vector3());
+
   setExplode(parts, 0);
   root.updateWorldMatrix(true, true);
-  return Math.max(size.x, size.z);
+
+  return { span: Math.max(size.x, size.z), shift: centre.sub(assembled) };
 }
 
 // KHR_materials_transmission lenses sample Three's transmission render target,
