@@ -104,7 +104,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
     [t],
   );
 
-  const locale = i18n.language === 'kh' ? 'km-KH' : 'en-GB';
+  const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) {

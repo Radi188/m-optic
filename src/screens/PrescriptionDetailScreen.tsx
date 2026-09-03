@@ -24,7 +24,7 @@ const PrescriptionDetailScreen = () => {
   const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
 
   const prescription = profile?.prescription;
-  const locale = i18n.language === 'kh' ? 'km-KH' : 'en-GB';
+  const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
   if (isLoading) {
     return (

@@ -164,7 +164,7 @@ const HistoryScreen: React.FC = () => {
   const { history, isLoading, isRefreshing, error, refetch } =
     useHistory(isAuthenticated);
 
-  const locale = i18n.language === 'kh' ? 'km-KH' : 'en-GB';
+  const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
   const data = useMemo(
     () =>
