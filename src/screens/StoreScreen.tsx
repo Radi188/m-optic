@@ -6,15 +6,15 @@ import React, {
   useEffect,
 } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  Image,
   Linking,
   Platform,
-  ActivityIndicator,
+  RefreshControl,
   ScrollView,
-  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { fetchBranches, groupHours } from '../services/branchService';
+import StoreSkeleton from '../components/ui/Loading/StoreLoadingScreen';
 import type { StoreLocation } from '../services/branchService';
 import AppText from '../components/AppText';
 
@@ -342,6 +343,7 @@ const StoreScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [locations, setLocations] = useState<StoreLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeId, setActiveId] = useState('');
 
   const mapRef = useRef<MapView>(null);
@@ -350,15 +352,33 @@ const StoreScreen: React.FC = () => {
   const tabLayouts = useRef<Record<string, { x: number; width: number }>>({});
   const tabsContainerW = useRef(0);
 
-  useEffect(() => {
-    fetchBranches()
-      .then(locs => {
-        setLocations(locs);
-        if (locs.length) setActiveId(locs[0].id);
-      })
-      .catch(err => console.warn('[Store] branches failed:', err.message))
-      .finally(() => setLoading(false));
+  // `showLoader` off keeps the map and the sheet on screen while the branches
+  // are refetched, so a pull-to-refresh doesn't tear the map down.
+  const loadBranches = useCallback(async (showLoader = true) => {
+    try {
+      if (showLoader) setLoading(true);
+      const locs = await fetchBranches();
+      setLocations(locs);
+      // Keep the branch the user is looking at selected across a refresh.
+      setActiveId(prev =>
+        locs.some(l => l.id === prev) ? prev : locs[0]?.id ?? '',
+      );
+    } catch (err: any) {
+      console.warn('[Store] branches failed:', err.message);
+    } finally {
+      if (showLoader) setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadBranches(false);
+  }, [loadBranches]);
+
+  useEffect(() => {
+    loadBranches(true);
+  }, [loadBranches]);
 
   useEffect(() => {
     if (!locations.length) return;
@@ -468,11 +488,7 @@ const StoreScreen: React.FC = () => {
   );
 
   if (loading) {
-    return (
-      <View style={[s.root, s.center]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+    return <StoreSkeleton />;
   }
 
   return (
@@ -556,6 +572,14 @@ const StoreScreen: React.FC = () => {
           <BottomSheetScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={s.sheetScroll}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            }
           >
             <LocationSheet location={activeLocation} />
           </BottomSheetScrollView>

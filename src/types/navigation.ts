@@ -68,7 +68,12 @@ export type RootStackParamList = {
   SearchResult: {
     query: string;
   };
-  Scan: undefined;
+  Scan: {
+    /** Which experience to open directly — the screen has no mode picker. */
+    mode?: 'face' | 'refraction';
+    /** Set by the screen itself while the camera is full-screen. */
+    hideTabBar?: boolean;
+  };
 };
 
 export type BottomTabParamList = {

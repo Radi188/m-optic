@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -19,6 +18,7 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import type { Invoice, Refraction } from '../types/history';
 import AppText from '../components/AppText';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
+import HistorySkeleton from '../components/ui/Loading/HistoryLoadingScreen';
 
 type Segment = 'refractions' | 'invoices';
 
@@ -238,10 +238,7 @@ const HistoryScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header}
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <AppText style={styles.stateText}>{t('LoadingHistory')}</AppText>
-        </View>
+        <HistorySkeleton />
       </SafeAreaView>
     );
   }

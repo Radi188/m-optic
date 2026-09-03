@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
+  RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -125,7 +126,8 @@ const ProfileScreen: React.FC = () => {
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
-  const { profile, isLoading, error, refetch } = useUserProfile();
+  const { profile, isLoading, isRefreshing, error, refetch } =
+    useUserProfile();
 
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
@@ -235,6 +237,17 @@ const ProfileScreen: React.FC = () => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={guestStyles.scroll}
+          refreshControl={
+            // Only signed-in profiles have anything to refetch.
+            user ? (
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={refetch}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            ) : undefined
+          }
         >
           <ProfileTitleHeader
             notificationCount={unreadCount}

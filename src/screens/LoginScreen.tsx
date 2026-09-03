@@ -86,8 +86,6 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
-  /** Set once the device recognises the number as having a PIN already. */
-  const [pinMode, setPinMode] = useState(false);
 
   const loading = useSelector(selectAuthLoading);
   const error = useSelector(selectAuthError);
@@ -97,23 +95,23 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     dispatch(setError(null));
   }, [dispatch]);
 
-  const digits = normalisePhone(phone);
-
-  // Recognise a remembered number as it is typed, so the PIN field can appear
-  // without an extra round trip.
+  // Save returning customers from retyping their number.
   useEffect(() => {
     let cancelled = false;
-    if (!digits) {
-      setPinMode(false);
-      return;
-    }
-    authService.hasPin(digits).then(known => {
-      if (!cancelled) setPinMode(known);
+    authService.lastPhone().then(last => {
+      if (last && !cancelled) setPhone(last);
     });
     return () => {
       cancelled = true;
     };
-  }, [digits]);
+  }, []);
+
+  const digits = normalisePhone(phone);
+
+  const handlePinLogin = useCallback(() => {
+    if (!digits || pin.length < PIN_LENGTH) return;
+    dispatch(loginThunk({ phone_number: digits, pin }));
+  }, [digits, dispatch, pin]);
 
   const handleRequestOtp = useCallback(async () => {
     if (!digits) return;
@@ -123,22 +121,9 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, [digits, dispatch, navigation]);
 
-  const handlePinLogin = useCallback(() => {
-    if (!digits || pin.length < PIN_LENGTH) return;
-    dispatch(loginThunk({ phone_number: digits, pin }));
-  }, [digits, dispatch, pin]);
-
-  /** Escape hatch for a forgotten PIN or a number remembered in error. */
-  const handleUseOtpInstead = useCallback(async () => {
-    setPin('');
-    await authService.forgetPhone(digits);
-    setPinMode(false);
-    await handleRequestOtp();
-  }, [digits, handleRequestOtp]);
-
-  const submitDisabled = pinMode
-    ? !digits || pin.length < PIN_LENGTH
-    : !digits;
+  // The API answers a PIN-less account with "Account not setup", which on its
+  // own reads like a dead end. Point those customers at the code flow instead.
+  const needsSetup = !!error && /not\s*set\s*up|no\s+pin/i.test(error);
 
   return (
     <AuthScreenLayout
@@ -161,39 +146,46 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         keyboardType="phone-pad"
       />
 
-      {pinMode && (
-        <View style={styles.pinBlock}>
-          <AppText style={styles.pinLabel}>{t('EnterYourPin')}</AppText>
-          <CodeInput
-            value={pin}
-            onChangeText={setPin}
-            length={PIN_LENGTH}
-            secure
-            onFilled={handlePinLogin}
-          />
-        </View>
-      )}
+      <View style={styles.pinBlock}>
+        <AppText style={styles.pinLabel}>{t('EnterYourPin')}</AppText>
+        <CodeInput
+          value={pin}
+          onChangeText={setPin}
+          length={PIN_LENGTH}
+          secure
+          onFilled={handlePinLogin}
+        />
+      </View>
 
       <AuthError message={error} />
 
+      {needsSetup && (
+        <AppText style={styles.setupHint}>{t('AccountNeedsPin')}</AppText>
+      )}
+
       <AuthButton
-        label={pinMode ? t('Login') : t('SendCode')}
-        onPress={pinMode ? handlePinLogin : handleRequestOtp}
+        label={t('Login')}
+        onPress={handlePinLogin}
         loading={loading}
-        disabled={submitDisabled}
+        disabled={!digits || pin.length < PIN_LENGTH}
       />
 
-      {pinMode ? (
-        <TouchableOpacity
-          onPress={handleUseOtpInstead}
-          activeOpacity={0.7}
-          disabled={loading}
-        >
-          <AppText style={styles.altText}>{t('ForgotPin')}</AppText>
-        </TouchableOpacity>
-      ) : (
-        <AppText style={styles.hint}>{t('OtpHint')}</AppText>
-      )}
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <AppText style={styles.dividerText}>{t('Or')}</AppText>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.secondaryBtn, !digits && styles.secondaryBtnMuted]}
+        onPress={handleRequestOtp}
+        activeOpacity={0.85}
+        disabled={loading || !digits}
+      >
+        <AppText style={styles.secondaryBtnText}>{t('SendCode')}</AppText>
+      </TouchableOpacity>
+
+      <AppText style={styles.hint}>{t('OtpHint')}</AppText>
     </AuthScreenLayout>
   );
 };
@@ -265,11 +257,45 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: Spacing.sm,
   },
-  altText: {
+  setupHint: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: Colors.gray600,
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+    marginTop: -Spacing.sm,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+    marginTop: -Spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.gray200,
+  },
+  dividerText: {
+    fontSize: FontSize.sm,
+    color: Colors.gray400,
     fontWeight: '600',
-    textAlign: 'center',
+  },
+  secondaryBtn: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  secondaryBtnMuted: {
+    opacity: 0.5,
+  },
+  secondaryBtnText: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   hint: {
     fontSize: FontSize.sm,

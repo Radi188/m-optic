@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-  ScrollView,
-  Image,
-  Modal,
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -350,8 +351,16 @@ const GlassDetailScreen: React.FC = () => {
   const openViewer = (mode: ViewMode) => setViewerMode(mode);
   const closeViewer = () => setViewerMode(null);
 
-  const { product, related, loading, error, refetch, inquiryLink } =
-    useProductDetail(id);
+  const {
+    product,
+    related,
+    loading,
+    isRefreshing,
+    error,
+    refetch,
+    refresh,
+    inquiryLink,
+  } = useProductDetail(id);
 
   const { t } = useTranslation();
 
@@ -546,6 +555,14 @@ const GlassDetailScreen: React.FC = () => {
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
       >
         {/* ── Hero Image ──────────────────────────────────────────────────── */}
         <View style={styles.heroWrap}>

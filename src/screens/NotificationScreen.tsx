@@ -1,12 +1,14 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  // 1. Import useWindowDimensions for width tracking,
   Image,
-  useWindowDimensions, // 1. Import useWindowDimensions for width tracking
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -30,7 +32,8 @@ const getNotificationIcon = (title: string) => {
 const NotificationListScreen = () => {
   const navigation = useNavigation();
   const { width } = useWindowDimensions(); // 3. Dynamically read width for your dynamic padding calculations
-  const { data, loading, error, refetch } = useAnnouncements();
+  const { data, loading, isRefreshing, error, refetch, refresh } =
+    useAnnouncements();
   // helpers/htmlTruncate.ts
   /**
    * Truncate HTML content safely while preserving inline tags like <b>, <i>, <strong>, <em>
@@ -108,6 +111,14 @@ const NotificationListScreen = () => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={refresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
         >
           {/* Summary Banner Card */}
           {/* <View style={styles.summaryCard}>

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -14,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import ProfilePointSection from '../components/ui/Profile/ProfilePointSection';
 import { usePoints } from '../hook/usePoint';
 import Header from '../components/ui/Header/HeaderComponent';
+import PointsSkeleton from '../components/ui/Loading/PointsLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import AppText from '../components/AppText';
 
@@ -115,10 +115,8 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#9B6A3D" />
-          <AppText style={styles.centerText}>{t('LoadingPoints')}</AppText>
-        </View>
+        <Header title={t('MyPoints')} onBack={() => navigation.goBack()} />
+        <PointsSkeleton />
       </SafeAreaView>
     );
   }

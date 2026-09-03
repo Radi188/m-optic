@@ -1,12 +1,13 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
   Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,7 @@ type RewardScreenProps = {
 
 const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
   const { t } = useTranslation();
-  const { rewardsData, isLoading, error, refetch } = useReward();
+  const { rewardsData, isLoading, isRefreshing, error, refetch } = useReward();
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) {
@@ -83,6 +84,14 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={refetch}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
         >
           <View style={styles.balanceCard}>
             <View style={styles.balanceContent}>

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../theme';
 import { useUserProfile } from '../hook/useUserProfile';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
+import PrescriptionSkeleton from '../components/ui/Loading/PrescriptionLoadingScreen';
 import AppText from '../components/AppText';
 
 const PrescriptionDetailScreen = () => {
@@ -29,12 +29,7 @@ const PrescriptionDetailScreen = () => {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <AppText style={styles.centerText}>
-            {t('LoadingPrescription')}
-          </AppText>
-        </View>
+        <PrescriptionSkeleton />
       </SafeAreaView>
     );
   }

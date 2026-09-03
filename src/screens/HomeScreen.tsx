@@ -1,17 +1,18 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
   FlatList,
   Image,
-  Dimensions,
-  TouchableOpacity,
   Linking,
-  ActivityIndicator,
   Modal,
-  Animated,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -481,26 +482,79 @@ const HomeScreen: React.FC = () => {
         contentContainerStyle={{
           paddingBottom: insets.bottom + Spacing.xxl + 80,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
       >
         <HeroSlider slides={data?.banners || []} signinLabel={t('SignIn')} />
 
-        {/* Scan CTA */}
-        <TouchableOpacity
-          style={styles.scanBtn}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('Scan')}
-        >
-          <View style={styles.scanIconWrap}>
-            <Ionicons name="scan-outline" size={22} color={Colors.white} />
+        {/* Scan & Try On — two entry points, each opening straight into its
+            own instructions. */}
+        <View style={styles.scanCard}>
+          <AppText style={styles.scanCardTitle}>{t('homeScanTitle')}</AppText>
+          <AppText style={styles.scanCardSubtitle}>
+            {t('homeScanSubtitle')}
+          </AppText>
+
+          <View style={styles.scanTileRow}>
+            <TouchableOpacity
+              style={styles.scanTile}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Scan', { mode: 'face' })}
+            >
+              <View style={styles.scanTileIcon}>
+                <Ionicons name="scan-outline" size={24} color={Colors.white} />
+              </View>
+
+              <AppText style={styles.scanTileTitle} numberOfLines={2}>
+                {t('FaceDetection')}
+              </AppText>
+              <AppText style={styles.scanTileSub} numberOfLines={3}>
+                {t('FaceDetectionSub')}
+              </AppText>
+
+              <View style={styles.scanTileCta}>
+                <AppText style={styles.scanTileCtaText}>{t('Start')}</AppText>
+                <Ionicons
+                  name="arrow-forward"
+                  size={14}
+                  color={Colors.primary}
+                />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.scanTile}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Scan', { mode: 'refraction' })}
+            >
+              <View style={styles.scanTileIcon}>
+                <Ionicons name="eye-outline" size={24} color={Colors.white} />
+              </View>
+
+              <AppText style={styles.scanTileTitle} numberOfLines={2}>
+                {t('EyeTestExam')}
+              </AppText>
+              <AppText style={styles.scanTileSub} numberOfLines={3}>
+                {t('EyeTestExamSub')}
+              </AppText>
+
+              <View style={styles.scanTileCta}>
+                <AppText style={styles.scanTileCtaText}>{t('Start')}</AppText>
+                <Ionicons
+                  name="arrow-forward"
+                  size={14}
+                  color={Colors.primary}
+                />
+              </View>
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.scanTitle}>{t('homeScanTitle')}</AppText>
-            <AppText style={styles.scanSubtitle}>
-              {t('homeScanSubtitle')}
-            </AppText>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-        </TouchableOpacity>
+        </View>
 
         <View
           style={[styles.pad, styles.sectionRow, { marginTop: Spacing.lg }]}
@@ -611,39 +665,75 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   pad: { paddingHorizontal: Spacing.lg },
 
-  // Scan CTA
-  scanBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
+  // Scan & Try On card
+  scanCard: {
     marginTop: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
+    marginHorizontal: Spacing.md,
+    padding: Spacing.md,
     backgroundColor: Colors.primaryLight,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
     borderColor: Colors.primary + '30',
-    marginHorizontal: Spacing.md,
   },
-  scanIconWrap: {
+  scanCardTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: -0.2,
+  },
+  scanCardSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.gray600,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: Spacing.md,
+  },
+  scanTileRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  // Equal halves; minHeight keeps the pair level when one label wraps.
+  scanTile: {
+    flex: 1,
+    minHeight: 172,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadow.sm,
+  },
+  scanTileIcon: {
     width: 44,
     height: 44,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.sm,
   },
-  scanTitle: {
+  scanTileTitle: {
     fontSize: FontSize.md,
     fontWeight: '700',
     color: Colors.black,
     letterSpacing: -0.1,
   },
-  scanSubtitle: {
+  scanTileSub: {
     fontSize: FontSize.xs,
     color: Colors.gray500,
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  scanTileCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 'auto',
+    paddingTop: Spacing.sm,
+  },
+  scanTileCtaText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 
   // Section headers

@@ -1,16 +1,17 @@
 import React, { useMemo, useState, useCallback } from 'react';
 
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  Dimensions,
-  ScrollView,
-  Image,
   ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
@@ -97,11 +98,13 @@ const GlassScreen: React.FC = () => {
     brands,
     meta,
     loading,
+    isRefreshing,
     brandLoading,
     error,
     filters,
     setFilters,
     refetch,
+    refresh,
   } = useProductList({
     page: 1,
     is_active_mobile: true,
@@ -301,6 +304,15 @@ const GlassScreen: React.FC = () => {
                 const active =
                   b.id === 'all' ? !filters.brand_1 : filters.brand_1 === b.id;
 
+                // A logo needs a fixed box to sit in; a label sizes itself.
+                // brandTabs mixes real brands with the synthetic "All" entry,
+                // which has no logo field — read it defensively once rather
+                // than reaching into the union at the call site.
+                const logoUri =
+                  b.name === 'All'
+                    ? undefined
+                    : (b as { logo?: string | null }).logo || undefined;
+
                 return (
                   <TouchableOpacity
                     key={b.id || b.name}
@@ -308,21 +320,26 @@ const GlassScreen: React.FC = () => {
                       handleSelectBrand(b.id === 'all' ? 'all' : Number(b.id))
                     }
                     activeOpacity={0.75}
-                    style={[styles.tab, active && styles.tabActive]}
+                    style={[
+                      styles.tab,
+                      logoUri && styles.tabLogo,
+                      active && styles.tabActive,
+                    ]}
                   >
                     {active && (
                       <View style={styles.tabHighlight} pointerEvents="none" />
                     )}
 
-                    {b.name === 'All' || !b.logo ? (
+                    {!logoUri ? (
                       <AppText
+                        numberOfLines={1}
                         style={[styles.tabText, active && styles.tabTextActive]}
                       >
                         {t(b.name)}
                       </AppText>
                     ) : (
                       <Image
-                        source={{ uri: b.logo }}
+                        source={{ uri: logoUri }}
                         style={styles.logo}
                         resizeMode="contain"
                       />
@@ -352,6 +369,14 @@ const GlassScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             renderItem={renderCard}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={refresh}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            }
             onEndReached={loadMoreProducts}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -494,9 +519,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.4 }],
   },
 
+  // Width follows the label: `minWidth` stops "All" from becoming a nub and
+  // `maxWidth` stops one long brand name from filling the row — past that the
+  // label ellipsises rather than the chip stretching.
   tab: {
-    width: 85,
-    height: 35,
+    minWidth: 64,
+    maxWidth: 180,
+    height: 36,
+    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.white,
     justifyContent: 'center',
@@ -505,6 +535,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: Colors.gray200,
+  },
+
+  // Logos have no intrinsic width here, so they keep a fixed box.
+  tabLogo: {
+    width: 95,
+    maxWidth: 95,
+    paddingHorizontal: 0,
   },
 
   tabActive: {

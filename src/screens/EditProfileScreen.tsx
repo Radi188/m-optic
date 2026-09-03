@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import EditProfileSkeleton from '../components/ui/Loading/EditProfileLoadingScreen';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, FontSize, Spacing } from '../theme';
@@ -74,10 +75,7 @@ const EditProfileScreen = () => {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <AppText style={styles.centerStateText}>Loading profile...</AppText>
-        </View>
+        <EditProfileSkeleton />
       </SafeAreaView>
     );
   }

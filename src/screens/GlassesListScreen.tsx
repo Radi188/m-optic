@@ -1,15 +1,16 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  Dimensions,
-  ScrollView,
-  Image,
   ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type {
@@ -93,12 +94,14 @@ const GlassesListScreen: React.FC = () => {
     brands,
     frameShapes,
     loading,
+    isRefreshing,
     brandLoading,
     frameLoading,
     error,
     filters,
     setFilters,
     refetch,
+    refresh,
     refetchBrands,
     refetchFrames,
     meta,
@@ -517,6 +520,14 @@ const GlassesListScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             renderItem={renderCard}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={refresh}
+                tintColor={Colors.primary}
+                colors={[Colors.primary]}
+              />
+            }
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
@@ -718,8 +729,12 @@ const styles = StyleSheet.create({
   // "ARMANI EXCHANGE" was crushed into the same 95dp, which is what made the
   // row read as untidy. minWidth keeps the very short labels from looking
   // pinched, and the padding is what actually sets the width now.
+  // Width follows the label: `minWidth` stops "All" from becoming a nub and
+  // `maxWidth` stops one long brand or frame name from filling the row — past
+  // that the label ellipsises rather than the chip stretching.
   tab: {
     minWidth: 64,
+    maxWidth: 180,
     height: 36,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.white,
@@ -729,7 +744,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: Colors.gray200,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.md,
   },
 
   // A logo has no text to measure, so those tabs keep a fixed box. The image
@@ -737,6 +752,7 @@ const styles = StyleSheet.create({
   // container.
   tabLogo: {
     width: 95,
+    maxWidth: 95,
     paddingHorizontal: 0,
   },
 

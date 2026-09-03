@@ -1,14 +1,15 @@
 import React, { useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  FlatList,
   Dimensions,
-  TextInput,
+  FlatList,
   Keyboard,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type {
@@ -51,7 +52,15 @@ const SearchResultScreen = () => {
   const [inputQuery, setInputQuery] = useState(initialQuery);
   const [isSearching, setIsSearching] = useState(false);
 
-  const { products, loading, error, refetch, setFilters } = useProductList({
+  const {
+    products,
+    loading,
+    isRefreshing,
+    error,
+    refetch,
+    refresh,
+    setFilters,
+  } = useProductList({
     page: 1,
     limit: 20,
     is_active_mobile: true,
@@ -252,6 +261,14 @@ const SearchResultScreen = () => {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.list}
                 renderItem={renderCard}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshing}
+                    onRefresh={refresh}
+                    tintColor={Colors.primary}
+                    colors={[Colors.primary]}
+                  />
+                }
                 ListEmptyComponent={
                   <View style={styles.empty}>
                     <Ionicons

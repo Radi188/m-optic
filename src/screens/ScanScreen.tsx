@@ -21,7 +21,10 @@ import {
   PermissionsAndroid,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../types/navigation';
+import EyeTestDisclaimerModal from '../components/ui/Modal/EyeTestDisclaimerModal';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 
@@ -1704,41 +1707,6 @@ const FaceShapeSelector: React.FC<{
   </ScrollView>
 );
 
-// ─── Tab Bar ──────────────────────────────────────────────────────────────────
-
-const TabBar: React.FC<{ active: Tab; onChange: (t: Tab) => void }> = ({
-  active,
-  onChange,
-}) => (
-  <View style={styles.tabBar}>
-    {(
-      [
-        { key: 'face', icon: 'scan-outline', label: 'Face Scan' },
-        { key: 'refraction', icon: 'eye-outline', label: 'Eye Test' },
-      ] as { key: Tab; icon: string; label: string }[]
-    ).map(tab => {
-      const isActive = active === tab.key;
-      return (
-        <TouchableOpacity
-          key={tab.key}
-          style={[styles.tabBtn, isActive && styles.tabBtnActive]}
-          onPress={() => onChange(tab.key)}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={tab.icon as any}
-            size={17}
-            color={isActive ? Colors.primary : Colors.gray400}
-          />
-          <AppText style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-            {tab.label}
-          </AppText>
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-);
-
 // ─── Face Scan — Idle ─────────────────────────────────────────────────────────
 
 const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
@@ -2792,7 +2760,6 @@ const DirectionPicker: React.FC<{
   );
 };
 
-
 const AcuityStep: React.FC<{
   eye: 'left' | 'right';
   angles: number[];
@@ -3743,7 +3710,16 @@ const RefractionFlow: React.FC = () => {
 const ScanScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [tab, setTab] = useState<Tab>('face');
+  const route = useRoute<RouteProp<RootStackParamList, 'Scan'>>();
+
+  // The home screen sends the user straight into one experience, so there is
+  // no picker here — the mode is fixed for the life of the screen.
+  const mode: Tab = route.params?.mode ?? 'face';
+
+  // The eye test is a self-screening tool, not a medical exam, so it stays
+  // behind an explicit consent gate. Re-asked on every entry rather than
+  // remembered — consent to a health disclaimer shouldn't be sticky.
+  const [testConsent, setTestConsent] = useState(false);
   const [faceScanStage, setFaceScanStage] = useState<FaceScanStage>('idle');
   const [faceShape, setFaceShape] = useState<FaceShape | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -3755,7 +3731,7 @@ const ScanScreen: React.FC = () => {
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const isScanning =
-    tab === 'face' &&
+    mode === 'face' &&
     (faceScanStage === 'scanning' || faceScanStage === 'countdown');
 
   // Hide the bottom tab bar while the countdown/camera is full-screen.
@@ -3812,16 +3788,7 @@ const ScanScreen: React.FC = () => {
 
   return (
     <View style={[styles.root, { paddingTop: isScanning ? 0 : insets.top }]}>
-      {!isScanning && (
-        <TabBar
-          active={tab}
-          onChange={t => {
-            setTab(t);
-          }}
-        />
-      )}
-
-      {tab === 'face' ? (
+      {mode === 'face' ? (
         <>
           {/* Idle — always shown unless camera is active or manual selector is open */}
           {faceScanStage === 'idle' && <FaceScanIdle onStart={startFaceScan} />}
@@ -3872,7 +3839,17 @@ const ScanScreen: React.FC = () => {
           )}
         </>
       ) : (
-        <RefractionFlow />
+        <>
+          <EyeTestDisclaimerModal
+            visible={!testConsent}
+            onAccept={() => setTestConsent(true)}
+            onDecline={() => navigation.goBack()}
+          />
+
+          {/* Mounted only once consent is given, so the test cannot be
+              started behind the dialog. */}
+          {testConsent && <RefractionFlow />}
+        </>
       )}
     </View>
   );
@@ -4477,42 +4454,6 @@ const scanStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.glassSurface,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    padding: 4,
-    gap: 4,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.full,
-  },
-  tabBtnActive: {
-    backgroundColor: Colors.white,
-    ...Shadow.sm,
-  },
-  tabLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.gray400,
-  },
-  tabLabelActive: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
 
   // Shared layout
   contentPad: {

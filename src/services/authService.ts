@@ -133,9 +133,9 @@ export const authService = {
   },
 
   // ─── Remembered numbers ────────────────────────────────────────────────────
-  // The API gives us no way to ask whether a number already has a PIN, so the
-  // device remembers the numbers that have signed in here and offers the PIN
-  // field for those. Anything else starts the OTP flow.
+  // The login form always accepts a phone number and PIN, so this is no longer
+  // a gate — it just remembers who has signed in on this device so the number
+  // can be prefilled next time.
 
   async knownPhones(): Promise<string[]> {
     try {
@@ -147,28 +147,20 @@ export const authService = {
     }
   },
 
-  async hasPin(phone: string): Promise<boolean> {
-    const target = normalisePhone(phone);
-    return (await authService.knownPhones()).includes(target);
+  /** The number that signed in here most recently, for prefilling the form. */
+  async lastPhone(): Promise<string | null> {
+    const phones = await authService.knownPhones();
+    return phones.length ? phones[phones.length - 1] : null;
   },
 
   async rememberPhone(phone: string): Promise<void> {
     const target = normalisePhone(phone);
     if (!target) return;
     const phones = await authService.knownPhones();
-    if (phones.includes(target)) return;
-    await AsyncStorage.setItem(
-      KNOWN_PHONES_KEY,
-      JSON.stringify([...phones, target]),
-    );
+    // Move an already-known number to the end so the list stays in
+    // most-recent-last order for `lastPhone`.
+    const next = [...phones.filter(p => p !== target), target];
+    await AsyncStorage.setItem(KNOWN_PHONES_KEY, JSON.stringify(next));
   },
 
-  async forgetPhone(phone: string): Promise<void> {
-    const target = normalisePhone(phone);
-    const phones = await authService.knownPhones();
-    await AsyncStorage.setItem(
-      KNOWN_PHONES_KEY,
-      JSON.stringify(phones.filter(p => p !== target)),
-    );
-  },
 };
