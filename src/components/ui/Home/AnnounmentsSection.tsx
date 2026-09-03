@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
   Image,
   StyleSheet,
   TouchableOpacity,
@@ -85,11 +84,12 @@ const AnnouncementSection = ({ annoucements }: AnnouncementSectionProps) => {
     );
   };
 
-  const renderItem = ({ item }: { item: AnnouncementItem }) => {
+  const renderAnnouncement = (item: AnnouncementItem) => {
     const previewText = stripHtml(item.content);
 
     return (
       <TouchableOpacity
+        key={String(item.id)}
         activeOpacity={0.85}
         style={styles.shadowWrapper}
         onPress={() => openModal(item)}
@@ -122,12 +122,11 @@ const AnnouncementSection = ({ annoucements }: AnnouncementSectionProps) => {
     <View style={styles.container}>
       <AppText style={styles.sectionTitle}>{t('announcementTitle')}</AppText>
 
-      <FlatList
-        data={annoucements}
-        renderItem={renderItem}
-        keyExtractor={item => String(item.id)}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Rendered with map rather than a FlatList: this section sits inside
+          the home screen's vertical ScrollView, and a nested vertical
+          VirtualizedList breaks windowing (and warns). The list is short and
+          the page already scrolls, so there is nothing to virtualise. */}
+      {annoucements.map(renderAnnouncement)}
 
       <Modal
         visible={!!selectedAnnouncement}

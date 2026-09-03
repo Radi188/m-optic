@@ -18,12 +18,13 @@ export const MOCK_HISTORY: HistoryResponse = {
     {
       id: 101,
       created_at: '2026-08-14T09:30:00Z',
-      right_eye: { sph: '-4.00', cyl: '-0.75', axis: 180 },
-      left_eye: { sph: '-3.75', cyl: '-0.50', axis: 175 },
+      right_eye: { sph: '-4.00', cyl: '-0.75', axis: 180, va: '6/6' },
+      left_eye: { sph: '-3.75', cyl: '-0.50', axis: 175, va: '6/9' },
       add: '+1.00',
       pd: 62,
       notes: 'Mild astigmatism in both eyes. Recommended anti-glare coating.',
       doctor: { name: 'Dr. Sok Dara' },
+      seller: { name: 'Chan Rithy' },
       branch: { branch_name: 'Toul Kork' },
     },
     // Deliberately out of order — the list sorts newest first.
@@ -35,6 +36,7 @@ export const MOCK_HISTORY: HistoryResponse = {
       pd: 62,
       diagnosis: 'Slight progression since the previous visit.',
       doctor_name: 'Dr. Chan Sophea',
+      seller_name: 'Meas Sreyneang',
       branch_name: 'Aeon Mall 2',
     },
     // Flat columns instead of nested objects.
@@ -43,11 +45,26 @@ export const MOCK_HISTORY: HistoryResponse = {
       date: '2025-11-20',
       right_sph: '-3.75',
       right_cyl: '-0.50',
+      seller_name: 'Sok Pisey',
+      right_va: '6/6',
+      left_va: '6/6',
       right_axis: '180',
       left_sph: '-3.50',
       left_cyl: '-0.50',
       left_axis: '172',
       pd: '61',
+      branch_name: 'Toul Kork',
+    },
+    // A single field carrying the whole prescription — sphere/cylinder, and
+    // sphere/cylinder×axis. Both must split rather than land in the sphere slot.
+    {
+      id: 106,
+      created_at: '2025-06-18T09:00:00Z',
+      right_eye: '-4.00/-2.00',
+      left_eye: '-3.75/-1.75x180',
+      pd: '62',
+      note: 'Combined reading as recorded in store.',
+      doctor_name: 'Dr. Kim Chanthy',
       branch_name: 'Toul Kork',
     },
     // od/os aliases carrying a bare sphere string.

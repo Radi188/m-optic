@@ -37,7 +37,7 @@ import {
   groupHours,
   type PlaceLocation,
 } from '../services/placesService';
-import FramesSection from '../components/ui/Home/FramesSection';
+import LensTechSection from '../components/ui/Lens/LensTechSection';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
 import { useHome } from '../hook/useHome';
@@ -638,16 +638,7 @@ const HomeScreen: React.FC = () => {
           }}
         />
 
-        <FramesSection
-          title={t('homeFrameTypes')}
-          frames={data?.frame_shapes}
-          onPressFrame={frame => {
-            navigation.navigate('GlassesList', {
-              from: 'frame',
-              frameShape: frame.name,
-            });
-          }}
-        />
+        <LensTechSection />
 
         <AnnouncementSection annoucements={data?.announcements || []} />
       </ScrollView>

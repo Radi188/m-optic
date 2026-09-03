@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { selectIsAuthenticated } from '../store/slices/authSlice';
 import { useHistory } from '../hook/useHistory';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
-import type { Invoice, Refraction } from '../types/history';
+import type { EyeReading, Invoice, Refraction } from '../types/history';
 import AppText from '../components/AppText';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import HistorySkeleton from '../components/ui/Loading/HistoryLoadingScreen';
@@ -36,6 +36,17 @@ function formatDate(iso: string | null, locale: string): string | null {
     month: 'short',
     year: 'numeric',
   });
+}
+
+/**
+ * "-4.00 / -2.00" when a cylinder is present, otherwise just the sphere.
+ * The card gives each eye one value slot, and the cylinder belongs beside its
+ * sphere rather than being dropped.
+ */
+function formatEye(reading: EyeReading): string {
+  if (!reading.sph && !reading.cyl) return '—';
+  if (!reading.cyl) return reading.sph ?? '—';
+  return `${reading.sph ?? '—'} / ${reading.cyl}`;
 }
 
 function formatMoney(value: number | null, currency: string): string | null {
@@ -67,11 +78,12 @@ const RefractionCard: React.FC<{ item: Refraction; locale: string }> = ({
   const { t } = useTranslation();
   const date = formatDate(item.date, locale);
 
-  // "ADD +2.00 · PD 62 · Dr Sok · Toul Kork" — only the parts that exist.
+  // "ADD +2.00 · PD 62 · Toul Kork" — only the parts that exist. The receipts
+  // carry no axis and no doctor, so neither is shown; visual acuity sits under
+  // its own eye instead, and the seller becomes the card's title.
   const meta = [
     item.add ? `${t('Add')} ${item.add}` : null,
     item.pd ? `${t('Pd')} ${item.pd}` : null,
-    item.doctor,
     item.branch,
   ]
     .filter(Boolean)
@@ -82,11 +94,15 @@ const RefractionCard: React.FC<{ item: Refraction; locale: string }> = ({
   return (
     <View style={styles.cardSpacer}>
       <CurrentPrescriptionCard
-        title={t('EyeExam')}
+        style={styles.refractionCard}
+        title={item.seller ?? t('EyeExam')}
         rightLabel={t('RightEye')}
         leftLabel={t('LeftEye')}
-        rightEye={item.right.sph ?? '—'}
-        leftEye={item.left.sph ?? '—'}
+        fullWidthEyes
+        rightEye={formatEye(item.right)}
+        leftEye={formatEye(item.left)}
+        rightSub={item.right.va ? `${t('Va')} ${item.right.va}` : undefined}
+        leftSub={item.left.va ? `${t('Va')} ${item.left.va}` : undefined}
         updatedAt={date ?? undefined}
         showDate={!!date}
         meta={meta || undefined}
@@ -370,6 +386,16 @@ const styles = StyleSheet.create({
   listContentEmpty: { flexGrow: 1 },
 
   cardSpacer: { marginBottom: Spacing.md },
+
+  // The card's default beige is designed for the white profile canvas. Here
+  // the page itself is warm beige, so it needs the same white, lifted surface
+  // the invoice cards use — otherwise the two tabs don't read as siblings and
+  // the card all but disappears into the background.
+  refractionCard: {
+    backgroundColor: Colors.white,
+    borderColor: Colors.gray200,
+    ...Shadow.sm,
+  },
 
   card: {
     backgroundColor: Colors.white,

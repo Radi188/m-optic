@@ -32,12 +32,28 @@ describe('history normalisers', () => {
     );
 
     expect(r.id).toBe('7');
-    expect(r.right).toEqual({ sph: '-4.00', cyl: '-0.50', axis: '180' });
+    expect(r.right).toEqual({ sph: '-4.00', cyl: '-0.50', axis: '180', va: null });
     expect(r.left.sph).toBe('-3.75');
     expect(r.left.cyl).toBeNull();
     expect(r.pd).toBe('62');
     expect(r.note).toBe('Mild astigmatism');
     expect(r.isEmpty).toBe(false);
+  });
+
+  it('reads visual acuity from nested objects and flat columns', () => {
+    const nested = normaliseRefraction(
+      { right_eye: { sph: '-1.00', va: '6/6' }, left_eye: { sph: '-1.25' } },
+      0,
+    );
+    expect(nested.right.va).toBe('6/6');
+    expect(nested.left.va).toBeNull();
+
+    const flat = normaliseRefraction(
+      { right_sph: '-1.00', right_va: '6/9', left_sph: '-1.25', left_va: 6 },
+      0,
+    );
+    expect(flat.right.va).toBe('6/9');
+    expect(flat.left.va).toBe('6');
   });
 
   it('reads flat columns and od/os aliases', () => {
@@ -160,5 +176,55 @@ describe('history normalisers', () => {
 
     expect(rows.map(r => r.id)).toEqual(['a', 'b']);
     expect(sorted.map(r => r.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('combined eye readings', () => {
+  it('splits "sphere/cylinder" into separate fields', () => {
+    const r = normaliseRefraction(
+      { id: 1, right_eye: '-4.00/-2.00', left_eye: '-3.75/-1.25' },
+      0,
+    );
+    expect(r.right).toEqual({ sph: '-4.00', cyl: '-2.00', axis: null, va: null });
+    expect(r.left.cyl).toBe('-1.25');
+    expect(r.isEmpty).toBe(false);
+  });
+
+  it('splits "sphere/cylinder x axis", either separator', () => {
+    expect(
+      normaliseRefraction({ right_eye: '-4.00/-2.00x180' }, 0).right,
+    ).toEqual({ sph: '-4.00', cyl: '-2.00', axis: '180', va: null });
+
+    expect(
+      normaliseRefraction({ right_eye: '-4.00/-2.00×90' }, 0).right,
+    ).toEqual({ sph: '-4.00', cyl: '-2.00', axis: '90', va: null });
+  });
+
+  it('leaves a plain sphere untouched', () => {
+    expect(normaliseRefraction({ right_eye: '-4.00' }, 0).right).toEqual({
+      sph: '-4.00',
+      cyl: null,
+      axis: null,
+      va: null,
+    });
+  });
+
+  it('splits a combined value arriving in a flat column', () => {
+    const r = normaliseRefraction({ right_sph: '-2.50/-0.75x10' }, 0);
+    expect(r.right).toEqual({ sph: '-2.50', cyl: '-0.75', axis: '10', va: null });
+  });
+
+  it('prefers explicit columns over values parsed from the combined string', () => {
+    const r = normaliseRefraction(
+      { right_sph: '-2.50/-0.75', right_cyl: '-1.00', right_axis: '95' },
+      0,
+    );
+    expect(r.right).toEqual({ sph: '-2.50', cyl: '-1.00', axis: '95', va: null });
+  });
+
+  it('handles whitespace and an empty string', () => {
+    expect(normaliseRefraction({ right_eye: '  -1.00 / -0.50  ' }, 0).right)
+      .toEqual({ sph: '-1.00', cyl: '-0.50', axis: null, va: null });
+    expect(normaliseRefraction({ right_eye: '   ' }, 0).right.sph).toBeNull();
   });
 });

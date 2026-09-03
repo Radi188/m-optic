@@ -45,6 +45,8 @@ export type RawRefraction = {
   left_sph?: string | number | null;
   left_cyl?: string | number | null;
   left_axis?: string | number | null;
+  right_va?: string | number | null;
+  left_va?: string | number | null;
 
   add?: string | number | null;
   pd?: string | number | null;
@@ -55,6 +57,9 @@ export type RawRefraction = {
   branch_name?: string | null;
   doctor?: { name?: string | null } | string | null;
   doctor_name?: string | null;
+  /** Whoever wrote the receipt — the store's own staff, not a doctor. */
+  seller?: { name?: string | null } | string | null;
+  seller_name?: string | null;
 };
 
 export type RawInvoiceItem = {
@@ -97,6 +102,8 @@ export type EyeReading = {
   sph: string | null;
   cyl: string | null;
   axis: string | null;
+  /** Visual acuity, e.g. "6/6" — the receipts carry this in place of ADD. */
+  va: string | null;
 };
 
 export type Refraction = {
@@ -110,6 +117,8 @@ export type Refraction = {
   note: string | null;
   branch: string | null;
   doctor: string | null;
+  /** Receipt seller; used as the card's title when present. */
+  seller: string | null;
   /** True when neither eye carries a single readable value. */
   isEmpty: boolean;
 };
@@ -167,21 +176,64 @@ function nameOf(value: unknown, key: string): string | null {
   return null;
 }
 
+/**
+ * Pull a combined reading apart.
+ *
+ * A single field often carries the whole prescription rather than just the
+ * sphere — "-4.00/-2.00" (sphere/cylinder) and "-4.00/-2.00x180"
+ * (sphere/cylinder×axis) are both common. Left whole, the cylinder ends up
+ * rendered inside the sphere slot and the cylinder column reads as empty.
+ */
+export function splitCombinedEye(value: string): EyeReading {
+  const text = value.trim();
+  if (!text) return { sph: null, cyl: null, axis: null, va: null };
+
+  const [spherePart, ...rest] = text.split('/');
+  const remainder = rest.join('/').trim();
+
+  // The axis is written against the cylinder, as "x180" or "×180".
+  const [cylPart, axisPart] = remainder
+    ? remainder.split(/[x×]/i)
+    : [undefined, undefined];
+
+  return {
+    sph: firstString(spherePart),
+    cyl: firstString(cylPart),
+    axis: firstString(axisPart),
+    va: null,
+  };
+}
+
 /** An eye can arrive as an object, a bare string ("-4.00"), or flat columns. */
 function toEye(
   nested: RawEye | string | null | undefined,
   sph: unknown,
   cyl: unknown,
   axis: unknown,
+  va?: unknown,
 ): EyeReading {
   if (typeof nested === 'string') {
-    return { sph: firstString(nested), cyl: null, axis: null };
+    return { ...splitCombinedEye(nested), va: firstString(va) };
   }
-  return {
-    sph: firstString(nested?.sph, nested?.sphere, sph),
-    cyl: firstString(nested?.cyl, nested?.cylinder, cyl),
-    axis: firstString(nested?.axis, axis),
-  };
+
+  const sphere = firstString(nested?.sph, nested?.sphere, sph);
+  const cylinder = firstString(nested?.cyl, nested?.cylinder, cyl);
+  const ax = firstString(nested?.axis, axis);
+  const acuity = firstString(nested?.va, va);
+
+  // A flat sphere column can carry the combined form too — only trust it to
+  // fill in cyl/axis that nothing else supplied.
+  if (sphere && sphere.includes('/')) {
+    const parsed = splitCombinedEye(sphere);
+    return {
+      sph: parsed.sph,
+      cyl: cylinder ?? parsed.cyl,
+      axis: ax ?? parsed.axis,
+      va: acuity,
+    };
+  }
+
+  return { sph: sphere, cyl: cylinder, axis: ax, va: acuity };
 }
 
 export function normaliseRefraction(raw: RawRefraction, index: number): Refraction {
@@ -190,12 +242,14 @@ export function normaliseRefraction(raw: RawRefraction, index: number): Refracti
     raw.right_sph,
     raw.right_cyl,
     raw.right_axis,
+    raw.right_va,
   );
   const left = toEye(
     raw.left_eye ?? raw.os,
     raw.left_sph,
     raw.left_cyl,
     raw.left_axis,
+    raw.left_va,
   );
 
   const readings = [right.sph, right.cyl, right.axis, left.sph, left.cyl, left.axis];
@@ -210,6 +264,7 @@ export function normaliseRefraction(raw: RawRefraction, index: number): Refracti
     note: firstString(raw.note, raw.notes, raw.diagnosis),
     branch: nameOf(raw.branch, 'branch_name') ?? firstString(raw.branch_name),
     doctor: nameOf(raw.doctor, 'name') ?? firstString(raw.doctor_name),
+    seller: nameOf(raw.seller, 'name') ?? firstString(raw.seller_name),
     isEmpty: readings.every(v => v === null),
   };
 }

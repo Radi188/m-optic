@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Spacing } from '../../../theme';
+import { Colors, Spacing, Shadow } from '../../../theme';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 
 /**
@@ -40,13 +40,17 @@ export default HistorySkeleton;
 
 const styles = StyleSheet.create({
   list: { paddingHorizontal: Spacing.md },
+  // Matches the real refraction card's surface on this screen — white and
+  // lifted, so the skeleton doesn't sit on a different ground than what
+  // replaces it.
   card: {
-    backgroundColor: '#F5ECE6',
+    backgroundColor: Colors.white,
     borderRadius: 32,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#EFE2DA',
+    borderColor: Colors.gray200,
+    ...Shadow.sm,
   },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   title: { flex: 1, marginLeft: 12, marginRight: Spacing.sm },
