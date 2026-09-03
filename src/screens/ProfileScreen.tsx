@@ -440,13 +440,6 @@ const guestStyles = StyleSheet.create({
     color: Colors.white,
     letterSpacing: 0.2,
   },
-  registerBtn: { paddingVertical: Spacing.sm, alignItems: 'center' },
-  registerText: {
-    fontSize: FontSize.sm,
-    color: Colors.gray500,
-    fontWeight: '500',
-  },
-  registerLink: { color: Colors.primary, fontWeight: '700' },
 });
 
 export default ProfileScreen;

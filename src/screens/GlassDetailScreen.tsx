@@ -558,6 +558,15 @@ const GlassDetailScreen: React.FC = () => {
                 images: images,
                 initialIndex: index,
                 productName: product?.name,
+                // Every colourway travels with its own gallery, so the viewer
+                // can switch colour without going back to this screen.
+                colors: colors.map(c => ({
+                  id: c.id,
+                  hex: c.hex,
+                  label: c.label,
+                  images: galleryImages(c.variation),
+                })),
+                selectedColorId: selectedColor?.id,
               })
             }
           />

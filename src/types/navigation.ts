@@ -26,16 +26,29 @@ export type GlassItem = {
   modelUrl?: string | null;
 };
 
+/** One colourway as the full-screen image viewer needs it. */
+export type ImageViewColor = {
+  id: string;
+  hex: string;
+  label: string;
+  images: string[];
+};
+
 export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
-  Register: undefined;
+  VerifyOtp: { phone_number: string };
+  SetPin: { phone_number: string };
   Main: undefined;
   GlassDetail: { id: string };
   ProductImageView: {
+    /** Gallery for the colourway open when the viewer was launched. */
     images: string[];
     initialIndex?: number;
     productName?: string;
+    /** Every colourway, each with its own gallery, so the viewer can switch. */
+    colors?: ImageViewColor[];
+    selectedColorId?: string;
   };
   NotificationSetting: undefined;
   Support: undefined;
@@ -63,5 +76,6 @@ export type BottomTabParamList = {
   Glass: undefined;
  
   Store: undefined;
+  History: undefined;
   Profile: undefined;
 };

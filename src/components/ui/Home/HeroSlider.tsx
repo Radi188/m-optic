@@ -22,7 +22,19 @@ import { buildFileUrl } from '../../../utils/fileUrlHelper';
 import AppText from '../../AppText';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const SLIDER_HEIGHT = 300;
+// Height of the banner itself; the safe-area inset is added on top (see
+// totalHeight), since the slider sits under the status bar.
+const SLIDER_HEIGHT = 380;
+
+// Banners are uploaded at whatever shape the shop has to hand — the live set is
+// two 3:4 portraits and one 16:9 landscape — so no single box can match them
+// all. 'cover' filled the box but paid for it by cropping: 15% off the portrait
+// banners and fully HALF of the 16:9 one, which cut the product out of frame.
+// 'contain' shows every banner whole; this is what fills the leftover band.
+//
+// Deliberately dark: the logo and the Sign In button are white and sit over the
+// top of the banner, so a light band would swallow them.
+const BANNER_BACKDROP = '#141727';
 
 type HeroSliderProps = {
   signinLabel: string;
@@ -117,11 +129,11 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
             item.image_url || buildFileUrl(item.image_path) || '';
 
           return (
-            <View style={{ width: SCREEN_WIDTH, height: totalHeight }}>
+            <View style={[styles.slide, { height: totalHeight }]}>
               <Image
                 source={{ uri: imageUrl }}
                 style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </View>
           );
@@ -181,6 +193,12 @@ const HeroSlider: React.FC<HeroSliderProps> = ({
 export default HeroSlider;
 
 const styles = StyleSheet.create({
+  // Height is applied at render time — it depends on the safe-area inset.
+  slide: {
+    width: SCREEN_WIDTH,
+    backgroundColor: BANNER_BACKDROP,
+  },
+
   dots: {
     position: 'absolute',
     bottom: Spacing.lg,

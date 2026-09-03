@@ -11,6 +11,16 @@ type CurrentPrescriptionCardProps = {
   title: string;
   rightLabel: string;
   leftLabel: string;
+  /**
+   * Show `updatedAt` in the top-right corner. Opt-in: the profile and
+   * prescription screens deliberately render this card without a date, while
+   * the history list needs one per entry to tell the exams apart.
+   */
+  showDate?: boolean;
+  /** Optional caption under the readings, e.g. "ADD +2.00 · PD 62". */
+  meta?: string;
+  /** Optional free-text note or diagnosis from the exam. */
+  note?: string;
 };
 
 const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
@@ -21,9 +31,17 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
   rightLabel = 'Right Eye',
   leftLabel = 'Left Eye',
   onPress,
+  showDate = false,
+  meta,
+  note,
 }) => {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.85 : 1}
+      disabled={!onPress}
+    >
       {/* Background/Bottom-Right Lens Image */}
       <Image
         source={require('../../../assets/images/len.png')}
@@ -42,7 +60,9 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
             {title}
           </AppText>
         </View>
-        {/* <AppText style={styles.updatedText}>Updated {updatedAt}</AppText> */}
+        {showDate && updatedAt && (
+          <AppText style={styles.updatedText}>{updatedAt}</AppText>
+        )}
       </View>
 
       {/* Center Section: Eye Prescription Numbers */}
@@ -59,6 +79,9 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
           <AppText style={styles.eyeValue}>{leftEye}</AppText>
         </View>
       </View>
+
+      {meta && <AppText style={styles.meta}>{meta}</AppText>}
+      {note && <AppText style={styles.note}>{note}</AppText>}
 
       {/* Bottom Section: View Details CTA */}
       {/* <TouchableOpacity
@@ -140,6 +163,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1310',
     letterSpacing: -0.5,
+  },
+  meta: {
+    fontSize: 13,
+    color: '#7F726A',
+    marginBottom: 4,
+  },
+  note: {
+    fontSize: 13,
+    color: '#5B4A42',
+    lineHeight: 19,
+    marginBottom: 4,
   },
   divider: {
     width: 1,

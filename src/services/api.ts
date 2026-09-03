@@ -22,12 +22,25 @@ api.interceptors.request.use(async config => {
 });
 
 // ─── Global error normalisation ──────────────────────────────────────────────
+function normaliseError(data: any): string | null {
+  if (!data) return null;
+  if (typeof data.message === 'string' && data.message) return data.message;
+
+  // Laravel-style validation: { error: { phone_number: ['...'], ... } }
+  const bag = data.error ?? data.errors;
+  if (typeof bag === 'string' && bag) return bag;
+  if (bag && typeof bag === 'object') {
+    const first = Object.values(bag).flat().filter(Boolean);
+    if (first.length) return String(first[0]);
+  }
+  return null;
+}
+
 api.interceptors.response.use(
   res => res,
   err => {
     const message =
-      err.response?.data?.message ||
-      err.response?.data?.error ||
+      normaliseError(err.response?.data) ||
       err.message ||
       'Something went wrong';
     return Promise.reject(new Error(message));

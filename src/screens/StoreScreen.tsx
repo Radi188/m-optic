@@ -613,7 +613,9 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.72)',
-    maxWidth: 130,
+    // Branch names are full Khmer strings ("សាខាស្ទឹងមានជ៍យ"), not the short
+    // codes the tabs used to show, so they need more room before truncating.
+    maxWidth: 180,
   },
   tabLabelActive: { color: Colors.primary, fontWeight: '800' },
 

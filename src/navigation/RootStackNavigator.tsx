@@ -7,7 +7,8 @@ import BottomTabNavigator from './BottomTabNavigator';
 import GlassDetailScreen from '../screens/GlassDetailScreen';
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
-import RegisterScreen from '../screens/RegisterScreen';
+import VerifyOtpScreen from '../screens/VerifyOtpScreen';
+import SetPinScreen from '../screens/SetPinScreen';
 import type { RootStackParamList } from '../types/navigation';
 import ProductImageViewScreen from '../screens/ImageViewFullScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingScreen';
@@ -167,8 +168,13 @@ const RootStackNavigator: React.FC = () => {
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
-            name="Register"
-            component={RegisterScreen}
+            name="VerifyOtp"
+            component={VerifyOtpScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="SetPin"
+            component={SetPinScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen

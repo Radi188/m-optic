@@ -339,7 +339,6 @@ const promoStyles = StyleSheet.create({
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const SLIDER_HEIGHT = 300;
 
 // ─── Hero Slider data ────────────────────────────────────────────────────────
 type Slide = {

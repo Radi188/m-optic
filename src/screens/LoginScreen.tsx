@@ -1,20 +1,5 @@
-import React, { useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  TextInput,
-  Dimensions,
-  StatusBar,
-} from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -22,17 +7,23 @@ import { useTranslation } from 'react-i18next';
 
 import {
   loginThunk,
+  requestOtpThunk,
   selectAuthLoading,
   selectAuthError,
+  setError,
 } from '../store/slices/authSlice';
+import { authService, normalisePhone } from '../services/authService';
 import type { AppDispatch } from '../store';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
 import AppText from '../components/AppText';
+import AuthScreenLayout from '../components/ui/Auth/AuthScreenLayout';
+import CodeInput from '../components/ui/Auth/CodeInput';
+import { AuthButton, AuthError } from '../components/ui/Auth/AuthParts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-const { height: SCREEN_H } = Dimensions.get('window');
+export const PIN_LENGTH = 6;
 
 interface FieldProps {
   label: string;
@@ -43,7 +34,7 @@ interface FieldProps {
   keyboardType?: any;
   autoCapitalize?: any;
   autoCorrect?: boolean;
-  secure?: boolean;
+  editable?: boolean;
 }
 
 const FormField: React.FC<FieldProps> = ({
@@ -55,9 +46,8 @@ const FormField: React.FC<FieldProps> = ({
   keyboardType,
   autoCapitalize,
   autoCorrect,
-  secure,
+  editable = true,
 }) => {
-  const [hidden, setHidden] = useState(secure ?? false);
   const [focused, setFocused] = useState(false);
 
   return (
@@ -81,209 +71,130 @@ const FormField: React.FC<FieldProps> = ({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize ?? 'none'}
           autoCorrect={autoCorrect ?? false}
-          secureTextEntry={hidden}
+          editable={editable}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
       </View>
-
-      {secure && (
-        <TouchableOpacity
-          onPress={() => setHidden(h => !h)}
-          style={field.eyeBtn}
-        >
-          <Ionicons
-            name={hidden ? 'eye-outline' : 'eye-off-outline'}
-            size={20}
-            color={Colors.gray400}
-          />
-        </TouchableOpacity>
-      )}
     </View>
   );
 };
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const dispatch = useDispatch<AppDispatch>();
 
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
-  const [remember, setRemember] = useState(false);
+  /** Set once the device recognises the number as having a PIN already. */
+  const [pinMode, setPinMode] = useState(false);
 
   const loading = useSelector(selectAuthLoading);
   const error = useSelector(selectAuthError);
 
-  const cardAnim = useRef(new Animated.Value(80)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  // Stale errors from a previous attempt shouldn't greet the next visitor.
+  useEffect(() => {
+    dispatch(setError(null));
+  }, [dispatch]);
 
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 480,
-        useNativeDriver: true,
-      }),
-      Animated.spring(cardAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 10,
-        delay: 120,
-      }),
-    ]).start();
-  }, [cardAnim, fadeAnim]);
+  const digits = normalisePhone(phone);
 
-  const handleLogin = () => {
-    if (!phone.trim() || !pin.trim()) return;
-    dispatch(loginThunk({ phone_number: phone.trim(), pin }));
-  };
+  // Recognise a remembered number as it is typed, so the PIN field can appear
+  // without an extra round trip.
+  useEffect(() => {
+    let cancelled = false;
+    if (!digits) {
+      setPinMode(false);
+      return;
+    }
+    authService.hasPin(digits).then(known => {
+      if (!cancelled) setPinMode(known);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [digits]);
+
+  const handleRequestOtp = useCallback(async () => {
+    if (!digits) return;
+    const result = await dispatch(requestOtpThunk({ phone_number: digits }));
+    if (requestOtpThunk.fulfilled.match(result)) {
+      navigation.navigate('VerifyOtp', { phone_number: digits });
+    }
+  }, [digits, dispatch, navigation]);
+
+  const handlePinLogin = useCallback(() => {
+    if (!digits || pin.length < PIN_LENGTH) return;
+    dispatch(loginThunk({ phone_number: digits, pin }));
+  }, [digits, dispatch, pin]);
+
+  /** Escape hatch for a forgotten PIN or a number remembered in error. */
+  const handleUseOtpInstead = useCallback(async () => {
+    setPin('');
+    await authService.forgetPhone(digits);
+    setPinMode(false);
+    await handleRequestOtp();
+  }, [digits, handleRequestOtp]);
+
+  const submitDisabled = pinMode
+    ? !digits || pin.length < PIN_LENGTH
+    : !digits;
 
   return (
-    <LinearGradient
-      colors={[Colors.primary, Colors.primaryMid, Colors.background]}
-      locations={[0, 0.42, 1]}
-      style={styles.root}
+    <AuthScreenLayout
+      title={t('GoAheadSignIn')}
+      subtitle={t('LoginSubtitle')}
+      onBack={() => navigation.goBack()}
     >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="transparent"
-        translucent
+      <View style={styles.tabBar}>
+        <View style={styles.tabActive}>
+          <AppText style={styles.tabActiveText}>{t('Login')}</AppText>
+        </View>
+      </View>
+
+      <FormField
+        label={t('PhoneNumber')}
+        icon="call-outline"
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="016 622 357"
+        keyboardType="phone-pad"
       />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <Animated.View
-          style={[
-            styles.top,
-            { paddingTop: insets.top + 16, opacity: fadeAnim },
-          ]}
+      {pinMode && (
+        <View style={styles.pinBlock}>
+          <AppText style={styles.pinLabel}>{t('EnterYourPin')}</AppText>
+          <CodeInput
+            value={pin}
+            onChangeText={setPin}
+            length={PIN_LENGTH}
+            secure
+            onFilled={handlePinLogin}
+          />
+        </View>
+      )}
+
+      <AuthError message={error} />
+
+      <AuthButton
+        label={pinMode ? t('Login') : t('SendCode')}
+        onPress={pinMode ? handlePinLogin : handleRequestOtp}
+        loading={loading}
+        disabled={submitDisabled}
+      />
+
+      {pinMode ? (
+        <TouchableOpacity
+          onPress={handleUseOtpInstead}
+          activeOpacity={0.7}
+          disabled={loading}
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.8}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.white} />
-            <AppText style={styles.backText}>{t('Back')}</AppText>
-          </TouchableOpacity>
-          <View style={styles.logoRow}>
-            <View style={styles.logoWrap}>
-              <Image
-                source={require('../assets/logo.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-          </View>
-
-          <AppText style={styles.title}>{t('GoAheadSignIn')}</AppText>
-          <AppText style={styles.subtitle}>{t('LoginSubtitle')}</AppText>
-        </Animated.View>
-
-        <Animated.View
-          style={[styles.cardOuter, { transform: [{ translateY: cardAnim }] }]}
-        >
-          <View style={[styles.card, { paddingBottom: insets.bottom + 24 }]}>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.tabBar}>
-                <View style={styles.tabActive}>
-                  <AppText style={styles.tabActiveText}>{t('Login')}</AppText>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.tabInactive}
-                  onPress={() => navigation.navigate('Register')}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={styles.tabInactiveText}>
-                    {t('Register')}
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-
-              <FormField
-                label={t('PhoneNumber')}
-                icon="call-outline"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="+855 12 345 678"
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-              />
-
-              <FormField
-                label={t('Pin')}
-                icon="keypad-outline"
-                value={pin}
-                onChangeText={setPin}
-                placeholder="• • • • • •"
-                keyboardType="number-pad"
-                secure
-              />
-
-              {error && (
-                <View style={styles.errorBox}>
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={14}
-                    color={Colors.error}
-                  />
-                  <AppText style={styles.errorText}>{error}</AppText>
-                </View>
-              )}
-
-              <View style={styles.rememberRow}>
-                <TouchableOpacity
-                  style={styles.checkRow}
-                  onPress={() => setRemember(r => !r)}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={[styles.checkbox, remember && styles.checkboxActive]}
-                  >
-                    {remember && (
-                      <Ionicons
-                        name="checkmark"
-                        size={12}
-                        color={Colors.white}
-                      />
-                    )}
-                  </View>
-
-                  <AppText style={styles.rememberText}>
-                    {t('RememberMe')}
-                  </AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity activeOpacity={0.7}>
-                  <AppText style={styles.forgotText}>
-                    {t('ForgotPassword')}
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.loginBtn, loading && { opacity: 0.7 }]}
-                onPress={handleLogin}
-                activeOpacity={0.85}
-                disabled={loading}
-              >
-                <AppText style={styles.loginBtnText}>
-                  {loading ? t('SigningIn') : t('Login')}
-                </AppText>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+          <AppText style={styles.altText}>{t('ForgotPin')}</AppText>
+        </TouchableOpacity>
+      ) : (
+        <AppText style={styles.hint}>{t('OtpHint')}</AppText>
+      )}
+    </AuthScreenLayout>
   );
 };
 
@@ -323,70 +234,9 @@ const field = StyleSheet.create({
     padding: 0,
     fontWeight: '500',
   },
-  eyeBtn: {
-    paddingLeft: Spacing.sm,
-  },
 });
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-
-  top: {
-    flex: 1,
-    paddingHorizontal: Spacing.xl,
-    justifyContent: 'flex-end',
-    paddingBottom: Spacing.xl,
-  },
-  backButton: {
-    borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center',
-
-    marginBottom: Spacing.md,
-    flexDirection: 'row',
-  },
-  backText: {
-    fontSize: 16,
-    color: Colors.white,
-    textDecorationLine: 'underline',
-  },
-  logoRow: {
-    marginBottom: Spacing.xl,
-  },
-  logoWrap: {
-    borderRadius: 100,
-    overflow: 'hidden',
-
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  logo: { width: 56, height: 56, borderRadius: 13 },
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: -0.8,
-    lineHeight: 52,
-    marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    color: 'rgba(255,255,255,0.65)',
-    fontWeight: '400',
-    lineHeight: 22,
-  },
-
-  cardOuter: {},
-  card: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xl,
-    minHeight: SCREEN_H * 0.58,
-    ...Shadow.lg,
-  },
-
   tabBar: {
     flexDirection: 'row',
     backgroundColor: Colors.gray100,
@@ -400,89 +250,31 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     paddingVertical: 11,
     alignItems: 'center',
-    ...Shadow.sm,
   },
   tabActiveText: {
     fontSize: FontSize.md,
     fontWeight: '700',
     color: Colors.black,
   },
-  tabInactive: {
-    flex: 1,
-    paddingVertical: 11,
-    alignItems: 'center',
+  pinBlock: {
+    marginBottom: Spacing.md,
   },
-  tabInactiveText: {
-    fontSize: FontSize.md,
-    fontWeight: '500',
+  pinLabel: {
+    fontSize: FontSize.xs,
     color: Colors.gray400,
-  },
-
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.errorLight,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    fontWeight: '500',
     marginBottom: Spacing.sm,
-    marginTop: -Spacing.sm,
   },
-  errorText: {
-    fontSize: FontSize.sm,
-    color: Colors.error,
-    fontWeight: '500',
-    flex: 1,
-  },
-
-  rememberRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Colors.gray300,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  rememberText: {
-    fontSize: FontSize.sm,
-    color: Colors.gray600,
-    fontWeight: '500',
-  },
-  forgotText: {
+  altText: {
     fontSize: FontSize.sm,
     color: Colors.primary,
     fontWeight: '600',
+    textAlign: 'center',
   },
-
-  loginBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-    ...Shadow.glow,
-  },
-  loginBtnText: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: 0.2,
+  hint: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

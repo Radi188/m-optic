@@ -107,9 +107,10 @@ export function mapBranch(branch: BranchResponse): StoreLocation {
   return {
     id: String(branch.id),
     name: (branch.branch_name || '').trim(),
-    // `description` is the shop's short code (BT, STM, SSW…) — a better tab
-    // label than the full Khmer name, which overflows.
-    branch: (branch.description || branch.branch_name || '').trim(),
+    // The shop's own branch name, as returned by the API. `description` holds a
+    // short code (BT, STM, SSW…) but it is blank on some branches, so the name
+    // is what the tabs show.
+    branch: (branch.branch_name || '').trim(),
     address: (branch.address || '').trim(),
     phone: (branch.phone_number || '').trim(),
     weekdayText: toWeekdayText(branch.open_time, branch.close_time),

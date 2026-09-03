@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
+import type { ImageViewColor } from '../types/navigation';
 import AppText from '../components/AppText';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -29,6 +30,9 @@ const HEADER_CONTENT_HEIGHT = 72;
 // dead band under the photo and shrank it for no reason. Now just enough for
 // the page dots.
 const BOTTOM_BAR_HEIGHT = 56;
+// Extra reserve when the colour swatches are on screen, so they sit below the
+// photo rather than on top of it.
+const SWATCH_BAR_HEIGHT = 46;
 
 /**
  * Warm studio backdrop, shared with the 3-D viewer (GlassModelScene) so both
@@ -84,6 +88,8 @@ type ProductImageViewScreenProps = {
       images: string[];
       initialIndex?: number;
       productName?: string;
+      colors?: ImageViewColor[];
+      selectedColorId?: string;
     };
   };
 };
@@ -97,19 +103,41 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
     images = [],
     initialIndex = 0,
     productName = 'Product Images',
+    colors = [],
+    selectedColorId,
   } = route.params || {};
 
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [isZoomed, setIsZoomed] = useState(false);
-
-  const validImages = useMemo(
-    () => images.filter(item => typeof item === 'string' && item.trim()),
-    [images],
+  const [activeColorId, setActiveColorId] = useState<string | undefined>(
+    selectedColorId ?? colors[0]?.id,
   );
 
+  const activeColor = useMemo(
+    () => colors.find(c => c.id === activeColorId),
+    [colors, activeColorId],
+  );
+
+  // The chosen colourway's gallery, falling back to whatever was passed in —
+  // a product with no colourways still opens with its own images.
+  const validImages = useMemo(() => {
+    const source = activeColor?.images?.length ? activeColor.images : images;
+    return source.filter(item => typeof item === 'string' && item.trim());
+  }, [activeColor, images]);
+
+  const selectColor = useCallback((id: string) => {
+    setActiveColorId(id);
+    // Galleries differ in length, so land on the first shot rather than
+    // holding an index that may not exist in the new set.
+    setActiveIndex(0);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
+
   const headerHeight = insets.top + HEADER_CONTENT_HEIGHT;
-  const zoomAreaHeight = SCREEN_HEIGHT - headerHeight - BOTTOM_BAR_HEIGHT;
+  const bottomBarHeight =
+    BOTTOM_BAR_HEIGHT + (colors.length > 1 ? SWATCH_BAR_HEIGHT : 0);
+  const zoomAreaHeight = SCREEN_HEIGHT - headerHeight - bottomBarHeight;
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = event.nativeEvent.contentOffset.x;
@@ -146,7 +174,7 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
           styles.imageCenterArea,
           {
             paddingTop: headerHeight,
-            paddingBottom: BOTTOM_BAR_HEIGHT,
+            paddingBottom: bottomBarHeight,
           },
         ]}
       >
@@ -237,7 +265,7 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
           scrollEnabled={!isZoomed}
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScrollEnd}
-          initialScrollIndex={initialIndex}
+          initialScrollIndex={Math.min(initialIndex, Math.max(0, validImages.length - 1))}
           getItemLayout={(_, index) => ({
             length: SCREEN_WIDTH,
             offset: SCREEN_WIDTH * index,
@@ -245,6 +273,31 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
           })}
           style={styles.mainSlider}
         />
+
+        {/* Colourways — switching one swaps the gallery in place. */}
+        {colors.length > 1 && (
+          <View style={styles.swatchRow} pointerEvents="box-none">
+            {colors.map(color => {
+              const active = color.id === activeColorId;
+              return (
+                <TouchableOpacity
+                  key={color.id}
+                  onPress={() => selectColor(color.id)}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={color.label || 'Colour option'}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  style={[styles.swatch, active && styles.swatchActive]}
+                >
+                  <View
+                    style={[styles.swatchDot, { backgroundColor: color.hex }]}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Fills the band the phantom thumbnail strip used to occupy. */}
         {validImages.length > 1 && (
@@ -340,6 +393,41 @@ const styles = StyleSheet.create({
     borderColor: STUDIO.chipBorder,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  swatchRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    zIndex: 40,
+  },
+
+  swatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+
+  swatchActive: {
+    borderColor: Colors.primary,
+  },
+
+  swatchDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    // A hairline keeps a pale colourway from vanishing into the light backdrop.
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(43,37,35,0.25)',
   },
 
   dotsRow: {

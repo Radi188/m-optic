@@ -413,6 +413,14 @@ const GlassesListScreen: React.FC = () => {
                       ? activeBrandId === 'all'
                       : String(activeBrandId) === String(b.id);
 
+                  // brandTabs mixes real brands with the synthetic "All" entry,
+                  // which has no logo field — read it defensively once rather
+                  // than reaching into the union at three call sites.
+                  const logoUri =
+                    b.name === 'All'
+                      ? undefined
+                      : (b as { logo?: string | null }).logo || undefined;
+
                   return (
                     <TouchableOpacity
                       key={String(b.id || b.name)}
@@ -420,10 +428,15 @@ const GlassesListScreen: React.FC = () => {
                         handleSelectBrand(b.id === 'all' ? 'all' : Number(b.id))
                       }
                       activeOpacity={0.75}
-                      style={[styles.tab, active && styles.tabActive]}
+                      style={[
+                        styles.tab,
+                        logoUri && styles.tabLogo,
+                        active && styles.tabActive,
+                      ]}
                     >
-                      {b.name === 'All' || !b.logo ? (
+                      {!logoUri ? (
                         <AppText
+                          numberOfLines={1}
                           style={[
                             styles.tabText,
                             active && styles.tabTextActive,
@@ -433,7 +446,7 @@ const GlassesListScreen: React.FC = () => {
                         </AppText>
                       ) : (
                         <Image
-                          source={{ uri: b.logo }}
+                          source={{ uri: logoUri }}
                           style={styles.logo}
                           resizeMode="contain"
                         />
@@ -462,6 +475,7 @@ const GlassesListScreen: React.FC = () => {
                     style={[styles.tab, active && styles.tabActive]}
                   >
                     <AppText
+                      numberOfLines={1}
                       style={[styles.tabText, active && styles.tabTextActive]}
                     >
                       {frame.name}
@@ -700,8 +714,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
 
+  // Sizes to its label. A fixed width left "All" swimming in empty space while
+  // "ARMANI EXCHANGE" was crushed into the same 95dp, which is what made the
+  // row read as untidy. minWidth keeps the very short labels from looking
+  // pinched, and the padding is what actually sets the width now.
   tab: {
-    width: 95,
+    minWidth: 64,
     height: 36,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.white,
@@ -711,7 +729,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: Colors.gray200,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
+  },
+
+  // A logo has no text to measure, so those tabs keep a fixed box. The image
+  // inside is width:'100%', which would collapse to nothing in an auto-width
+  // container.
+  tabLogo: {
+    width: 95,
+    paddingHorizontal: 0,
   },
 
   tabActive: {

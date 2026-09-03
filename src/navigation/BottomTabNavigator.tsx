@@ -10,12 +10,15 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useSelector } from 'react-redux';
 
 import HomeScreen from '../screens/HomeScreen';
 import GlassScreen from '../screens/GlassScreen';
 import ScanScreen from '../screens/ScanScreen';
 import StoreScreen from '../screens/StoreScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import { selectIsAuthenticated } from '../store/slices/authSlice';
 import { Colors, FontSize } from '../theme';
 import type { BottomTabParamList } from '../types/navigation';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +39,11 @@ const TAB_CONFIG: Record<
     icon: 'storefront-outline',
     iconActive: 'storefront',
     label: 'Store',
+  },
+  History: {
+    icon: 'time-outline',
+    iconActive: 'time',
+    label: 'History',
   },
   Profile: {
     icon: 'person-circle-outline',
@@ -88,7 +96,6 @@ const TabItem: React.FC<TabItemProps> = ({
       style={styles.tabItem}
     >
       <Animated.View style={[styles.tabContent, { transform: [{ scale }] }]}>
-        xqx
         {/* Top indicator line */}
         <View style={[styles.indicator, isFocused && styles.indicatorActive]} />
         <Ionicons
@@ -166,17 +173,26 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
 
 export const TAB_BAR_HEIGHT = 64;
 
-const BottomTabNavigator: React.FC = () => (
-  <Tab.Navigator
-    tabBar={props => <CustomTabBar {...props} />}
-    screenOptions={{ headerShown: false }}
-  >
-    <Tab.Screen name="Home" component={HomeScreen} />
-    <Tab.Screen name="Glass" component={GlassScreen} />
-    <Tab.Screen name="Store" component={StoreScreen} />
-    <Tab.Screen name="Profile" component={ProfileScreen} />
-  </Tab.Navigator>
-);
+const BottomTabNavigator: React.FC = () => {
+  // History is personal to the signed-in customer — GET /profile/history needs
+  // a token — so the tab only exists once they are authenticated.
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+
+  return (
+    <Tab.Navigator
+      tabBar={props => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Glass" component={GlassScreen} />
+      <Tab.Screen name="Store" component={StoreScreen} />
+      {isAuthenticated && (
+        <Tab.Screen name="History" component={HistoryScreen} />
+      )}
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+};
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

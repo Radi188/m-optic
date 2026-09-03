@@ -2,7 +2,12 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
 import { authService } from '../../services/authService';
-import type { LoginPayload } from '../../services/authService';
+import type {
+  LoginPayload,
+  RequestOtpPayload,
+  VerifyOtpPayload,
+  SetPinPayload,
+} from '../../services/authService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +43,39 @@ export const loginThunk = createAsyncThunk(
       return await authService.login(payload);
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.message ?? err.message ?? 'Login failed');
+    }
+  },
+);
+
+export const requestOtpThunk = createAsyncThunk(
+  'auth/requestOtp',
+  async (payload: RequestOtpPayload, { rejectWithValue }) => {
+    try {
+      return await authService.requestOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message ?? 'Could not send the code');
+    }
+  },
+);
+
+export const verifyOtpThunk = createAsyncThunk(
+  'auth/verifyOtp',
+  async (payload: VerifyOtpPayload, { rejectWithValue }) => {
+    try {
+      return await authService.verifyOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message ?? 'Invalid code');
+    }
+  },
+);
+
+export const setPinThunk = createAsyncThunk(
+  'auth/setPin',
+  async (payload: SetPinPayload, { rejectWithValue }) => {
+    try {
+      return await authService.setPin(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message ?? 'Could not set the PIN');
     }
   },
 );
@@ -93,6 +131,12 @@ function mapCustomerToUser(c: import('../../services/authService').CustomerData)
   };
 }
 
+const OTP_FLOW_THUNKS = ['auth/requestOtp', 'auth/verifyOtp', 'auth/setPin'];
+
+function otpFlowMatcher(action: any, phase: string): boolean {
+  return OTP_FLOW_THUNKS.some(name => action.type === `${name}/${phase}`);
+}
+
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 const authSlice = createSlice({
@@ -121,6 +165,9 @@ const authSlice = createSlice({
     },
   },
   extraReducers: builder => {
+    // NOTE: every addCase must come before the addMatcher block below —
+    // RTK throws if that order is reversed.
+
     // ── Login ────────────────────────────────────────────────────
     builder
       .addCase(loginThunk.pending, state => {
@@ -136,7 +183,8 @@ const authSlice = createSlice({
       })
       .addCase(loginThunk.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error =
+          (action.payload as string) ?? action.error?.message ?? 'Login failed';
       });
 
     // ── Logout ───────────────────────────────────────────────────
@@ -150,6 +198,43 @@ const authSlice = createSlice({
     builder.addCase(fetchProfileThunk.fulfilled, (state, action) => {
       state.user = mapCustomerToUser(action.payload);
     });
+
+    // ── OTP request / verify / set-pin ───────────────────────────
+    // These share the one loading + error pair the screens already read.
+    builder
+      .addMatcher(
+        action => otpFlowMatcher(action, 'pending'),
+        state => {
+          state.loading = true;
+          state.error = null;
+        },
+      )
+      .addMatcher(
+        action => otpFlowMatcher(action, 'rejected'),
+        (state, action: any) => {
+          state.loading = false;
+          state.error =
+            (action.payload as string) ??
+            action.error?.message ??
+            'Something went wrong';
+        },
+      )
+      .addMatcher(
+        action => otpFlowMatcher(action, 'fulfilled'),
+        (state, action: any) => {
+          state.loading = false;
+          state.error = null;
+
+          // request-otp returns nothing to sign in with; verify-otp and
+          // set-pin hand back a token (and usually the customer) once the
+          // number is confirmed.
+          const payload = action.payload ?? {};
+          const token = payload.token ?? payload.access_token ?? null;
+          if (token) state.token = token;
+          if (payload.customer) state.user = mapCustomerToUser(payload.customer);
+          if (token && state.user) state.isAuthenticated = true;
+        },
+      );
   },
 });
 
