@@ -39,6 +39,7 @@ import LogoutModal from '../components/ui/Modal/LogoutModal';
 import RewardButton from '../components/ui/Profile/RewardButton';
 import { useUserProfile } from '../hook/useUserProfile';
 import { formatDate } from '../utils/dateHelper';
+import { formatEye, splitCombinedEye } from '../types/history';
 import ProfileHeaderSkeleton from '../components/ui/Profile/Loading/ProfileHeaderSkeleton';
 import CurrentPrescriptionCardSkeleton from '../components/ui/Profile/Loading/CurrentPrescriptionCardSkeleton';
 import ProfilePointSectionSkeleton from '../components/ui/Profile/Loading/ProfilePointSkeleton';
@@ -128,6 +129,25 @@ const ProfileScreen: React.FC = () => {
 
   const { profile, isLoading, isRefreshing, error, refetch } =
     useUserProfile();
+
+  // The prescription arrives as two combined strings ("-4.00/-2.00x180"), the
+  // same shape the history rows use. Splitting it here lets this card render
+  // exactly like the refraction cards in History: sphere / cylinder in the
+  // value slot, acuity underneath, ADD and PD in the caption.
+  const prescription = profile?.prescription ?? null;
+  const rightReading = splitCombinedEye(prescription?.right_eye ?? '');
+  const leftReading = splitCombinedEye(prescription?.left_eye ?? '');
+  const rightEye = formatEye(rightReading);
+  const leftEye = formatEye(leftReading);
+  const prescriptionDate = prescription?.created_at
+    ? formatDate(prescription.created_at)
+    : undefined;
+  const prescriptionMeta = [
+    prescription?.add ? `${t('Add')} ${prescription.add}` : null,
+    prescription?.pd ? `${t('Pd')} ${prescription.pd}` : null,
+  ]
+    .filter(Boolean)
+    .join('  ·  ');
 
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
@@ -284,9 +304,18 @@ const ProfileScreen: React.FC = () => {
                   />
 
                   <CurrentPrescriptionCard
-                    rightEye={profile?.prescription?.right_eye}
-                    leftEye={profile?.prescription?.left_eye}
-                    updatedAt={formatDate(profile?.prescription?.created_at)}
+                    rightEye={rightEye}
+                    leftEye={leftEye}
+                    rightSub={
+                      rightReading.va ? `${t('Va')} ${rightReading.va}` : undefined
+                    }
+                    leftSub={
+                      leftReading.va ? `${t('Va')} ${leftReading.va}` : undefined
+                    }
+                    meta={prescriptionMeta || undefined}
+                    updatedAt={prescriptionDate}
+                    showDate={!!prescriptionDate}
+                    fullWidthEyes
                     onPress={() => navigation.navigate('PrescriptionDetail')}
                     title={t('CurrentPrescription')}
                     rightLabel={t('RightEye')}

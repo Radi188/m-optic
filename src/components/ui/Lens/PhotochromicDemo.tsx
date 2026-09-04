@@ -72,7 +72,6 @@ const PhotochromicDemo: React.FC = () => {
   return (
     <View style={styles.card}>
       <AppText style={styles.kicker}>{t('LensDemoKicker')}</AppText>
-      <AppText style={styles.heading}>{t('LensPhotoTitle')}</AppText>
 
       <View style={styles.stage}>
         <View style={styles.lensOuter}>
@@ -156,12 +155,6 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-  },
-  heading: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.black,
-    marginTop: 2,
     marginBottom: Spacing.lg,
   },
 

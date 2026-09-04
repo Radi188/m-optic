@@ -154,11 +154,10 @@ const LensTechSection: React.FC = () => {
       </ScrollView>
 
       <View style={styles.body}>
-        <AppText style={styles.title}>{localize(active.title, lang)}</AppText>
-        <AppText style={styles.subtitle}>
-          {localize(active.subtitle, lang)}
-        </AppText>
-
+        {/* Neither the title nor the subtitle is rendered here: the title is
+            the selected tab's own label, and the description below it said the
+            same thing again in longer form. The recommendation box is the
+            first thing the tab has to add. */}
         {!!localize(active.recommendedFor, lang) && (
           <View style={styles.recommendBox}>
             <View style={styles.recommendIcon}>
@@ -179,13 +178,10 @@ const LensTechSection: React.FC = () => {
         {active.demo === 'thickness' && <ThicknessDemo />}
         {active.demo === 'photochromic' && <PhotochromicDemo />}
         {active.demo === 'zonesBifocal' && (
-          <ZoneMapDemo zones={['far', 'near']} titleKey="LensZoneBifocalTitle" />
+          <ZoneMapDemo zones={['far', 'near']} />
         )}
         {active.demo === 'zonesProgressive' && (
-          <ZoneMapDemo
-            zones={['far', 'mid', 'near']}
-            titleKey="LensZoneProgressiveTitle"
-          />
+          <ZoneMapDemo zones={['far', 'mid', 'near']} />
         )}
 
         <AppText style={styles.optionsHeading}>{t('LensOptions')}</AppText>
@@ -284,19 +280,6 @@ const styles = StyleSheet.create({
   tabUnderlineActive: { backgroundColor: Colors.primary },
 
   body: { paddingHorizontal: Spacing.md },
-  title: {
-    fontSize: FontSize.xxl,
-    fontWeight: '800',
-    color: Colors.black,
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.gray500,
-    marginTop: 4,
-    marginBottom: Spacing.md,
-    lineHeight: 19,
-  },
 
   recommendBox: {
     flexDirection: 'row',

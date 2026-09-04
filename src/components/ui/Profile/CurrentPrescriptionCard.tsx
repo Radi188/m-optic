@@ -67,11 +67,11 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
       disabled={!onPress}
     >
       {/* Background/Bottom-Right Lens Image */}
-      <Image
+      {/* <Image
         source={require('../../../assets/images/lens.png')}
         style={styles.cardImage}
         resizeMode="contain"
-      />
+      /> */}
 
       {/* Top Section: Icon, Title, and Date */}
       <View style={styles.header}>
@@ -112,16 +112,6 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
           {note && <AppText style={styles.note}>{note}</AppText>}
         </View>
       )}
-
-      {/* Bottom Section: View Details CTA */}
-      {/* <TouchableOpacity
-        style={styles.button}
-        activeOpacity={0.85}
-        onPress={onPress}
-      >
-        <AppText style={styles.buttonText}>View Details</AppText>
-        <Ionicons name="chevron-forward" size={14} color={'#412616'} />
-      </TouchableOpacity> */}
     </TouchableOpacity>
   );
 };
@@ -220,7 +210,7 @@ const styles = StyleSheet.create({
   // The lens occupies the right ~32% of the card, so the doctor/branch line
   // and the note stay in the left column rather than running across it.
   footer: {
-    maxWidth: '68%',
+    maxWidth: '100%',
     zIndex: 1,
   },
   meta: {

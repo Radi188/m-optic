@@ -10,7 +10,6 @@ export type ZoneId = 'far' | 'mid' | 'near';
 type Props = {
   /** Top to bottom, as the zones sit in the lens. */
   zones: ZoneId[];
-  titleKey: string;
 };
 
 const ZONE = {
@@ -61,14 +60,13 @@ const Lens: React.FC<{
  * segments are tappable and the explanation is shown below the frame rather
  * than in a tooltip that would have nothing to attach to.
  */
-const ZoneMapDemo: React.FC<Props> = ({ zones, titleKey }) => {
+const ZoneMapDemo: React.FC<Props> = ({ zones }) => {
   const { t } = useTranslation();
   const [active, setActive] = useState<ZoneId>(zones[0]);
 
   return (
     <View style={styles.card}>
       <AppText style={styles.kicker}>{t('LensDemoKicker')}</AppText>
-      <AppText style={styles.heading}>{t(titleKey)}</AppText>
 
       <View style={styles.frame}>
         <Lens zones={zones} active={active} onSelect={setActive} />
@@ -79,9 +77,7 @@ const ZoneMapDemo: React.FC<Props> = ({ zones, titleKey }) => {
       <AppText style={styles.hint}>{t('ZoneTapHint')}</AppText>
 
       <View style={styles.detail}>
-        <AppText style={styles.detailTitle}>
-          {t(ZONE[active].labelKey)}
-        </AppText>
+        <AppText style={styles.detailTitle}>{t(ZONE[active].labelKey)}</AppText>
         <AppText style={styles.detailBody}>{t(ZONE[active].bodyKey)}</AppText>
       </View>
     </View>
@@ -104,12 +100,6 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-  },
-  heading: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.black,
-    marginTop: 2,
     marginBottom: Spacing.lg,
   },
 

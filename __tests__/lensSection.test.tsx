@@ -116,7 +116,9 @@ it('resets to the new category\'s first lens when the category changes', () => {
   );
 
   const found = texts(tree.toJSON());
-  expect(found).toContain(localize(photochromic.title, 'en'));
+  // Not the title or subtitle — neither is rendered any more. The
+  // recommendation is the new category's first line of body copy.
+  expect(found).toContain(localize(photochromic.recommendedFor, 'en'));
   expect(featureCount(tree, second)).toBe(0);
   expect(featureCount(tree, photochromic.products[0])).toBeGreaterThan(0);
 });

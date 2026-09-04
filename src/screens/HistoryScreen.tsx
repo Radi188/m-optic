@@ -15,7 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { selectIsAuthenticated } from '../store/slices/authSlice';
 import { useHistory } from '../hook/useHistory';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
-import type { EyeReading, Invoice, Refraction } from '../types/history';
+import { formatEye } from '../types/history';
+import type { Invoice, Refraction } from '../types/history';
 import AppText from '../components/AppText';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import HistorySkeleton from '../components/ui/Loading/HistoryLoadingScreen';
@@ -36,17 +37,6 @@ function formatDate(iso: string | null, locale: string): string | null {
     month: 'short',
     year: 'numeric',
   });
-}
-
-/**
- * "-4.00 / -2.00" when a cylinder is present, otherwise just the sphere.
- * The card gives each eye one value slot, and the cylinder belongs beside its
- * sphere rather than being dropped.
- */
-function formatEye(reading: EyeReading): string {
-  if (!reading.sph && !reading.cyl) return '—';
-  if (!reading.cyl) return reading.sph ?? '—';
-  return `${reading.sph ?? '—'} / ${reading.cyl}`;
 }
 
 function formatMoney(value: number | null, currency: string): string | null {
@@ -213,12 +203,12 @@ const HistoryScreen: React.FC = () => {
               <AppText
                 style={[
                   styles.segmentText,
-                  active ? styles.segmentTextActive : styles.segmentTextInactive,
+                  active
+                    ? styles.segmentTextActive
+                    : styles.segmentTextInactive,
                 ]}
               >
-                {key === 'refractions'
-                  ? t('Refractions')
-                  : t('Invoices')}
+                {key === 'refractions' ? t('Refractions') : t('Invoices')}
                 {count > 0 ? ` (${count})` : ''}
               </AppText>
             </TouchableOpacity>
@@ -235,7 +225,11 @@ const HistoryScreen: React.FC = () => {
         {header}
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
-            <Ionicons name="lock-closed-outline" size={26} color={Colors.gray500} />
+            <Ionicons
+              name="lock-closed-outline"
+              size={26}
+              color={Colors.gray500}
+            />
           </View>
           <AppText style={styles.stateTitle}>{t('SignInToSeeHistory')}</AppText>
           <TouchableOpacity
@@ -265,9 +259,15 @@ const HistoryScreen: React.FC = () => {
         {header}
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
-            <Ionicons name="alert-circle-outline" size={26} color={Colors.error} />
+            <Ionicons
+              name="alert-circle-outline"
+              size={26}
+              color={Colors.error}
+            />
           </View>
-          <AppText style={styles.stateTitle}>{t('CouldNotLoadHistory')}</AppText>
+          <AppText style={styles.stateTitle}>
+            {t('CouldNotLoadHistory')}
+          </AppText>
           <AppText style={styles.stateText}>{error}</AppText>
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -455,7 +455,11 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   lineName: { flex: 1, fontSize: FontSize.sm, color: Colors.gray700 },
-  lineTotal: { fontSize: FontSize.sm, color: Colors.gray700, fontWeight: '600' },
+  lineTotal: {
+    fontSize: FontSize.sm,
+    color: Colors.gray700,
+    fontWeight: '600',
+  },
 
   totalRow: {
     flexDirection: 'row',

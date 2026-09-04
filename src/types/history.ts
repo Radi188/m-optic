@@ -204,6 +204,17 @@ export function splitCombinedEye(value: string): EyeReading {
   };
 }
 
+/**
+ * "-4.00 / -2.00" when a cylinder is present, otherwise just the sphere.
+ * A card gives each eye one value slot, and the cylinder belongs beside its
+ * sphere rather than being dropped.
+ */
+export function formatEye(reading: EyeReading): string {
+  if (!reading.sph && !reading.cyl) return '—';
+  if (!reading.cyl) return reading.sph ?? '—';
+  return `${reading.sph ?? '—'} / ${reading.cyl}`;
+}
+
 /** An eye can arrive as an object, a bare string ("-4.00"), or flat columns. */
 function toEye(
   nested: RawEye | string | null | undefined,

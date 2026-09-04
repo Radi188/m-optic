@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Colors, FontSize, Spacing, BorderRadius } from '../../../theme';
 import AppText from '../../AppText';
+import RealisticLensIcon from './RealisticLensIcon';
 
 type Coating = 'uv400' | 'blueBlock';
 
@@ -40,26 +41,35 @@ const BlueBlockDemo: React.FC = () => {
       pulse.setValue(0);
       return;
     }
+    // The JS driver, not the native one: this value feeds the same style node
+    // as the width animation below, and the native animated module rejects
+    // `width` outright — a mixed node logs "Style property 'width' is not
+    // supported by native animated module" on every toggle.
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: false }),
       ]),
     );
     loop.start();
     return () => loop.stop();
   }, [laserOn, pulse]);
 
-  // Stop at the lens when blocked, otherwise carry on to the eye.
+  // The beam always travels as far as the lens; what happens inside the glass
+  // — passing through or stopping at the front surface — is drawn by the lens
+  // itself, and only a lens that lets the light through gets an exit beam.
   const beamWidth = beam.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0%', blocked ? '46%' : '88%'],
+    outputRange: ['0%', BEAM_TO_LENS],
+  });
+  const exitWidth = beam.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', BEAM_TO_EYE],
   });
 
   return (
     <View style={styles.card}>
       <AppText style={styles.kicker}>{t('LensDemoKicker')}</AppText>
-      <AppText style={styles.heading}>{t('LensDemoTitle')}</AppText>
 
       <View style={styles.stageLabels}>
         <AppText style={styles.stageLabel}>{t('LensDemoLaser')}</AppText>
@@ -82,15 +92,33 @@ const BlueBlockDemo: React.FC = () => {
           ]}
         />
 
+        {!blocked && (
+          <Animated.View
+            style={[
+              styles.exitBeam,
+              {
+                width: exitWidth,
+                opacity: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.55, 1],
+                }),
+              },
+            ]}
+          />
+        )}
+
         <View style={[styles.emitter, laserOn && styles.emitterOn]} />
 
-        <View
-          style={[
-            styles.lens,
-            { borderColor: blocked ? '#3B82F6' : '#C9B7AC' },
-            blocked && styles.lensActive,
-          ]}
-        />
+        <View style={styles.lensSlot} pointerEvents="none">
+          <RealisticLensIcon
+            thickness={100}
+            isActive={blocked}
+            laserOn={laserOn}
+            lensType={blocked ? 'blueblock' : 'standard'}
+            width={LENS_ICON_WIDTH}
+            height={LENS_ICON_HEIGHT}
+          />
+        </View>
 
         <View
           style={[
@@ -156,6 +184,17 @@ const BlueBlockDemo: React.FC = () => {
 export default BlueBlockDemo;
 
 const LENS_LEFT = '46%';
+/** How far the beam runs before it meets the front face of the lens. */
+const BEAM_TO_LENS = '44%';
+/** …and from the back face on to the eye, when the coating lets it through. */
+const BEAM_TO_EYE = '30%';
+
+// The artwork is letterboxed inside its viewBox: the lens face covers the
+// middle ~55% of the rendered width and starts ~17.5% in, so the icon is drawn
+// wider than the face and pulled left to line the face up with LENS_LEFT.
+const LENS_ICON_WIDTH = 84;
+const LENS_ICON_HEIGHT = 116;
+const LENS_FACE_INSET = -15;
 
 const styles = StyleSheet.create({
   card: {
@@ -171,12 +210,6 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-  },
-  heading: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.black,
-    marginTop: 2,
     marginBottom: Spacing.lg,
   },
 
@@ -192,7 +225,7 @@ const styles = StyleSheet.create({
   },
 
   stage: {
-    height: 92,
+    height: 120,
     justifyContent: 'center',
     marginBottom: Spacing.md,
   },
@@ -211,16 +244,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray300,
   },
   emitterOn: { backgroundColor: '#1E3A8A' },
-  lens: {
+  // Picks up where the lens face ends, so the light reads as continuing on to
+  // the eye rather than restarting there.
+  exitBeam: {
     position: 'absolute',
     left: LENS_LEFT,
-    width: 46,
-    height: 74,
-    borderRadius: 23,
-    borderWidth: 2,
-    backgroundColor: 'rgba(219, 234, 254, 0.55)',
+    marginLeft: 46,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#F0426E',
   },
-  lensActive: { backgroundColor: 'rgba(59, 130, 246, 0.28)' },
+  lensSlot: {
+    position: 'absolute',
+    left: LENS_LEFT,
+    marginLeft: LENS_FACE_INSET,
+  },
   eye: {
     position: 'absolute',
     right: 0,

@@ -1,5 +1,5 @@
 import { LENS_CATEGORIES, localize } from '../src/types/lens';
-import { thinnerBy } from '../src/components/ui/Lens/ThicknessDemo';
+import { thinnerBy, visualThickness } from '../src/components/ui/Lens/ThicknessDemo';
 import type { Localized } from '../src/types/lens';
 
 const walk = (): Localized[] => {
@@ -68,12 +68,17 @@ describe('lens catalogue', () => {
 });
 
 describe('high-index thickness maths', () => {
-  it('derives the reduction from the refractive index', () => {
-    // Edge thickness is proportional to 1/(n-1), relative to the 1.56 baseline.
+  it('quotes the published reduction for every stocked index', () => {
     expect(thinnerBy(1.56)).toBe(0);
-    expect(thinnerBy(1.61)).toBe(8);
-    expect(thinnerBy(1.67)).toBe(16);
-    expect(thinnerBy(1.74)).toBe(24);
+    expect(thinnerBy(1.61)).toBe(26);
+    expect(thinnerBy(1.67)).toBe(48);
+    expect(thinnerBy(1.74)).toBe(66);
+  });
+
+  it('falls back to the optical derivation for an index we do not stock', () => {
+    // Edge thickness is proportional to 1/(n-1), relative to the 1.56 baseline.
+    expect(thinnerBy(1.6)).toBe(7);
+    expect(thinnerBy(1.9)).toBe(38);
   });
 
   it('never reports a thinner-than-baseline lens as thicker', () => {
