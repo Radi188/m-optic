@@ -1860,8 +1860,8 @@ const STAGE_W = 240;
 const STAGE_H = 210;
 const FACE_W = 160;
 const FACE_H = 196;
-const RETICLE_W = 152;   // portrait, so the brackets frame the face, not the
-const RETICLE_H = 198;   // full width of the stage
+const RETICLE_W = 152; // portrait, so the brackets frame the face, not the
+const RETICLE_H = 198; // full width of the stage
 const RING_D = 160;
 
 // Abstract face wireframe — a contour, a light mesh over it and the landmark
@@ -1896,9 +1896,20 @@ const FaceWireframe: React.FC = () => (
     {/* Landmark vertices */}
     <G fill="rgba(234,251,255,0.92)">
       {[
-        [100, 80], [62, 88], [138, 88], [56, 106], [144, 106],
-        [54, 126], [146, 126], [100, 134], [70, 164], [130, 164],
-        [100, 177], [100, 194], [46, 92], [154, 92],
+        [100, 80],
+        [62, 88],
+        [138, 88],
+        [56, 106],
+        [144, 106],
+        [54, 126],
+        [146, 126],
+        [100, 134],
+        [70, 164],
+        [130, 164],
+        [100, 177],
+        [100, 194],
+        [46, 92],
+        [154, 92],
       ].map(([cx, cy]) => (
         <Circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={2.4} />
       ))}
@@ -2109,11 +2120,7 @@ const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => {
       </TouchableOpacity>
 
       <View style={idleStyles.privacy}>
-        <Ionicons
-          name="lock-closed-outline"
-          size={13}
-          color={Colors.gray500}
-        />
+        <Ionicons name="lock-closed-outline" size={13} color={Colors.gray500} />
         <AppText style={idleStyles.privacyText}>
           Your photo is analysed on your device — it is never uploaded.
         </AppText>
@@ -2685,7 +2692,9 @@ const GlassesBottomSheet: React.FC<{
             >
               <AppText style={gsStyles.previewCaption}>
                 {shape} face
-                {typeof confidence === 'number' ? ` · ${confidence}% match` : ''}
+                {typeof confidence === 'number'
+                  ? ` · ${confidence}% match`
+                  : ''}
               </AppText>
               <AppText style={gsStyles.previewHint}>
                 Pinch or double-tap to zoom
@@ -4231,8 +4240,7 @@ const idleStyles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: BorderRadius.xl,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl,
-    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
     marginBottom: Spacing.lg,
     overflow: 'hidden',
     borderWidth: 1,
