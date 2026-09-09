@@ -19,6 +19,7 @@ import {
   Image,
   ActivityIndicator,
   PermissionsAndroid,
+  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -29,7 +30,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle, G } from 'react-native-svg';
+import LinearGradient from 'react-native-linear-gradient';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -551,10 +553,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 .hud-br{bottom:max(150px,calc(env(safe-area-inset-bottom) + 150px));right:22px;text-align:right}
 
 /* Larger rounded-square frame — easier to fill while holding the phone */
-.oval-wrap{position:relative;width:min(84vw,340px);height:min(84vw,340px)}
+.oval-wrap{position:relative;width:min(94vw,420px,54vh);height:min(94vw,420px,54vh)}
 
 /* Mesh + scan-beam layer, clipped to the frame */
-.oval-clip{position:absolute;inset:0;border-radius:34px;overflow:hidden;z-index:1}
+.oval-clip{position:absolute;inset:0;border-radius:40px;overflow:hidden;z-index:1}
 .mesh{position:absolute;inset:0;background-image:linear-gradient(rgba(95,233,255,0.10) 1px,transparent 1px),linear-gradient(90deg,rgba(95,233,255,0.10) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:radial-gradient(closest-side,#000 78%,transparent 100%);mask-image:radial-gradient(closest-side,#000 78%,transparent 100%);animation:meshpulse 3s ease-in-out infinite}
 @keyframes meshpulse{0%,100%{opacity:.35}50%{opacity:.72}}
 .scanbeam{position:absolute;left:-3%;right:-3%;height:2px;top:8%;border-radius:2px;background:linear-gradient(90deg,transparent,#5FE9FF 20%,#EAFBFF 50%,#5FE9FF 80%,transparent);box-shadow:0 0 16px 4px rgba(95,233,255,0.55);animation:scanmove 2.8s cubic-bezier(.55,0,.45,1) infinite}
@@ -562,26 +564,26 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 @keyframes scanmove{0%{top:8%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:90%;opacity:0}}
 
 /* Guide frame — dims everything outside */
-.guide-oval{border-radius:34px;position:absolute;inset:0;z-index:2;border:1.5px solid rgba(255,255,255,0.5);box-shadow:0 0 0 2000px rgba(6,10,14,0.66),inset 0 0 22px rgba(95,233,255,0.10);transition:border-color .35s ease,box-shadow .35s ease}
+.guide-oval{border-radius:40px;position:absolute;inset:0;z-index:2;border:1.5px solid rgba(255,255,255,0.5);box-shadow:0 0 0 2000px rgba(6,10,14,0.66),inset 0 0 22px rgba(95,233,255,0.10);transition:border-color .35s ease,box-shadow .35s ease}
 .guide-oval.locked{border-color:rgba(111,227,174,0.9);box-shadow:0 0 0 2000px rgba(6,10,14,0.66),inset 0 0 40px rgba(45,189,126,0.28),0 0 40px rgba(45,189,126,0.5)}
 /* Expanding pulse frame on lock */
-.guide-oval::after{content:'';position:absolute;inset:-1.5px;border-radius:35px;border:1.5px solid rgba(111,227,174,0.8);opacity:0;pointer-events:none}
+.guide-oval::after{content:'';position:absolute;inset:-1.5px;border-radius:41px;border:1.5px solid rgba(111,227,174,0.8);opacity:0;pointer-events:none}
 .guide-oval.locked::after{animation:pulsering 1.7s ease-out infinite}
 @keyframes pulsering{0%{transform:scale(1);opacity:.8}70%{transform:scale(1.13);opacity:0}100%{opacity:0}}
 
 /* HUD corner brackets — reticle framing the square */
-.bracket{position:absolute;width:42px;height:42px;z-index:4;border:2.5px solid rgba(95,233,255,0.85);filter:drop-shadow(0 0 6px rgba(95,233,255,0.5));transition:border-color .35s,filter .35s;animation:brfloat 2.4s ease-in-out infinite}
-.b-tl{top:-13px;left:-13px;border-right:0;border-bottom:0;border-top-left-radius:20px}
-.b-tr{top:-13px;right:-13px;border-left:0;border-bottom:0;border-top-right-radius:20px}
-.b-bl{bottom:-13px;left:-13px;border-right:0;border-top:0;border-bottom-left-radius:20px}
-.b-br{bottom:-13px;right:-13px;border-left:0;border-top:0;border-bottom-right-radius:20px}
+.bracket{position:absolute;width:48px;height:48px;z-index:4;border:2.5px solid rgba(95,233,255,0.85);filter:drop-shadow(0 0 6px rgba(95,233,255,0.5));transition:border-color .35s,filter .35s;animation:brfloat 2.4s ease-in-out infinite}
+.b-tl{top:-14px;left:-14px;border-right:0;border-bottom:0;border-top-left-radius:24px}
+.b-tr{top:-14px;right:-14px;border-left:0;border-bottom:0;border-top-right-radius:24px}
+.b-bl{bottom:-14px;left:-14px;border-right:0;border-top:0;border-bottom-left-radius:24px}
+.b-br{bottom:-14px;right:-14px;border-left:0;border-top:0;border-bottom-right-radius:24px}
 @keyframes brfloat{0%,100%{opacity:.85}50%{opacity:.42}}
 #oval.locked ~ .bracket{border-color:rgba(111,227,174,0.95);filter:drop-shadow(0 0 8px rgba(45,189,126,0.6));animation:none;opacity:1}
 #oval.locked ~ .oval-clip .scanbeam{background:linear-gradient(90deg,transparent,#6FE3AE 20%,#EAFFF3 50%,#6FE3AE 80%,transparent);box-shadow:0 0 16px 4px rgba(45,189,126,0.55)}
 
 #hint{
   position:relative;z-index:8;
-  margin-top:38px;display:inline-flex;align-items:center;
+  margin-top:28px;display:inline-flex;align-items:center;
   background:rgba(12,16,20,0.52);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
   color:#fff;font-size:14px;font-weight:600;
   padding:12px 24px;border-radius:100px;border:1px solid rgba(255,255,255,0.14);
@@ -592,7 +594,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 
 /* Capture button */
 #captureBtn{
-  position:relative;z-index:8;margin-top:26px;pointer-events:auto;
+  position:relative;z-index:8;margin-top:20px;pointer-events:auto;
   width:72px;height:72px;border-radius:50%;
   background:rgba(255,255,255,0.14);border:3px solid rgba(255,255,255,0.35);
   display:flex;align-items:center;justify-content:center;
@@ -630,6 +632,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #overlay.analyzing #captureHint{opacity:0;transition:opacity .3s ease;pointer-events:none}
 #overlay.analyzing .guide-oval{border-color:rgba(255,255,255,0.14);box-shadow:0 0 0 2000px rgba(6,10,14,0.5)}
 #overlay.analyzing .guide-oval::after{animation:none;opacity:0}
+
+/* Analysis progress — a thin determinate bar under the hint while the reveal
+   animation runs, so the wait reads as measured work rather than a stall. */
+#analyzeBar{position:relative;z-index:8;margin-top:20px;width:min(58vw,210px);height:3px;border-radius:3px;background:rgba(255,255,255,0.14);overflow:hidden;display:none;opacity:0;transition:opacity .3s ease}
+#overlay.analyzing #analyzeBar{display:block}
+#analyzeBar.show{opacity:1}
+#analyzeBarFill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5FE9FF,#6FE3AE);box-shadow:0 0 12px rgba(111,227,174,0.75);transition:width .12s linear}
 
 /* Shape-detected reveal badge — pops in once the reveal outline lands */
 #shapeBadge{
@@ -672,6 +681,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
     <span class="bracket b-tl"></span><span class="bracket b-tr"></span><span class="bracket b-bl"></span><span class="bracket b-br"></span>
   </div>
   <div id="hint">Position your face in the frame</div>
+  <div id="analyzeBar"><div id="analyzeBarFill"></div></div>
   <button id="captureBtn" disabled></button>
   <div id="captureHint">Tap to capture</div>
   <div id="reviewRow">
@@ -711,6 +721,7 @@ var resultRow=document.getElementById('resultRow'),rescanBtn=document.getElement
 var snapCanvas=document.getElementById('snapCanvas');
 var flipBtn=document.getElementById('flipBtn'),topchipText=document.getElementById('topchipText');
 var shapeBadge=document.getElementById('shapeBadge'),shapeBadgeText=document.getElementById('shapeBadgeText');
+var analyzeBar=document.getElementById('analyzeBar'),analyzeBarFill=document.getElementById('analyzeBarFill');
 
 // ── Single-shot capture flow: hold still facing forward, tap to capture ─────
 var done=false,aligned=false,lastLm=null;
@@ -1056,16 +1067,28 @@ function setCaptureEnabled(v){
 }
 
 // ── Captured-face reveal animation ───────────────────────────────────────────
-// Deliberately minimal: the frozen photo stays fully visible. One soft sweep
-// says "working", then a thin contour traces the jaw/hairline edge — nothing
-// is drawn across the eyes, nose or mouth, and there are no labels or mesh
-// covering the face. The result itself is reported by the badge above it.
+// A staged "biometric analysis" reveal over the frozen photo:
+//   1. the 468-point mesh materialises behind a scan beam sweeping down,
+//   2. the mesh holds and breathes while the measurements are taken and the
+//      shape is matched — the readouts stay in the hint pill, nothing is drawn
+//      over the face itself,
+//   3. the mesh dissolves, a reticle snaps onto the face, the frame flashes
+//      and the shape badge pops in.
+// Everything is drawn thin and translucent so the face stays visible; nothing
+// opaque is ever painted over the eyes, nose or mouth.
 function easeOut(t){return 1-Math.pow(1-t,3);}
+function easeOutBack(t){var c=1.70158,c3=c+1;return 1+c3*Math.pow(t-1,3)+c*Math.pow(t-1,2);}
+function clamp01(v){return v<0?0:(v>1?1:v);}
 
-var SWEEP_END=900,CONTOUR_START=250,CONTOUR_END=1150,BADGE_AT=1300,REVEAL_END=2000;
+var MESH_START=140,BEAM_END=1350,
+    MEASURE_AT=1450,
+    MATCH_AT=2200,MATCH_END=2900,
+    MESH_FADE_START=2680,MESH_FADE_END=3040,
+    LOCK_AT=2940,BADGE_AT=3040,
+    REVEAL_END=3700;
 
 // FACEMESH_FACE_OVAL is an unordered list of [a,b] index pairs; chain them into
-// one ordered loop so the outline can be drawn as a single traced path.
+// one ordered loop so the face outline can be walked as a single polygon.
 // The same loop, hardcoded — the measurement pass depends on this contour, so
 // it must not go dark if the drawing_utils CDN script fails to load.
 var FACE_OVAL_FALLBACK=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
@@ -1082,70 +1105,184 @@ function faceOvalOrder(){
   return order;
 }
 
+// The full mesh wireframe, when drawing_utils loaded. Without it the reveal
+// falls back to landmark dots only — still animated, just no connecting lines.
+function tesselation(){
+  return (typeof FACEMESH_TESSELATION!=='undefined')?FACEMESH_TESSELATION:null;
+}
+
 function runCaptureAnimation(lm,shapeName,photo,mirrored,onDone){
   var w=photo.width,h=photo.height;
   snapCanvas.width=w;snapCanvas.height=h;
   var ctx=snapCanvas.getContext('2d');
 
-  // Trace the same hairline-extended contour the measurements are taken from,
-  // so what the user sees outlined is exactly what was measured. Points are in
-  // raw (unmirrored) frame space, so x only needs flipping when the stored
-  // photo was mirrored for the selfie camera.
-  var fr=ovalFrame(lm,w,h);
-  var order=fr?fr.img:null;
-  function px(p){return mirrored?w-p.x:p.x;}
-  function py(p){return p.y;}
+  // Landmarks arrive normalised; the mesh needs them in photo pixels, mirrored
+  // to match the stored photo when it came from the selfie camera.
+  function lx(p){return mirrored?w-p.x*w:p.x*w;}
+  function ly(p){return p.y*h;}
+
+  var tess=tesselation();
+  var S=w/640;                      // stroke scale for the photo's size
+
+  // Face bounding box — drives the reticle and the mesh reveal ordering.
+  var bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9,i;
+  for(i=0;i<lm.length;i++){
+    var X=lx(lm[i]),Y=ly(lm[i]);
+    if(X<bx0)bx0=X;if(X>bx1)bx1=X;if(Y<by0)by0=Y;if(Y>by1)by1=Y;
+  }
+  var bw=bx1-bx0,bh=by1-by0;
+  bx0-=bw*0.10;bx1+=bw*0.10;by0-=bh*0.22;by1+=bh*0.06;
+  bw=bx1-bx0;bh=by1-by0;
+
+  // Pre-project the mesh once: every edge keeps its midpoint height so it can
+  // light up as the beam passes it, instead of the whole mesh popping in.
+  var edges=[];
+  if(tess){
+    for(i=0;i<tess.length;i++){
+      var a=lm[tess[i][0]],b=lm[tess[i][1]];
+      if(!a||!b)continue;
+      var ax=lx(a),ay=ly(a),bx=lx(b),by=ly(b);
+      edges.push({ax:ax,ay:ay,bx:bx,by:by,my:(ay+by)/2});
+    }
+  }
+  var dots=[];
+  for(i=0;i<lm.length;i++)dots.push({x:lx(lm[i]),y:ly(lm[i])});
+
   var hints=[
-    {t:0,text:'Analyzing your face…'},
+    {t:0,text:'Mapping facial landmarks…'},
+    {t:MEASURE_AT,text:'Measuring facial proportions…'},
+    {t:MATCH_AT,text:'Matching your face shape…'},
     {t:BADGE_AT,text:'Analysis complete'}
   ];
   var hintIdx=-1,badgeShown=false,t0=null;
+  analyzeBarFill.style.width='0%';
+  analyzeBar.classList.add('show');
 
   function frame(ts){
     if(t0===null)t0=ts;
-    var t=ts-t0;
+    var t=ts-t0,k;
 
     for(var hi=0;hi<hints.length;hi++){
       if(t>=hints[hi].t && hintIdx<hi){
         hintIdx=hi;hint.className='success';hint.textContent=hints[hi].text;
       }
     }
+    analyzeBarFill.style.width=Math.round(clamp01(t/LOCK_AT)*100)+'%';
 
     ctx.clearRect(0,0,w,h);
     ctx.drawImage(photo,0,0,w,h);
 
-    // A single soft sweep passes down the photo once — the only moving part.
-    if(t<SWEEP_END){
-      var sy=easeOut(t/SWEEP_END)*h;
-      var band=h*0.06;
-      var grad=ctx.createLinearGradient(0,sy-band,0,sy+band);
-      grad.addColorStop(0,'rgba(111,227,174,0)');
-      grad.addColorStop(0.5,'rgba(111,227,174,0.20)');
-      grad.addColorStop(1,'rgba(111,227,174,0)');
-      ctx.fillStyle=grad;
-      ctx.fillRect(0,sy-band,w,band*2);
+    // Slight scrim while the overlays are up, so thin cyan lines read against
+    // a bright photo. It lifts again for the final held result.
+    var scrim=0.20*clamp01(t/220)*(1-clamp01((t-LOCK_AT)/500));
+    if(scrim>0.005){
+      ctx.fillStyle='rgba(6,12,18,'+scrim.toFixed(3)+')';
+      ctx.fillRect(0,0,w,h);
     }
 
-    // Thin outline traced around the face edge, then held steady.
-    if(order && t>CONTOUR_START){
-      var ct=Math.min(1,(t-CONTOUR_START)/(CONTOUR_END-CONTOUR_START));
-      var count=Math.max(2,Math.round(order.length*easeOut(ct)));
+    // ── Mesh + scan beam ────────────────────────────────────────────────────
+    var meshAlpha=clamp01((t-MESH_START)/260)*(1-clamp01((t-MESH_FADE_START)/(MESH_FADE_END-MESH_FADE_START)));
+    // After the beam has passed, the settled mesh pulses gently so the
+    // measuring/matching beat still reads as live work.
+    if(t>BEAM_END)meshAlpha*=0.78+0.22*Math.sin((t-BEAM_END)/300);
+    if(meshAlpha>0.01){
+      var beamP=clamp01((t-MESH_START)/(BEAM_END-MESH_START));
+      var beamY=(t<BEAM_END)?easeOut(beamP)*h:h*2;
+      var band=h*0.075;
       ctx.save();
-      ctx.strokeStyle='rgba(111,227,174,0.9)';
-      ctx.lineWidth=Math.max(2,w/260);
-      ctx.lineJoin='round';ctx.lineCap='round';
+      ctx.lineWidth=Math.max(0.6,0.8*S);
+      // Two passes only — one path for the settled mesh, one for the sliver
+      // lit by the beam — so a ~2600-edge wireframe still runs at frame rate.
+      ctx.strokeStyle='rgba(95,233,255,'+(0.16*meshAlpha).toFixed(3)+')';
       ctx.beginPath();
-      ctx.moveTo(px(order[0]),py(order[0]));
-      for(var i=1;i<count;i++)ctx.lineTo(px(order[i]),py(order[i]));
-      if(ct>=1)ctx.closePath();
+      for(k=0;k<edges.length;k++){
+        var e=edges[k];
+        if(e.my>beamY)continue;
+        if(Math.abs(e.my-beamY)<band)continue;
+        ctx.moveTo(e.ax,e.ay);ctx.lineTo(e.bx,e.by);
+      }
+      ctx.stroke();
+      if(t<BEAM_END){
+        ctx.strokeStyle='rgba(215,250,255,'+(0.85*meshAlpha).toFixed(3)+')';
+        ctx.lineWidth=Math.max(0.8,1.1*S);
+        ctx.shadowColor='rgba(95,233,255,0.9)';
+        ctx.shadowBlur=6*S;
+        ctx.beginPath();
+        for(k=0;k<edges.length;k++){
+          var e2=edges[k];
+          if(e2.my>beamY||Math.abs(e2.my-beamY)>=band)continue;
+          ctx.moveTo(e2.ax,e2.ay);ctx.lineTo(e2.bx,e2.by);
+        }
+        ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+      // Landmark dots — every point once revealed, brighter under the beam.
+      for(k=0;k<dots.length;k++){
+        var d=dots[k];
+        if(d.y>beamY)continue;
+        var near=Math.abs(d.y-beamY)<band;
+        if(!near&&(k%3))continue;
+        ctx.fillStyle=near
+          ?'rgba(234,251,255,'+(0.95*meshAlpha).toFixed(3)+')'
+          :'rgba(111,227,174,'+(0.38*meshAlpha).toFixed(3)+')';
+        var r=(near?1.9:1.2)*S;
+        ctx.fillRect(d.x-r,d.y-r,r*2,r*2);
+      }
+      ctx.restore();
+
+      // The beam itself, plus the glow trailing behind it.
+      if(t<BEAM_END){
+        ctx.save();
+        ctx.globalAlpha=meshAlpha*(1-clamp01((beamP-0.88)/0.12));
+        var g=ctx.createLinearGradient(0,beamY-band*1.6,0,beamY);
+        g.addColorStop(0,'rgba(95,233,255,0)');
+        g.addColorStop(1,'rgba(95,233,255,0.22)');
+        ctx.fillStyle=g;
+        ctx.fillRect(0,beamY-band*1.6,w,band*1.6);
+        var g2=ctx.createLinearGradient(0,beamY-3*S,0,beamY+3*S);
+        g2.addColorStop(0,'rgba(95,233,255,0)');
+        g2.addColorStop(0.5,'rgba(234,251,255,0.95)');
+        g2.addColorStop(1,'rgba(95,233,255,0)');
+        ctx.fillStyle=g2;
+        ctx.fillRect(0,beamY-3*S,w,6*S);
+        ctx.restore();
+      }
+    }
+
+    // ── Lock-on reticle ─────────────────────────────────────────────────────
+    if(t>MATCH_END-260){
+      var lp=clamp01((t-(MATCH_END-260))/420);
+      var off=(1-easeOutBack(lp))*bw*0.16;
+      var arm=Math.min(bw,bh)*0.16;
+      ctx.save();
+      ctx.globalAlpha=clamp01(lp*1.4);
+      ctx.strokeStyle='rgba(111,227,174,0.9)';
+      ctx.lineWidth=Math.max(2,2.4*S);
+      ctx.lineCap='round';
+      var cs=[[bx0-off,by0-off,1,1],[bx1+off,by0-off,-1,1],[bx0-off,by1+off,1,-1],[bx1+off,by1+off,-1,-1]];
+      ctx.beginPath();
+      for(k=0;k<4;k++){
+        var c4=cs[k];
+        ctx.moveTo(c4[0]+c4[2]*arm,c4[1]);
+        ctx.lineTo(c4[0],c4[1]);
+        ctx.lineTo(c4[0],c4[1]+c4[3]*arm);
+      }
       ctx.stroke();
       ctx.restore();
+    }
+
+    // Lock flash — a single frame-wide pulse the moment the shape is called.
+    if(t>=LOCK_AT&&t<LOCK_AT+260){
+      var fa=(1-(t-LOCK_AT)/260)*0.3;
+      ctx.fillStyle='rgba(180,255,225,'+fa.toFixed(3)+')';
+      ctx.fillRect(0,0,w,h);
     }
 
     if(t>=BADGE_AT && !badgeShown){
       badgeShown=true;
       shapeBadgeText.textContent=shapeName+' Face';
       shapeBadge.classList.add('show');
+      analyzeBar.classList.remove('show');
     }
 
     if(t<REVEAL_END){
@@ -1230,6 +1367,8 @@ function resetScan(){
   flipBtn.style.display='';
   overlay.classList.remove('analyzing');
   shapeBadge.classList.remove('show');
+  analyzeBar.classList.remove('show');
+  analyzeBarFill.style.width='0%';
   oval.className='guide-oval';
   hint.className='';
   hint.textContent=idleHint();
@@ -1710,51 +1849,278 @@ const FaceShapeSelector: React.FC<{
 
 // ─── Face Scan — Idle ─────────────────────────────────────────────────────────
 
-const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => (
-  <ScrollView
-    contentContainerStyle={styles.contentPad}
-    showsVerticalScrollIndicator={false}
+// The intro is a preview of the scanner itself: a dark HUD panel with the same
+// cyan wireframe and sweeping beam the camera shows, so tapping Start feels
+// like stepping into something the user has already seen.
+
+// Stage geometry, kept explicit: the pulse ring and the beam are absolutely
+// positioned, and relying on the parent's centring for insetless absolute
+// children left them off-centre. Every layer is placed from these numbers.
+const STAGE_W = 240;
+const STAGE_H = 210;
+const FACE_W = 160;
+const FACE_H = 196;
+const RETICLE_W = 152;   // portrait, so the brackets frame the face, not the
+const RETICLE_H = 198;   // full width of the stage
+const RING_D = 160;
+
+// Abstract face wireframe — a contour, a light mesh over it and the landmark
+// vertices, in the scanner's palette.
+const FaceWireframe: React.FC = () => (
+  <Svg
+    width={FACE_W}
+    height={FACE_H}
+    viewBox="0 0 200 220"
+    style={idleStyles.face}
   >
-    <View style={styles.heroCard}>
-      <View style={styles.heroIconRing}>
-        <Ionicons name="scan-circle-outline" size={64} color={Colors.primary} />
-      </View>
-      <AppText style={styles.heroTitle}>Face Shape Scan</AppText>
-      <AppText style={styles.heroSub}>
-        We'll analyse your face shape using your front camera and recommend the
-        perfect frames for you.
-      </AppText>
-    </View>
-
-    {[
-      { n: '1', text: 'Find good lighting and hold your phone at eye level.' },
-      {
-        n: '2',
-        text: 'Position your face inside the frame and look straight ahead.',
-      },
-      {
-        n: '3',
-        text: 'When the frame locks green, tap Capture to scan your face.',
-      },
-    ].map(step => (
-      <View key={step.n} style={styles.stepRow}>
-        <View style={styles.stepBadge}>
-          <AppText style={styles.stepNum}>{step.n}</AppText>
-        </View>
-        <AppText style={styles.stepText}>{step.text}</AppText>
-      </View>
-    ))}
-
-    <TouchableOpacity
-      style={styles.primaryBtn}
-      onPress={onStart}
-      activeOpacity={0.82}
-    >
-      <Ionicons name="scan-outline" size={20} color={Colors.white} />
-      <AppText style={styles.primaryBtnText}>Start Scan</AppText>
-    </TouchableOpacity>
-  </ScrollView>
+    {/* Face contour */}
+    <Path
+      d="M100 26 C132 26 152 52 154 92 C156 126 140 160 116 182 C110 190 104 194 100 194 C96 194 90 190 84 182 C60 160 44 126 46 92 C48 52 68 26 100 26 Z"
+      stroke="rgba(95,233,255,0.85)"
+      strokeWidth={1.6}
+      fill="rgba(95,233,255,0.05)"
+    />
+    {/* Mesh — brow, eye, cheek and jaw lines plus the tie-ins between them */}
+    <G stroke="rgba(95,233,255,0.36)" strokeWidth={1} fill="none">
+      <Path d="M62 88 L100 80 L138 88" />
+      <Path d="M56 106 L100 99 L144 106" />
+      <Path d="M54 126 L100 134 L146 126" />
+      <Path d="M70 164 L100 177 L130 164" />
+      <Path d="M100 80 L100 134 L100 177" />
+      <Path d="M62 88 L100 134 L138 88" />
+      <Path d="M56 106 L70 164" />
+      <Path d="M144 106 L130 164" />
+      <Path d="M54 126 L70 164" />
+      <Path d="M146 126 L130 164" />
+    </G>
+    {/* Landmark vertices */}
+    <G fill="rgba(234,251,255,0.92)">
+      {[
+        [100, 80], [62, 88], [138, 88], [56, 106], [144, 106],
+        [54, 126], [146, 126], [100, 134], [70, 164], [130, 164],
+        [100, 177], [100, 194], [46, 92], [154, 92],
+      ].map(([cx, cy]) => (
+        <Circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={2.4} />
+      ))}
+    </G>
+    {/* Eyes — the only solid marks, so the wireframe still reads as a face */}
+    <G fill="rgba(111,227,174,0.95)">
+      <Circle cx={76} cy={106} r={4} />
+      <Circle cx={124} cy={106} r={4} />
+    </G>
+  </Svg>
 );
+
+const FaceScanIdle: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+  const beam = useRef(new Animated.Value(0)).current;
+  const ring = useRef(new Animated.Value(0)).current;
+  const blink = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loops = [
+      // The beam sweeps the panel the way it sweeps the photo during analysis.
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(beam, {
+            toValue: 1,
+            duration: 2200,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.delay(420),
+        ]),
+      ),
+      Animated.loop(
+        Animated.timing(ring, {
+          toValue: 1,
+          duration: 2600,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(blink, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(blink, {
+            toValue: 0,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    ];
+    loops.forEach(l => l.start());
+    return () => loops.forEach(l => l.stop());
+  }, [beam, ring, blink]);
+
+  const beamY = beam.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-60, STAGE_H],
+  });
+  const beamOpacity = beam.interpolate({
+    inputRange: [0, 0.08, 0.9, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+  const ringScale = ring.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.82, 1.28],
+  });
+  const ringOpacity = ring.interpolate({
+    inputRange: [0, 0.15, 1],
+    outputRange: [0, 0.55, 0],
+  });
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Hero: a window into the scanner ────────────────────────────────── */}
+      <LinearGradient
+        colors={['#241C18', '#3A2C25', '#221A16']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={idleStyles.hero}
+      >
+        {/* Ambient glows behind the wireframe */}
+        <View style={[idleStyles.glow, idleStyles.glowTop]} />
+        <View style={[idleStyles.glow, idleStyles.glowBottom]} />
+
+        <View style={idleStyles.heroChip}>
+          <Animated.View style={[idleStyles.chipDot, { opacity: blink }]} />
+          <AppText style={idleStyles.chipText}>AI Face Analysis</AppText>
+        </View>
+
+        <View style={idleStyles.stage}>
+          <Animated.View
+            style={[
+              idleStyles.ring,
+              { opacity: ringOpacity, transform: [{ scale: ringScale }] },
+            ]}
+          />
+          <FaceWireframe />
+
+          {/* Sweeping beam, clipped to the stage */}
+          <Animated.View
+            style={[
+              idleStyles.beam,
+              { opacity: beamOpacity, transform: [{ translateY: beamY }] },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                'rgba(95,233,255,0)',
+                'rgba(95,233,255,0.16)',
+                'rgba(234,251,255,0.95)',
+              ]}
+              style={idleStyles.beamFill}
+            />
+          </Animated.View>
+
+          {/* Reticle corners — on their own box so they frame the face */}
+          <View style={idleStyles.reticle} pointerEvents="none">
+            <View style={[idleStyles.corner, idleStyles.cornerTL]} />
+            <View style={[idleStyles.corner, idleStyles.cornerTR]} />
+            <View style={[idleStyles.corner, idleStyles.cornerBL]} />
+            <View style={[idleStyles.corner, idleStyles.cornerBR]} />
+          </View>
+        </View>
+
+        <AppText style={idleStyles.heroTitle}>Face Shape Scan</AppText>
+        <AppText style={idleStyles.heroSub}>
+          Map your face in seconds and get the frames that suit its shape.
+        </AppText>
+      </LinearGradient>
+
+      {/* ── What the scan does ─────────────────────────────────────────────── */}
+      <View style={idleStyles.statsRow}>
+        {[
+          { icon: 'grid-outline', value: '468', label: 'Landmarks' },
+          { icon: 'timer-outline', value: '~5s', label: 'To scan' },
+          { icon: 'shapes-outline', value: '7', label: 'Face shapes' },
+        ].map(s => (
+          <View key={s.label} style={idleStyles.statCard}>
+            <Ionicons name={s.icon as any} size={17} color={Colors.primary} />
+            <AppText style={idleStyles.statValue}>{s.value}</AppText>
+            <AppText style={idleStyles.statLabel}>{s.label}</AppText>
+          </View>
+        ))}
+      </View>
+
+      {/* ── Steps ──────────────────────────────────────────────────────────── */}
+      <AppText style={idleStyles.sectionLabel}>How it works</AppText>
+      <View style={idleStyles.stepList}>
+        {[
+          {
+            icon: 'sunny-outline',
+            title: 'Find good light',
+            text: 'Face a window or a lamp and hold the phone at eye level.',
+          },
+          {
+            icon: 'person-outline',
+            title: 'Fill the frame',
+            text: 'Put your whole face inside the frame and look straight ahead.',
+          },
+          {
+            icon: 'scan-outline',
+            title: 'Capture',
+            text: 'When the frame turns green, tap the shutter to analyse.',
+          },
+        ].map((step, i, arr) => (
+          <View key={step.title} style={idleStyles.stepRow}>
+            <View style={idleStyles.stepRail}>
+              <View style={idleStyles.stepBadge}>
+                <Ionicons
+                  name={step.icon as any}
+                  size={16}
+                  color={Colors.primary}
+                />
+              </View>
+              {i < arr.length - 1 && <View style={idleStyles.stepLine} />}
+            </View>
+            <View style={idleStyles.stepBody}>
+              <AppText style={idleStyles.stepTitle}>{step.title}</AppText>
+              <AppText style={idleStyles.stepCopy}>{step.text}</AppText>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* ── CTA ────────────────────────────────────────────────────────────── */}
+      <TouchableOpacity onPress={onStart} activeOpacity={0.85}>
+        <LinearGradient
+          colors={[Colors.primaryMid, Colors.primary, Colors.primaryDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={idleStyles.cta}
+        >
+          <Ionicons name="scan-outline" size={20} color={Colors.white} />
+          <AppText style={idleStyles.ctaText}>Start Face Scan</AppText>
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color="rgba(255,255,255,0.85)"
+          />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      <View style={idleStyles.privacy}>
+        <Ionicons
+          name="lock-closed-outline"
+          size={13}
+          color={Colors.gray500}
+        />
+        <AppText style={idleStyles.privacyText}>
+          Your photo is analysed on your device — it is never uploaded.
+        </AppText>
+      </View>
+    </ScrollView>
+  );
+};
 
 // ─── Product Recommendations (by face shape) ──────────────────────────────────
 
@@ -3856,6 +4222,262 @@ const ScanScreen: React.FC = () => {
   );
 };
 
+// ─── Face Scan Idle Styles ────────────────────────────────────────────────────
+
+const idleStyles = StyleSheet.create({
+  // Hero — dark HUD panel, deliberately off-palette so it reads as a live
+  // viewport rather than another card.
+  hero: {
+    alignItems: 'center',
+    borderRadius: BorderRadius.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(95,233,255,0.18)',
+    ...Shadow.lg,
+  },
+  glow: { position: 'absolute', left: '50%', borderRadius: 999 },
+  glowTop: {
+    width: 280,
+    height: 280,
+    top: -130,
+    marginLeft: -140,
+    backgroundColor: 'rgba(95,233,255,0.10)',
+  },
+  glowBottom: {
+    width: 240,
+    height: 240,
+    bottom: -130,
+    marginLeft: -120,
+    backgroundColor: 'rgba(111,227,174,0.09)',
+  },
+  heroChip: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 6,
+    paddingHorizontal: 13,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(95,233,255,0.28)',
+  },
+  chipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#5FE9FF',
+  },
+  chipText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+
+  // Wireframe stage — the beam is clipped to this box.
+  stage: {
+    alignSelf: 'center',
+    width: STAGE_W,
+    height: STAGE_H,
+    marginTop: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  ring: {
+    position: 'absolute',
+    top: (STAGE_H - RING_D) / 2,
+    left: (STAGE_W - RING_D) / 2,
+    width: RING_D,
+    height: RING_D,
+    borderRadius: RING_D / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(95,233,255,0.5)',
+  },
+  face: {
+    position: 'absolute',
+    top: (STAGE_H - FACE_H) / 2,
+    left: (STAGE_W - FACE_W) / 2,
+  },
+  reticle: {
+    position: 'absolute',
+    top: (STAGE_H - RETICLE_H) / 2,
+    left: (STAGE_W - RETICLE_W) / 2,
+    width: RETICLE_W,
+    height: RETICLE_H,
+  },
+  beam: { position: 'absolute', top: 0, left: 0, right: 0, height: 56 },
+  beamFill: { flex: 1, borderRadius: 2 },
+  corner: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderColor: 'rgba(95,233,255,0.75)',
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopLeftRadius: 8,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderTopRightRadius: 8,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomLeftRadius: 8,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderBottomRightRadius: 8,
+  },
+
+  heroTitle: {
+    alignSelf: 'stretch',
+    marginTop: Spacing.md,
+    fontSize: FontSize.xxl,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  heroSub: {
+    alignSelf: 'stretch',
+    marginTop: 6,
+    paddingHorizontal: Spacing.sm,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
+    color: 'rgba(255,255,255,0.66)',
+    textAlign: 'center',
+  },
+
+  // Stat strip
+  statsRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.glassSurface,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+  },
+  statValue: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.black,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    fontWeight: '600',
+  },
+
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray400,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.sm,
+  },
+
+  // Steps — a rail of badges joined by a hairline, so the three read as a
+  // sequence rather than three loose rows.
+  stepList: {
+    backgroundColor: Colors.glassSurfaceHigh,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.glassBorder,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    ...Shadow.sm,
+  },
+  stepRow: { flexDirection: 'row', gap: Spacing.md },
+  stepRail: { alignItems: 'center', width: 34 },
+  stepBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLine: {
+    flex: 1,
+    width: 1.5,
+    marginVertical: 4,
+    borderRadius: 1,
+    backgroundColor: Colors.divider,
+  },
+  stepBody: { flex: 1, paddingBottom: Spacing.md },
+  stepTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: Colors.black,
+    marginTop: 6,
+  },
+  stepCopy: {
+    marginTop: 2,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    color: Colors.gray600,
+  },
+
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minHeight: 58,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    ...Shadow.md,
+  },
+  ctaText: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.white,
+    letterSpacing: 0.2,
+  },
+
+  privacy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+  },
+  privacyText: {
+    flexShrink: 1,
+    fontSize: FontSize.xs,
+    color: Colors.gray500,
+    textAlign: 'center',
+  },
+});
+
 // ─── Product Recommendation Styles ────────────────────────────────────────────
 
 const prStyles = StyleSheet.create({
@@ -4513,34 +5135,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: -1,
     marginBottom: 8,
-  },
-
-  // Steps
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1,
-    borderColor: Colors.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 1,
-  },
-  stepNum: { fontSize: FontSize.xs, fontWeight: '800', color: Colors.primary },
-  stepText: {
-    fontSize: FontSize.sm,
-    color: Colors.gray600,
-    flex: 1,
-    lineHeight: 20,
-    paddingTop: 4,
   },
 
   // Feature rows (refraction intro)
