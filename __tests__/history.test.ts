@@ -105,14 +105,18 @@ describe('history normalisers', () => {
     );
 
     expect(inv.number).toBe('INV-0042');
-    expect(inv.status).toBe('paid');
+    expect(inv.event).toBe('paid');
     expect(inv.branch).toBe('Toul Kork');
     expect(inv.items).toHaveLength(2);
     expect(inv.items[0]).toEqual({
       id: '1',
       name: 'Aviator frame',
+      code: null,
+      productType: null,
       quantity: 1,
+      unitPrice: null,
       total: 90,
+      image: null,
     });
     expect(inv.items[1].id).toBe('item-1');
     expect(inv.items[1].total).toBe(15);

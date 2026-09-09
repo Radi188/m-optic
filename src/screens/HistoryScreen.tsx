@@ -16,6 +16,7 @@ import { selectIsAuthenticated } from '../store/slices/authSlice';
 import { useHistory } from '../hook/useHistory';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { formatEye } from '../types/history';
+import { eventColors } from '../utils/invoiceEvent';
 import type { Invoice, Refraction } from '../types/history';
 import AppText from '../components/AppText';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
@@ -45,20 +46,6 @@ function formatMoney(value: number | null, currency: string): string | null {
 }
 
 /** Maps a free-text status onto the palette's semantic colours. */
-function statusColors(status: string | null): { bg: string; fg: string } {
-  const s = (status ?? '').toLowerCase();
-  if (/paid|complete|success|receipt/.test(s)) {
-    return { bg: Colors.successLight, fg: Colors.success };
-  }
-  if (/pending|partial|due/.test(s)) {
-    return { bg: Colors.warningLight, fg: Colors.warning };
-  }
-  if (/cancel|void|refund|unpaid/.test(s)) {
-    return { bg: Colors.errorLight, fg: Colors.error };
-  }
-  return { bg: Colors.gray100, fg: Colors.gray600 };
-}
-
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
 const RefractionCard: React.FC<{ item: Refraction; locale: string }> = ({
@@ -109,7 +96,7 @@ const InvoiceCard: React.FC<{
   const { t } = useTranslation();
   const date = formatDate(item.date, locale);
   const total = formatMoney(item.total, item.currency);
-  const badge = statusColors(item.status);
+  const badge = eventColors(item.event);
 
   // Two lines of the receipt is enough for a list row; the rest is on the
   // detail screen, which the chevron leads to.
@@ -134,10 +121,10 @@ const InvoiceCard: React.FC<{
           {date && <AppText style={styles.cardSubtitle}>{date}</AppText>}
         </View>
 
-        {item.status && (
+        {!!item.event && (
           <View style={[styles.badge, { backgroundColor: badge.bg }]}>
             <AppText style={[styles.badgeText, { color: badge.fg }]}>
-              {item.status}
+              {t(item.event)}
             </AppText>
           </View>
         )}

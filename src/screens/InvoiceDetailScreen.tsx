@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Image,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -15,6 +14,7 @@ import { BorderRadius, Colors, FontSize, Shadow, Spacing } from '../theme';
 import type { Invoice, InvoiceItem } from '../types/history';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
+import { eventColors } from '../utils/invoiceEvent';
 
 /**
  * The full receipt behind a row in History › Invoices.
@@ -34,6 +34,8 @@ const InvoiceDetailScreen: React.FC = () => {
   const money = (value: number | null) =>
     value === null ? null : `${invoice?.currency ?? '$'}${value.toFixed(2)}`;
 
+  const eventTint = eventColors(invoice?.event ?? null);
+
   const header = (
     <View style={styles.header}>
       <TouchableOpacity
@@ -44,9 +46,9 @@ const InvoiceDetailScreen: React.FC = () => {
         <Ionicons name="chevron-back" size={24} color={Colors.black} />
       </TouchableOpacity>
 
-      <AppText style={styles.headerTitle}>{t('InvoiceDetails')}</AppText>
-
-      <View style={styles.headerButton} />
+      <AppText style={styles.headerTitle} numberOfLines={1}>
+        {t('InvoiceDetails')}
+      </AppText>
     </View>
   );
 
@@ -82,30 +84,19 @@ const InvoiceDetailScreen: React.FC = () => {
             </AppText>
           )}
 
-          <View style={styles.heroBadges}>
-            {invoice.status && (
-              <View style={styles.heroBadge}>
-                <AppText style={styles.heroBadgeText}>{invoice.status}</AppText>
-              </View>
-            )}
-            <View
-              style={[
-                styles.heroBadge,
-                invoice.isReady ? styles.badgeReady : styles.badgePreparing,
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.heroBadgeText,
-                  invoice.isReady
-                    ? styles.badgeReadyText
-                    : styles.badgePreparingText,
-                ]}
+          {!!invoice.event && (
+            <View style={styles.heroBadges}>
+              <View
+                style={[styles.heroBadge, { backgroundColor: eventTint.bg }]}
               >
-                {invoice.isReady ? t('Ready') : t('Preparing')}
-              </AppText>
+                <AppText
+                  style={[styles.heroBadgeText, { color: eventTint.fg }]}
+                >
+                  {t(invoice.event)}
+                </AppText>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         {/* ── Items ── */}
@@ -222,9 +213,15 @@ const ItemRow: React.FC<{
   return (
     <View style={[styles.itemRow, isLast && styles.rowLast]}>
       {item.image ? (
-        <AppImage source={{ uri: item.image }} style={styles.itemImage} />
+        <View style={styles.itemImageBox}>
+          <AppImage
+            source={{ uri: item.image }}
+            style={styles.itemImage}
+            resizeMode="contain"
+          />
+        </View>
       ) : (
-        <View style={[styles.itemImage, styles.itemImageFallback]}>
+        <View style={[styles.itemImageBox, styles.itemImageFallback]}>
           <Ionicons name="glasses-outline" size={22} color={Colors.gray400} />
         </View>
       )}
@@ -323,7 +320,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   headerButton: {
     width: 44,
@@ -334,6 +331,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
     fontSize: FontSize.lg,
     fontWeight: '800',
     color: Colors.black,
@@ -390,10 +388,6 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     textTransform: 'capitalize',
   },
-  badgeReady: { backgroundColor: Colors.successLight },
-  badgeReadyText: { color: Colors.success },
-  badgePreparing: { backgroundColor: Colors.warningLight },
-  badgePreparingText: { color: Colors.warning },
 
   sectionLabel: {
     marginTop: Spacing.lg,
@@ -418,17 +412,26 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
   },
-  itemImage: {
-    width: 56,
-    height: 56,
+  itemImageBox: {
+    width: 88,
+    height: 66,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.gray100,
+    // White, not gray: product shots are cut-outs on white, and a grey well
+    // leaves a visible square of background around the frame.
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 3,
+    overflow: 'hidden',
   },
+  itemImage: { width: '100%', height: '100%' },
   itemImageFallback: { alignItems: 'center', justifyContent: 'center' },
   itemText: { flex: 1, gap: 2 },
   itemName: {

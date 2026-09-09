@@ -340,6 +340,7 @@
   "Note": "Note",
   "Qty": "Qty",
   "Ready": "Ready",
+  "Completed": "Completed",
   "Preparing": "Preparing",
   "Member": "Member",
   "TopTierReached": "You’ve reached our highest tier",
@@ -379,5 +380,8 @@
   "Cancelled": "Cancelled",
   "Featured": "Featured",
   "ReadMore": "Read more",
-  "LearnMore": "Learn more"
+  "LearnMore": "Learn more",
+  "Receipt": "Receipt",
+  "Deposit": "Deposit",
+  "Repay": "Repay"
 }

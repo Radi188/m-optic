@@ -37,6 +37,9 @@ import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { useProductList } from '../hook/useProductList';
+import FrameShapeIcon from '../components/ui/Frame/FrameShapeIcon';
+import { fetchBranches } from '../services/branchService';
+import type { StoreLocation } from '../services/branchService';
 import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
@@ -302,31 +305,55 @@ const RISK_CONFIG: Record<
 
 // ─── Booking Data ─────────────────────────────────────────────────────────────
 
-const BRANCHES = [
-  {
-    id: 'b1',
-    name: 'M Optic Centre',
-    address: 'Boulevard Zerktouni, Casablanca',
-  },
-  { id: 'b2', name: 'M Optic Maarif', address: 'Maarif District, Casablanca' },
-  { id: 'b3', name: 'M Optic Ain Sebaa', address: 'Ain Sebaa, Casablanca' },
-];
+// Branches come from GET /api/v1/branches (see services/branchService), the
+// same source the store map uses — the shop edits them there. They used to be
+// three hardcoded Casablanca addresses, which are not our stores.
 
-const TIME_SLOTS = [
-  '09:00',
-  '09:30',
-  '10:00',
-  '10:30',
-  '11:00',
-  '11:30',
-  '14:00',
-  '14:30',
-  '15:00',
-  '15:30',
-  '16:00',
-  '16:30',
-  '17:00',
-];
+// Appointment slots are generated from the selected branch's own opening hours.
+const SLOT_MINUTES = 30;
+// Only used when a branch has no hours set in the API, so the picker still has
+// something to offer instead of going blank.
+const FALLBACK_OPEN = '09:00';
+const FALLBACK_CLOSE = '17:00';
+
+const toMinutes = (hhmm: string): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
+};
+
+const fmtMinutes = (mins: number): string =>
+  `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(
+    mins % 60,
+  ).padStart(2, '0')}`;
+
+/**
+ * Half-hour slots inside the branch's opening window. The last slot starts one
+ * slot before closing, so a booking never lands after the shop shuts. When the
+ * chosen day is today, slots that have already passed are dropped.
+ */
+const slotsFor = (
+  branch: StoreLocation | undefined,
+  day: Date | null,
+): string[] => {
+  const open = toMinutes(branch?.openTime || FALLBACK_OPEN);
+  const close = toMinutes(branch?.closeTime || FALLBACK_CLOSE);
+  if (open === null || close === null || close <= open) return [];
+
+  const now = new Date();
+  const isToday = !!day && day.toDateString() === now.toDateString();
+  const cutoff = now.getHours() * 60 + now.getMinutes();
+
+  const out: string[] = [];
+  for (let t = open; t + SLOT_MINUTES <= close; t += SLOT_MINUTES) {
+    if (isToday && t <= cutoff) continue;
+    out.push(fmtMinutes(t));
+  }
+  return out;
+};
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT = [
@@ -519,8 +546,33 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 /* Only the front camera is mirrored — the back camera shows the scene as-is. */
 #video.mirrored{transform:scaleX(-1)}
-#snapCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
-#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+
+/* Skin-smoothing (soft focus). A blurred copy of the preview is laid back over
+   the sharp one at partial opacity — the classic soft-focus portrait trick, so
+   skin texture and blemishes soften while the eyes stay readable.
+   backdrop-filter gets the blurred copy for free on the GPU, with no second
+   <video> to decode; where it is unsupported the layer is simply invisible and
+   the preview stays sharp.
+   The layer covers only the tracked face: it keeps this fixed size and is moved
+   and scaled onto the face box every frame with a transform (compositor-only,
+   so it stays cheap), and a feathered elliptical mask keeps the effect from
+   ending on a visible edge. Everything else in shot — the room, hands, anyone
+   standing behind — is left exactly as the camera saw it.
+   Detection is untouched: MediaPipe reads frames straight off the <video>
+   element, which no CSS filter can reach, so the measurements come from the
+   raw image either way. */
+#softLayer{
+  position:absolute;left:0;top:0;width:200px;height:260px;transform-origin:0 0;
+  z-index:1;pointer-events:none;opacity:0;transition:opacity .25s ease;
+  -webkit-backdrop-filter:blur(6px) brightness(1.04) saturate(1.06);
+  backdrop-filter:blur(6px) brightness(1.04) saturate(1.06);
+  -webkit-mask-image:radial-gradient(ellipse closest-side at 50% 50%,#000 55%,rgba(0,0,0,0.55) 78%,transparent 100%);
+  mask-image:radial-gradient(ellipse closest-side at 50% 50%,#000 55%,rgba(0,0,0,0.55) 78%,transparent 100%);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat
+}
+body.smooth #softLayer.on{opacity:.5}
+#snapCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2}
+#overlay{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 
 /* Top HUD chip — sits below the notch / status bar */
 .topbar{position:absolute;top:max(30px,calc(env(safe-area-inset-top) + 16px));left:0;right:0;display:flex;justify-content:center;z-index:8}
@@ -542,7 +594,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #flipBtn svg{width:20px;height:20px;fill:none;stroke:rgba(255,255,255,0.92);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #flipBtn.busy{opacity:.5}
 #flipBtn.spin{transform:rotate(180deg)}
-#overlay.analyzing #flipBtn{opacity:0;pointer-events:none}
+#overlay.analyzing #flipBtn,#overlay.analyzing #smoothBtn{opacity:0;pointer-events:none}
+
+/* Smoothing toggle — same chip as the flip button, sitting to its left. */
+#smoothBtn{
+  position:absolute;top:max(30px,calc(env(safe-area-inset-top) + 16px));right:70px;z-index:9;
+  pointer-events:auto;width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(12,16,20,0.5);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(95,233,255,0.22);box-shadow:0 6px 22px rgba(0,0,0,0.28);
+  transition:opacity .25s ease,border-color .25s ease
+}
+#smoothBtn svg{width:19px;height:19px;fill:rgba(255,255,255,0.94);stroke:none}
+#smoothBtn.off{border-color:rgba(255,255,255,0.14)}
+#smoothBtn.off svg{fill:rgba(255,255,255,0.42)}
 
 /* Corner HUD readouts — clearly below the chip */
 .hud{position:absolute;z-index:7;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:9.5px;letter-spacing:1.4px;color:rgba(95,233,255,0.72);text-transform:uppercase;text-shadow:0 0 8px rgba(95,233,255,0.35)}
@@ -654,7 +719,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 #shapeBadge span{color:#fff;font-weight:700;font-size:14px;letter-spacing:0.3px}
 
 #loading{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  position:absolute;z-index:10;top:50%;left:50%;transform:translate(-50%,-50%);
   color:rgba(255,255,255,.78);font-size:14px;text-align:center;line-height:2
 }
 .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:#5FE9FF;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
@@ -663,9 +728,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
+<div id="softLayer"></div>
 <canvas id="snapCanvas"></canvas>
 <div id="overlay">
   <div class="topbar"><div class="topchip"><span class="pulse"></span><span id="topchipText">Biometric Face Scan</span></div></div>
+  <button id="smoothBtn" aria-label="Toggle skin smoothing">
+    <svg viewBox="0 0 24 24"><path d="M11 2.5l1.7 4.6 4.6 1.7-4.6 1.7L11 15.1 9.3 10.5 4.7 8.8l4.6-1.7z"/><path d="M18 14l.85 2.35L21.2 17.2l-2.35.85L18 20.4l-.85-2.35-2.35-.85 2.35-.85z"/></svg>
+  </button>
   <button id="flipBtn" aria-label="Switch camera">
     <svg viewBox="0 0 24 24"><path d="M3 8.5V7a3 3 0 0 1 3-3h9"/><path d="m12.5 1.5 3 2.5-3 2.5"/><path d="M21 15.5V17a3 3 0 0 1-3 3H9"/><path d="m11.5 22.5-3-2.5 3-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>
   </button>
@@ -720,6 +789,7 @@ var reviewRow=document.getElementById('reviewRow'),retakeBtn=document.getElement
 var resultRow=document.getElementById('resultRow'),rescanBtn=document.getElementById('rescanBtn'),continueBtn=document.getElementById('continueBtn');
 var snapCanvas=document.getElementById('snapCanvas');
 var flipBtn=document.getElementById('flipBtn'),topchipText=document.getElementById('topchipText');
+var smoothBtn=document.getElementById('smoothBtn'),softLayer=document.getElementById('softLayer');
 var shapeBadge=document.getElementById('shapeBadge'),shapeBadgeText=document.getElementById('shapeBadgeText');
 var analyzeBar=document.getElementById('analyzeBar'),analyzeBarFill=document.getElementById('analyzeBarFill');
 
@@ -1066,6 +1136,109 @@ function setCaptureEnabled(v){
   if(v)captureBtn.classList.add('enabled');else captureBtn.classList.remove('enabled');
 }
 
+// ── Skin smoothing ───────────────────────────────────────────────────────────
+// On by default. The live preview is smoothed in CSS; the captured still has
+// to be smoothed in canvas to match, because CSS filters do not apply to
+// drawImage — without this the frozen photo would snap back to raw camera
+// texture the moment the user taps Capture.
+var SMOOTH=true;
+document.body.classList.add('smooth');
+
+smoothBtn.addEventListener('click',function(){
+  if(done)return;
+  SMOOTH=!SMOOTH;
+  document.body.classList.toggle('smooth',SMOOTH);
+  smoothBtn.classList.toggle('off',!SMOOTH);
+  if(!SMOOTH){softLayer.classList.remove('on');softBox=null;}
+});
+
+// The face box, padded out to cover the whole head: wider for the cheeks and
+// ears, and a lot taller upward, since the mesh stops partway up the forehead
+// and the hairline has to be inside the mask too. Shared by the live preview
+// and the captured still so both smooth exactly the same region.
+var FACE_PAD_X=0.16,FACE_PAD_TOP=0.30,FACE_PAD_W=1.32,FACE_PAD_H=1.46;
+function faceBox(lm,w,h,mirrored){
+  var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,i,X,Y;
+  for(i=0;i<lm.length;i++){
+    X=(mirrored?(1-lm[i].x):lm[i].x)*w;
+    Y=lm[i].y*h;
+    if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;
+  }
+  var bw=x1-x0,bh=y1-y0;
+  if(!(bw>0&&bh>0))return null;
+  return {x:x0-bw*FACE_PAD_X,y:y0-bh*FACE_PAD_TOP,w:bw*FACE_PAD_W,h:bh*FACE_PAD_H};
+}
+
+// ── Live preview: park the soft layer on the tracked face ───────────────────
+var SOFT_W=200,SOFT_H=260;
+var softBox=null;
+function updateSoftMask(lm){
+  if(!lm||!SMOOTH){softLayer.classList.remove('on');softBox=null;return;}
+  // The preview is object-fit:cover, so the video is scaled up and centre
+  // cropped; the same mapping has to be applied to the landmarks.
+  var vw=video.videoWidth||640,vh=video.videoHeight||480;
+  var dw=window.innerWidth,dh=window.innerHeight;
+  var sc=Math.max(dw/vw,dh/vh);
+  var b=faceBox(lm,vw*sc,vh*sc,MIRROR);
+  if(!b){softLayer.classList.remove('on');return;}
+  b.x+=(dw-vw*sc)/2;b.y+=(dh-vh*sc)/2;
+  // Ease toward the target, or tracker jitter makes the mask edge shimmer.
+  if(!softBox)softBox=b;
+  else{
+    var k=0.35;
+    softBox.x+=(b.x-softBox.x)*k;softBox.y+=(b.y-softBox.y)*k;
+    softBox.w+=(b.w-softBox.w)*k;softBox.h+=(b.h-softBox.h)*k;
+  }
+  softLayer.style.transform=
+    'translate('+softBox.x.toFixed(1)+'px,'+softBox.y.toFixed(1)+'px) scale('+
+    (softBox.w/SOFT_W).toFixed(4)+','+(softBox.h/SOFT_H).toFixed(4)+')';
+  softLayer.classList.add('on');
+}
+
+// Soft focus in canvas: a heavily downscaled copy drawn back up over the sharp
+// frame with 'screen', which is what the preview's blurred backdrop does. The
+// downscale is the blur — cheap, and it needs no ctx.filter support. The copy
+// is then masked to the same feathered face ellipse as the preview, so the
+// background of the captured photo keeps its original detail.
+function applySoftFocus(ctx,src,w,h,lm,mirrored){
+  try{
+    var dw=Math.max(1,Math.round(w/10)),dh=Math.max(1,Math.round(h/10));
+    var tmp=document.createElement('canvas');
+    tmp.width=dw;tmp.height=dh;
+    var tctx=tmp.getContext('2d');
+    tctx.imageSmoothingEnabled=true;
+    tctx.drawImage(src,0,0,dw,dh);
+
+    var soft=document.createElement('canvas');
+    soft.width=w;soft.height=h;
+    var sctx=soft.getContext('2d');
+    sctx.imageSmoothingEnabled=true;
+    sctx.drawImage(tmp,0,0,w,h);
+
+    var b=lm?faceBox(lm,w,h,mirrored):null;
+    if(!b)return;
+    var cx=b.x+b.w/2,cy=b.y+b.h/2,rx=b.w/2,ry=b.h/2;
+    sctx.globalCompositeOperation='destination-in';
+    sctx.save();
+    sctx.translate(cx,cy);
+    sctx.scale(1,ry/rx);
+    var g=sctx.createRadialGradient(0,0,0,0,0,rx);
+    g.addColorStop(0,'rgba(0,0,0,1)');
+    g.addColorStop(0.55,'rgba(0,0,0,1)');
+    g.addColorStop(0.78,'rgba(0,0,0,0.55)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    sctx.fillStyle=g;
+    sctx.fillRect(-rx,-rx,rx*2,rx*2);
+    sctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha=0.5;
+    ctx.globalCompositeOperation='screen';
+    ctx.drawImage(soft,0,0);
+    ctx.restore();
+  }catch(e){}
+}
+
 // ── Captured-face reveal animation ───────────────────────────────────────────
 // A staged "biometric analysis" reveal over the frozen photo:
 //   1. the 468-point mesh materialises behind a scan beam sweeping down,
@@ -1325,6 +1498,7 @@ function freezeFrame(lm){
   var pctx=photo.getContext('2d');
   if(MIRROR){pctx.save();pctx.translate(w,0);pctx.scale(-1,1);pctx.drawImage(video,0,0,w,h);pctx.restore();}
   else{pctx.drawImage(video,0,0,w,h);}
+  if(SMOOTH)applySoftFocus(pctx,photo,w,h,lm,MIRROR);
   capturedPhoto=photo;
   capturedLm=lm;
   capturedMirror=MIRROR;
@@ -1332,6 +1506,9 @@ function freezeFrame(lm){
   snapCanvas.width=w;snapCanvas.height=h;
   snapCanvas.getContext('2d').drawImage(photo,0,0);
   video.style.display='none';
+  softLayer.classList.remove('on');
+  softBox=null;
+  softLayer.style.display='none';
   snapCanvas.style.display='block';
 }
 
@@ -1342,6 +1519,7 @@ captureBtn.addEventListener('click',function(){
   captureBtn.style.display='none';
   captureHint.style.display='none';
   flipBtn.style.display='none';
+  smoothBtn.style.display='none';
   oval.className='guide-oval locked';
   hint.className='success';
   hint.textContent='Nice! Retake or analyze this photo';
@@ -1359,12 +1537,14 @@ function resetScan(){
   lastLm=null;
   snapCanvas.style.display='none';
   video.style.display='block';
+  softLayer.style.display='';
   if(video.play) video.play();
   captureBtn.style.display='';
   captureBtn.disabled=true;
   captureBtn.classList.remove('enabled');
   captureHint.style.display='';
   flipBtn.style.display='';
+  smoothBtn.style.display='';
   overlay.classList.remove('analyzing');
   shapeBadge.classList.remove('show');
   analyzeBar.classList.remove('show');
@@ -1442,6 +1622,7 @@ faceMesh.onResults(function(results){
 
   if(!lms||!lms[0]){
     lastLm=null;
+    updateSoftMask(null);
     setCaptureEnabled(false);
     oval.className='guide-oval';
     hint.className='';
@@ -1453,6 +1634,7 @@ faceMesh.onResults(function(results){
 
   var lm=lms[0];
   lastLm=lm;
+  updateSoftMask(lm);
   var sz=faceSize(lm);
 
   if(sz<0.16){
@@ -1545,6 +1727,7 @@ flipBtn.addEventListener('click',function(){
   facing=(facing==='user')?'environment':'user';
 
   recentMetrics=[];recentShapes=[];lastLm=null;
+  softLayer.classList.remove('on');softBox=null;
   setCaptureEnabled(false);
   oval.className='guide-oval';
   hint.className='';
@@ -2144,57 +2327,119 @@ const SHAPE_EFFECT: Record<FaceShape, string> = {
 
 // Per-frame-shape icon + the reason it flatters a face — shown in the
 // "Recommended Frame Shapes" section.
-const FRAME_INFO: Record<string, { icon: string; reason: string }> = {
+// The reason a frame shape works, as a fallback for a face/frame pair that
+// SHAPE_FRAME_REASON does not cover. The icon field is gone — the cards draw
+// the real frame silhouette now (components/ui/Frame/FrameShapeIcon).
+const FRAME_INFO: Record<string, { reason: string }> = {
   Wayfarer: {
-    icon: 'square-outline',
     reason:
       'Bold angular lines add structure and definition to softer features.',
   },
   Aviator: {
-    icon: 'triangle-outline',
     reason:
       'Teardrop curves balance an angular jaw and gently elongate the face.',
   },
   Round: {
-    icon: 'ellipse-outline',
     reason: 'Soft circular frames offset strong angles and a wide jawline.',
   },
   'Cat-Eye': {
-    icon: 'sparkles-outline',
     reason: 'Upswept outer corners lift the face and draw the eye upward.',
   },
   Rectangle: {
-    icon: 'tablet-landscape-outline',
     reason: 'Straight, wider lines add definition and slim a rounder face.',
   },
   Square: {
-    icon: 'square-outline',
     reason: 'Sharp geometric edges contrast soft curves for a balanced look.',
   },
   Browline: {
-    icon: 'glasses-outline',
     reason:
       'Weight on the top frame widens the forehead and offsets a strong jaw.',
   },
   Geometric: {
-    icon: 'shapes-outline',
     reason: 'Distinct angles add a modern, structured edge to your look.',
   },
   Oval: {
-    icon: 'ellipse-outline',
     reason: 'Gently rounded frames flatter almost any face and soften angles.',
   },
   Rimless: {
-    icon: 'remove-outline',
     reason: 'Minimal, light frames keep the focus on your eyes and cheekbones.',
   },
   Oversized: {
-    icon: 'expand-outline',
     reason: 'Larger frames add width and shorten the look of a longer face.',
   },
   Decorative: {
-    icon: 'diamond-outline',
     reason: 'Detailing and depth add width and visual interest to a long face.',
+  },
+};
+
+// Why a frame flatters THIS face. FRAME_INFO's reason is written per frame
+// shape, so the same sentence was being shown to every face — telling an oval
+// face that aviators "balance an angular jaw", or a heart face that round
+// frames "offset a wide jawline", when neither has one. These are keyed by the
+// pair, so each card argues from the features the scan actually found.
+const SHAPE_FRAME_REASON: Record<FaceShape, Record<string, string>> = {
+  Oval: {
+    Wayfarer:
+      'Clean angular lines add structure without upsetting your balanced proportions.',
+    Aviator:
+      'Soft teardrop curves follow your natural proportions for an effortless look.',
+    Round:
+      'Gentle curves echo the soft lines of an oval face without widening it.',
+    'Cat-Eye':
+      'Upswept corners add lift and character to already balanced features.',
+  },
+  Round: {
+    Rectangle:
+      'Straight horizontal lines make a round face read longer and slimmer.',
+    Square:
+      'Sharp corners contrast your soft curves and add definition to the cheeks.',
+    Browline:
+      'Weight along the top draws the eye upward, lengthening a round face.',
+    Geometric:
+      'Distinct angles break up soft curves and give a round face definition.',
+  },
+  Square: {
+    Round: 'Circular curves soften a strong jawline and a broad forehead.',
+    Oval: 'Rounded edges take the hardness off angular features.',
+    Aviator:
+      'Teardrop curves soften the jaw and gently elongate a square face.',
+    'Cat-Eye':
+      'Upswept corners lift attention from the jaw up toward your eyes.',
+  },
+  Heart: {
+    Aviator:
+      'Curved lower edges add width where your face narrows toward the chin.',
+    Round:
+      'Soft curves add fullness around a narrow chin and offset a wider forehead.',
+    Rimless:
+      'Light, frameless styling keeps the top of the face from looking wider.',
+    Oval: 'Even, rounded lines balance a wide forehead against a narrow chin.',
+  },
+  Oblong: {
+    Wayfarer:
+      'Deep lenses and a strong brow line break up the length of a long face.',
+    Round:
+      'Curves add width across the middle of the face and shorten it visually.',
+    Oversized:
+      'Large frames cover more of the face height, making it look shorter.',
+    Decorative: 'Detail on the temples draws the eye sideways and adds width.',
+  },
+  Diamond: {
+    'Cat-Eye':
+      'Upswept corners widen the brow line and balance prominent cheekbones.',
+    Oval: 'Soft curves ease the angle of high cheekbones without narrowing the face.',
+    Rimless: 'Minimal frames keep wide cheekbones from looking any wider.',
+    Browline:
+      'Weight along the top broadens a narrow forehead against wide cheekbones.',
+  },
+  Triangle: {
+    Browline:
+      'Weight along the top widens a narrow forehead to balance a strong jaw.',
+    'Cat-Eye':
+      'Upswept corners lift attention up and away from a wider jawline.',
+    Aviator: 'A wide top bar broadens the brow line to match a strong jaw.',
+    Round:
+      'Soft curves take the edge off an angular jaw while adding width up top.',
   },
 };
 
@@ -2212,10 +2457,9 @@ const ProductRecommendations: React.FC<{
   });
 
   const wanted = recommendedFrames.map(f => f.toLowerCase());
-  const matched = products.filter(
-    p =>
-      p.frame_shape?.name && wanted.includes(p.frame_shape.name.toLowerCase()),
-  );
+  const isRecommended = (p: Product) =>
+    !!p.frame_shape?.name && wanted.includes(p.frame_shape.name.toLowerCase());
+  const matched = products.filter(isRecommended);
   // Fall back to the general catalogue if nothing matches the face shape.
   const recommended = (matched.length ? matched : products).slice(0, 6);
 
@@ -2226,9 +2470,15 @@ const ProductRecommendations: React.FC<{
         ? `Its ${fs} shape complements ${hairStyle.toLowerCase()} hair.`
         : `A great match for ${hairStyle.toLowerCase()} hair.`;
     }
-    return fs
-      ? `Its ${fs} shape ${SHAPE_EFFECT[shape]}`
-      : `A great match for your ${shape.toLowerCase()} face.`;
+    // Only claim a face-shape benefit for frames that actually carry one of
+    // the recommended shapes — a fallback product gets a neutral line instead
+    // of a reason that does not apply to it.
+    if (!isRecommended(p)) {
+      return fs
+        ? `A ${fs} frame from our current range.`
+        : 'From our current range.';
+    }
+    return `Its ${fs} shape ${SHAPE_EFFECT[shape]}`;
   };
 
   if (loading) {
@@ -2444,10 +2694,11 @@ const GlassesBottomSheet: React.FC<{
 
           <View style={gsStyles.recList}>
             {info.frames.map((frame, idx) => {
-              const fi = FRAME_INFO[frame] || {
-                icon: 'glasses-outline',
-                reason: `A flattering match for your ${shape.toLowerCase()} face.`,
-              };
+              const fallbackReason = `A flattering match for your ${shape.toLowerCase()} face.`;
+              const reason =
+                SHAPE_FRAME_REASON[shape]?.[frame] ??
+                FRAME_INFO[frame]?.reason ??
+                fallbackReason;
               const best = idx === 0;
               return (
                 <TouchableOpacity
@@ -2472,15 +2723,15 @@ const GlassesBottomSheet: React.FC<{
                     <View
                       style={[gsStyles.recIcon, best && gsStyles.recIconBest]}
                     >
-                      <Ionicons
-                        name={fi.icon as any}
-                        size={24}
+                      <FrameShapeIcon
+                        shape={frame}
+                        size={22}
                         color={best ? Colors.white : Colors.primary}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
                       <AppText style={gsStyles.recName}>{frame}</AppText>
-                      <AppText style={gsStyles.recReason}>{fi.reason}</AppText>
+                      <AppText style={gsStyles.recReason}>{reason}</AppText>
                     </View>
                   </View>
                   <View style={gsStyles.recCta}>
@@ -2586,44 +2837,6 @@ const GlassesBottomSheet: React.FC<{
                 </View>
               )}
             </>
-          )}
-
-          {/* ── TEMPORARY debug panel showing the raw ratios behind the result.
-                 Safe to delete (along with the FaceDebug plumbing) any time. ── */}
-          {debug?.raw && (
-            <View style={gsStyles.dbgCard}>
-              <AppText style={gsStyles.dbgTitle}>
-                CALIBRATION DATA (temporary)
-              </AppText>
-              <AppText style={gsStyles.dbgRow}>
-                aspect (len/width) : {debug.raw.aspect.toFixed(3)}
-              </AppText>
-              <AppText style={gsStyles.dbgRow}>
-                fVc (forehead/cheek): {debug.raw.fVc.toFixed(3)}
-              </AppText>
-              <AppText style={gsStyles.dbgRow}>
-                jVc (jaw/cheek) : {debug.raw.jVc.toFixed(3)}
-              </AppText>
-              <AppText style={gsStyles.dbgRow}>
-                chinTaper (chin/jaw): {debug.raw.chinTaper?.toFixed(3)}
-              </AppText>
-              <AppText style={gsStyles.dbgRow}>
-                jawDeg (gonial) : {debug.raw.jawDeg.toFixed(1)}
-              </AppText>
-              {debug.scores && (
-                <AppText style={gsStyles.dbgRow}>
-                  scores :{' '}
-                  {Object.entries(debug.scores)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 3)
-                    .map(([k, v]) => `${k} ${v.toFixed(2)}`)
-                    .join('  ')}
-                </AppText>
-              )}
-              <AppText style={gsStyles.dbgRow}>
-                picked : {shape} ({debug.samples} frames)
-              </AppText>
-            </View>
           )}
 
           {/* CTAs */}
@@ -3463,9 +3676,38 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
   const [date, setDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [branches, setBranches] = useState<StoreLocation[]>([]);
+  const [branchLoading, setBranchLoading] = useState(false);
+  const [branchError, setBranchError] = useState(false);
 
+  const loadBranches = useCallback(async () => {
+    setBranchLoading(true);
+    setBranchError(false);
+    try {
+      setBranches(await fetchBranches());
+    } catch (err: any) {
+      console.warn('[Booking] branches failed:', err?.message);
+      setBranchError(true);
+    } finally {
+      setBranchLoading(false);
+    }
+  }, []);
+
+  // Fetched when the sheet opens rather than on mount, so a user who never
+  // books never pays for the request, and a reopen picks up branch edits.
+  useEffect(() => {
+    if (visible) loadBranches();
+  }, [visible, loadBranches]);
+
+  const branch = branches.find(b => b.id === branchId);
+  const slots = useMemo(() => slotsFor(branch, date), [branch, date]);
   const canConfirm = branchId && date && timeSlot;
-  const branch = BRANCHES.find(b => b.id === branchId);
+
+  // A slot only means anything for the branch and day it was picked under —
+  // switching either can make it invalid (different hours, or now in the past).
+  useEffect(() => {
+    if (timeSlot && !slots.includes(timeSlot)) setTimeSlot(null);
+  }, [slots, timeSlot]);
 
   const handleClose = () => {
     setBranchId(null);
@@ -3528,6 +3770,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               {[
                 { icon: 'location-outline', text: branch.name },
                 { icon: 'map-outline', text: branch.address },
+                { icon: 'call-outline', text: branch.phone },
                 {
                   icon: 'calendar-outline',
                   text: `${DAY_SHORT[date.getDay()]}, ${date.getDate()} ${
@@ -3535,26 +3778,32 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                   }`,
                 },
                 { icon: 'time-outline', text: timeSlot },
-              ].map(row => (
-                <View key={row.icon} style={bkStyles.summaryRow}>
-                  <Ionicons
-                    name={row.icon as any}
-                    size={16}
-                    color={Colors.primary}
-                  />
-                  <AppText style={bkStyles.summaryText}>{row.text}</AppText>
-                </View>
-              ))}
+              ]
+                .filter(row => !!row.text)
+                .map(row => (
+                  <View key={row.icon} style={bkStyles.summaryRow}>
+                    <Ionicons
+                      name={row.icon as any}
+                      size={16}
+                      color={Colors.primary}
+                    />
+                    <AppText style={bkStyles.summaryText}>{row.text}</AppText>
+                  </View>
+                ))}
             </View>
 
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={() => Linking.openURL('tel:+212')}
-              activeOpacity={0.82}
-            >
-              <Ionicons name="call-outline" size={18} color={Colors.white} />
-              <AppText style={styles.primaryBtnText}>Call to Confirm</AppText>
-            </TouchableOpacity>
+            {!!branch.phone && (
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() =>
+                  Linking.openURL(`tel:${branch.phone.replace(/[\s-]/g, '')}`)
+                }
+                activeOpacity={0.82}
+              >
+                <Ionicons name="call-outline" size={18} color={Colors.white} />
+                <AppText style={styles.primaryBtnText}>Call to Confirm</AppText>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.outlineBtn, { marginTop: Spacing.sm }]}
@@ -3573,7 +3822,35 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
             >
               {/* Branch */}
               <AppText style={bkStyles.sectionTitle}>Select Branch</AppText>
-              {BRANCHES.map(b => {
+              {branchLoading && !branches.length && (
+                <View style={bkStyles.branchState}>
+                  <ActivityIndicator color={Colors.primary} />
+                </View>
+              )}
+              {branchError && !branches.length && (
+                <TouchableOpacity
+                  style={bkStyles.branchState}
+                  onPress={loadBranches}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="refresh-outline"
+                    size={18}
+                    color={Colors.primary}
+                  />
+                  <AppText style={bkStyles.branchStateText}>
+                    Couldn't load our stores. Tap to retry.
+                  </AppText>
+                </TouchableOpacity>
+              )}
+              {!branchLoading && !branchError && !branches.length && (
+                <View style={bkStyles.branchState}>
+                  <AppText style={bkStyles.branchStateText}>
+                    No stores are listed right now.
+                  </AppText>
+                </View>
+              )}
+              {branches.map(b => {
                 const selected = branchId === b.id;
                 return (
                   <TouchableOpacity
@@ -3601,9 +3878,11 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                       >
                         {b.name}
                       </AppText>
-                      <AppText style={bkStyles.branchAddress}>
-                        {b.address}
-                      </AppText>
+                      {!!(b.address || b.phone) && (
+                        <AppText style={bkStyles.branchAddress}>
+                          {b.address || b.phone}
+                        </AppText>
+                      )}
                     </View>
                     <View
                       style={[bkStyles.radio, selected && bkStyles.radioActive]}
@@ -3672,8 +3951,18 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               >
                 Select Time
               </AppText>
+              {!branch && (
+                <AppText style={bkStyles.timeHint}>
+                  Pick a store first to see its opening times.
+                </AppText>
+              )}
+              {!!branch && !slots.length && (
+                <AppText style={bkStyles.timeHint}>
+                  No times left on this day — try another date.
+                </AppText>
+              )}
               <View style={bkStyles.timeGrid}>
-                {TIME_SLOTS.map(slot => {
+                {slots.map(slot => {
                   const selected = timeSlot === slot;
                   return (
                     <TouchableOpacity
@@ -4818,7 +5107,7 @@ const gsStyles = StyleSheet.create({
     gap: Spacing.sm + 2,
   },
   recIcon: {
-    width: 46,
+    width: 58,
     height: 46,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.primaryLight,
@@ -5661,6 +5950,23 @@ const rfStyles = StyleSheet.create({
 // ─── Booking Modal Styles ─────────────────────────────────────────────────────
 
 const bkStyles = StyleSheet.create({
+  branchState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.lg,
+  },
+  branchStateText: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    textAlign: 'center',
+  },
+  timeHint: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    marginBottom: Spacing.sm,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',

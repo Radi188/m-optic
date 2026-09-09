@@ -119,7 +119,11 @@ export type RawInvoice = {
   currency?: string | null;
   exchange_rate?: number | string | null;
   queue_number?: number | string | null;
-  is_ready?: boolean | null;
+  /**
+   * Whether the order has been handed over. Sent as a real boolean by some
+   * payloads and as 1/0 or "1"/"0" by others, so it must be read loosely.
+   */
+  is_ready?: boolean | number | string | null;
   note?: string | null;
   description?: string | null;
 
@@ -197,7 +201,8 @@ export type Invoice = {
   number: string | null;
   date: string | null;
   /** Document kind — "Receipt". Shown as the card's badge. */
-  status: string | null;
+  /** "Receipt" | "Deposit" | "Repay" — the kind of document this row is. */
+  event: string | null;
   /** Line-items total before discount, in USD. */
   subtotal: number | null;
   discount: number | null;
@@ -210,7 +215,8 @@ export type Invoice = {
   paymentMethod: string | null;
   queueNumber: string | null;
   /** Whether the order has been prepared for collection. */
-  isReady: boolean;
+  /** null when the payload carries no readiness flag at all. */
+  isReady: boolean | null;
   note: string | null;
   branch: string | null;
   branchAddress: string | null;
@@ -224,6 +230,23 @@ export type History = {
 };
 
 // ─── Normalisers ─────────────────────────────────────────────────────────────
+
+/**
+ * A flag as this API sends them: true/1/"1"/"true"/"yes" mean set, the matching
+ * negatives mean unset, and anything absent returns null so the caller can tell
+ * "not ready" apart from "the payload never said".
+ */
+function toFlag(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y'].includes(v)) return true;
+    if (['0', 'false', 'no', 'n'].includes(v)) return false;
+  }
+  return null;
+}
 
 function firstString(...values: unknown[]): string | null {
   for (const v of values) {
@@ -424,9 +447,10 @@ export function normaliseInvoice(raw: RawInvoice, index: number): Invoice {
     // `transaction_date` is local store time and is what the receipt shows;
     // `created_at` is the UTC fallback.
     date: firstString(raw.transaction_date, raw.created_at, raw.date, raw.issued_at),
-    // `status` is a "1"/"0" row flag, so the badge uses `event` ("Receipt")
-    // and falls back to the payment status when a future payload sends one.
-    status: firstString(raw.event, raw.payment_status),
+    // The document kind — "Receipt", "Deposit" or "Repay". Named `event` after
+    // the API field: `status` on the raw row is a "1"/"0" flag, nothing a
+    // customer would recognise, so it is never surfaced.
+    event: firstString(raw.event, raw.payment_status),
     subtotal: money(raw.total_amount_usd, raw.total_amount),
     discount: money(raw.discount_amount),
     total: money(
@@ -442,7 +466,7 @@ export function normaliseInvoice(raw: RawInvoice, index: number): Invoice {
     exchangeRate: money(raw.exchange_rate),
     paymentMethod: firstString(raw.payment_method),
     queueNumber: firstString(raw.queue_number),
-    isReady: raw.is_ready === true,
+    isReady: toFlag(raw.is_ready),
     note: firstString(raw.note, raw.description),
     branch: nameOf(raw.branch, 'branch_name') ?? firstString(raw.branch_name),
     branchAddress: fieldOf(raw.branch, 'address'),

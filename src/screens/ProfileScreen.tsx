@@ -293,14 +293,6 @@ const ProfileScreen: React.FC = () => {
                 <ProfileErrorState onRetry={refetch} />
               ) : !isLoading ? (
                 <>
-                  {/* <ProfileHeader
-                    name={profile?.customer_name}
-                    subtitle={profile?.tier?.name}
-                    avatarUrl={profile?.avatar_url || ''}
-                    notificationCount={unreadCount}
-                    editLabel={t('Edit')}
-                    onEditPress={() => navigation.navigate('EditProfile')}
-                  /> */}
                   <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => navigation.navigate('PointMember')}
@@ -348,7 +340,6 @@ const ProfileScreen: React.FC = () => {
                     rightLabel={t('RightEye')}
                     leftLabel={t('LeftEye')}
                   />
-
                 </>
               ) : (
                 <>

@@ -69,6 +69,14 @@ export interface StoreLocation {
   lng: number;
   /** False when the branch has no coordinates — it cannot be mapped. */
   hasCoords: boolean;
+  /**
+   * The branch's own opening window, 'HH:mm', or null when the shop has not
+   * set hours. Kept alongside `weekdayText` because callers that need to
+   * compute against the hours (the appointment slot picker) should not have to
+   * parse the display strings back apart.
+   */
+  openTime: string | null;
+  closeTime: string | null;
   mapsLink: string | null;
   /** The branch's own logo. */
   photoUri: string | null;
@@ -145,6 +153,8 @@ export function mapBranch(branch: BranchResponse): StoreLocation {
     lat: lat ?? 0,
     lng: lng ?? 0,
     hasCoords: lat !== null && lng !== null,
+    openTime: branch.open_time || null,
+    closeTime: branch.close_time || null,
     mapsLink: branch.google_maps_link,
     photoUri: buildFileUrl(branch.logo),
     photos: toPhotos(branch.gallery),
