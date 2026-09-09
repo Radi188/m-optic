@@ -47,7 +47,7 @@ function formatMoney(value: number | null, currency: string): string | null {
 /** Maps a free-text status onto the palette's semantic colours. */
 function statusColors(status: string | null): { bg: string; fg: string } {
   const s = (status ?? '').toLowerCase();
-  if (/paid|complete|success/.test(s)) {
+  if (/paid|complete|success|receipt/.test(s)) {
     return { bg: Colors.successLight, fg: Colors.success };
   }
   if (/pending|partial|due/.test(s)) {
@@ -84,7 +84,6 @@ const RefractionCard: React.FC<{ item: Refraction; locale: string }> = ({
   return (
     <View style={styles.cardSpacer}>
       <CurrentPrescriptionCard
-        style={styles.refractionCard}
         title={item.seller ?? t('EyeExam')}
         rightLabel={t('RightEye')}
         leftLabel={t('LeftEye')}
@@ -102,24 +101,34 @@ const RefractionCard: React.FC<{ item: Refraction; locale: string }> = ({
   );
 };
 
-const InvoiceCard: React.FC<{ item: Invoice; locale: string }> = ({
-  item,
-  locale,
-}) => {
+const InvoiceCard: React.FC<{
+  item: Invoice;
+  locale: string;
+  onPress: () => void;
+}> = ({ item, locale, onPress }) => {
   const { t } = useTranslation();
   const date = formatDate(item.date, locale);
   const total = formatMoney(item.total, item.currency);
   const badge = statusColors(item.status);
 
+  // Two lines of the receipt is enough for a list row; the rest is on the
+  // detail screen, which the chevron leads to.
+  const preview = item.items.slice(0, 2);
+  const hidden = item.items.length - preview.length;
+
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
       <View style={styles.cardHeader}>
         <View style={styles.iconCircle}>
           <Ionicons name="receipt-outline" size={18} color={Colors.primary} />
         </View>
 
         <View style={styles.cardHeaderText}>
-          <AppText style={styles.cardTitle}>
+          <AppText style={styles.cardTitle} numberOfLines={1}>
             {item.number ? `#${item.number}` : t('Invoice')}
           </AppText>
           {date && <AppText style={styles.cardSubtitle}>{date}</AppText>}
@@ -134,7 +143,7 @@ const InvoiceCard: React.FC<{ item: Invoice; locale: string }> = ({
         )}
       </View>
 
-      {item.items.map(line => (
+      {preview.map(line => (
         <View key={line.id} style={styles.lineRow}>
           <AppText style={styles.lineName} numberOfLines={1}>
             {line.quantity ? `${line.quantity} × ${line.name}` : line.name}
@@ -147,6 +156,12 @@ const InvoiceCard: React.FC<{ item: Invoice; locale: string }> = ({
         </View>
       ))}
 
+      {hidden > 0 && (
+        <AppText style={styles.moreItems}>
+          {t('PlusMoreItems', { count: hidden })}
+        </AppText>
+      )}
+
       {total && (
         <View style={styles.totalRow}>
           <AppText style={styles.totalLabel}>{t('Total')}</AppText>
@@ -154,8 +169,17 @@ const InvoiceCard: React.FC<{ item: Invoice; locale: string }> = ({
         </View>
       )}
 
-      {item.branch && <AppText style={styles.footNote}>{item.branch}</AppText>}
-    </View>
+      <View style={styles.cardFooter}>
+        <AppText style={styles.footNote} numberOfLines={1}>
+          {[item.branch, item.paymentMethod].filter(Boolean).join('  ·  ')}
+        </AppText>
+
+        <View style={styles.viewDetails}>
+          <AppText style={styles.viewDetailsText}>{t('ViewDetails')}</AppText>
+          <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 };
 
@@ -291,7 +315,15 @@ const HistoryScreen: React.FC = () => {
           segment === 'refractions' ? (
             <RefractionCard item={item as Refraction} locale={locale} />
           ) : (
-            <InvoiceCard item={item as Invoice} locale={locale} />
+            <InvoiceCard
+              item={item as Invoice}
+              locale={locale}
+              onPress={() =>
+                navigation.navigate('InvoiceDetail', {
+                  invoice: item as Invoice,
+                })
+              }
+            />
           )
         }
         contentContainerStyle={[
@@ -387,16 +419,6 @@ const styles = StyleSheet.create({
 
   cardSpacer: { marginBottom: Spacing.md },
 
-  // The card's default beige is designed for the white profile canvas. Here
-  // the page itself is warm beige, so it needs the same white, lifted surface
-  // the invoice cards use — otherwise the two tabs don't read as siblings and
-  // the card all but disappears into the background.
-  refractionCard: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.gray200,
-    ...Shadow.sm,
-  },
-
   card: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius.lg,
@@ -441,10 +463,28 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
 
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
   footNote: {
+    flex: 1,
     fontSize: FontSize.xs,
     color: Colors.gray400,
-    marginTop: Spacing.sm,
+  },
+  viewDetails: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewDetailsText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  moreItems: {
+    fontSize: FontSize.xs,
+    color: Colors.gray400,
+    paddingVertical: 2,
   },
 
   lineRow: {

@@ -1,149 +1,144 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  ImageSourcePropType,
-} from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { FontSize, Spacing } from '../../../theme';
 import AppText from '../../AppText';
 
 type ProfilePointSectionProps = {
-  tierName?: string;
-  points?: number;
-  nextTier?: string;
-  remainingPoints?: number;
-  progress?: number;
+  tierName?: string | null;
+  points?: number | null;
+  nextTier?: string | null;
+  remainingPoints?: number | null;
+  progress?: number | null;
 };
 
 type TierTheme = {
-  cardBackground: string;
-  accentColor: string;
-  progressTrack: string;
-  cardImage: ImageSourcePropType;
+  /** Drives the medallion, the progress fill and the points figure. */
+  accent: string;
+  /** Page-level tint the block sits on — a wash, not a filled card. */
+  tint: string;
+  border: string;
+};
+
+/**
+ * Tier palette.
+ *
+ * Colour is the only thing that changes between tiers now: the block is a
+ * light wash of the tier's own hue rather than a saturated card carrying
+ * membership-card artwork, so it sits inside a screen of other content
+ * without competing with it.
+ */
+const TIER_THEMES: Record<string, TierTheme> = {
+  bronze: { accent: '#A96A3C', tint: '#FBF2EA', border: '#F0DFCE' },
+  silver: { accent: '#6E7378', tint: '#F3F4F6', border: '#E3E5E9' },
+  gold: { accent: '#A9762A', tint: '#FBF3E3', border: '#EFE0C2' },
+  platinum: { accent: '#55606E', tint: '#EFF2F6', border: '#DDE3EB' },
+  diamond: { accent: '#2F7FA8', tint: '#EAF4FA', border: '#CFE5F0' },
+};
+
+const NEUTRAL_THEME: TierTheme = {
+  accent: '#8A7468',
+  tint: '#F7F2EE',
+  border: '#EBE1D9',
+};
+
+const TIER_KEYS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'] as const;
+
+/** "M Optic Silver", "silver", "Silver Member" → "silver". */
+const tierKey = (tier?: string | null): string | null => {
+  const value = (tier ?? '').toLowerCase();
+  if (!value.trim()) return null;
+  return TIER_KEYS.find(key => value.includes(key)) ?? null;
 };
 
 const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
-  tierName = 'M Optic Gold',
-  points = 1250,
-  nextTier = 'Platinum',
-  remainingPoints = 750,
-  progress = 70,
+  tierName,
+  points,
+  nextTier,
+  remainingPoints,
+  progress,
 }) => {
   const { t, i18n } = useTranslation();
 
-  const normalizedTier = tierName.toLowerCase();
-  const normalizedNextTier = nextTier.toLowerCase();
+  const key = tierKey(tierName);
+  const theme = key ? TIER_THEMES[key] : NEUTRAL_THEME;
 
-  const isSilver = normalizedTier.includes('silver');
-
-  const getTranslatedTier = (tier: string): string => {
-    const normalizedValue = tier.toLowerCase();
-
-    if (normalizedValue.includes('silver')) {
-      return t('MembershipTiers.Silver');
-    }
-
-    if (normalizedValue.includes('gold')) {
-      return t('MembershipTiers.Gold');
-    }
-
-    if (normalizedValue.includes('platinum')) {
-      return t('MembershipTiers.Platinum');
-    }
-
-    return tier;
+  const getTranslatedTier = (tier?: string | null): string | null => {
+    const value = tierKey(tier);
+    if (!value) return tier?.trim() || null;
+    // Falls back to the tier's own name for any tier the copy deck has not
+    // been given a translation for yet.
+    return t(
+      `MembershipTiers.${value.charAt(0).toUpperCase()}${value.slice(1)}`,
+      { defaultValue: tier?.trim() ?? '' },
+    );
   };
 
-  const translatedTierName = normalizedTier.includes('m optic')
-    ? t('MOpticTier', {
-        tier: getTranslatedTier(tierName),
-      })
-    : getTranslatedTier(tierName);
+  const translatedTier = getTranslatedTier(tierName);
+  const translatedTierName = !translatedTier
+    ? t('Member')
+    : (tierName ?? '').toLowerCase().includes('m optic')
+    ? t('MOpticTier', { tier: translatedTier })
+    : translatedTier;
 
-  const translatedNextTier = getTranslatedTier(normalizedNextTier);
+  const translatedNextTier = getTranslatedTier(nextTier);
 
-  const tierTheme: TierTheme = isSilver
-    ? {
-        cardBackground: '#8C8F94',
-        accentColor: '#F1F3F5',
-        progressTrack: 'rgba(55,60,66,0.35)',
-        cardImage: require('../../../assets/images/silver_member.png'),
-      }
-    : {
-        cardBackground: '#8B5E3C',
-        accentColor: '#F6D48B',
-        progressTrack: 'rgba(50,30,18,0.35)',
-        cardImage: require('../../../assets/images/gold_member.png'),
-      };
+  const totalPoints = points ?? 0;
 
-  const safeProgress = Math.min(Math.max(progress, 0), 100);
+  // No next tier means the member is already at the top — the bar is full and
+  // there is no "n points away" line to show.
+  const isTopTier = !translatedNextTier;
+  const hasRemaining =
+    !isTopTier && remainingPoints !== null && remainingPoints !== undefined;
+
+  const safeProgress = isTopTier
+    ? 100
+    : Math.round(Math.min(Math.max(progress ?? 0, 0), 100));
 
   return (
     <View
       style={[
-        styles.card,
-        {
-          backgroundColor: tierTheme.cardBackground,
-        },
+        styles.block,
+        { backgroundColor: theme.tint, borderColor: theme.border },
       ]}
     >
-      <View style={styles.leftContent}>
-        <View style={styles.titleRow}>
-          <Ionicons
-            name="diamond-outline"
-            size={23}
-            color={tierTheme.accentColor}
-          />
-
-          <AppText style={styles.title}>{translatedTierName}</AppText>
+      <View style={styles.topRow}>
+        <View style={[styles.medallion, { backgroundColor: theme.accent }]}>
+          <Ionicons name="diamond" size={15} color="#FFFFFF" />
         </View>
 
-        <AppText style={styles.points}>
-          {t('PointsAmount', {
-            points: points.toLocaleString(i18n.language),
-          })}
+        <AppText style={styles.tierName} numberOfLines={1}>
+          {translatedTierName}
         </AppText>
 
-        <AppText style={styles.description}>
-          {t('PointsAwayFromTier', {
-            points: remainingPoints.toLocaleString(i18n.language),
-            tier: translatedNextTier,
-          })}
+        {/* The figure is the point of the block, so it anchors the right edge
+            rather than sitting in the middle of a stack. */}
+        <AppText style={[styles.points, { color: theme.accent }]}>
+          {totalPoints.toLocaleString(i18n.language)}
+          <AppText style={styles.pointsUnit}> {t('Pts')}</AppText>
         </AppText>
-
-        <View style={styles.progressRow}>
-          <View
-            style={[
-              styles.progressTrack,
-              {
-                backgroundColor: tierTheme.progressTrack,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${safeProgress}%`,
-                  backgroundColor: tierTheme.accentColor,
-                },
-              ]}
-            />
-          </View>
-
-          <AppText style={styles.progressText}>{safeProgress}%</AppText>
-        </View>
       </View>
 
-      <Image
-        source={tierTheme.cardImage}
-        style={styles.goldCardImage}
-        resizeMode="contain"
-      />
+      <View style={styles.track}>
+        <View
+          style={[
+            styles.fill,
+            { width: `${safeProgress}%`, backgroundColor: theme.accent },
+          ]}
+        />
+      </View>
+
+      <AppText style={styles.caption} numberOfLines={1}>
+        {hasRemaining
+          ? t('PointsAwayFromTier', {
+              points: (remainingPoints as number).toLocaleString(
+                i18n.language,
+              ),
+              tier: translatedNextTier,
+            })
+          : t('TopTierReached')}
+      </AppText>
     </View>
   );
 };
@@ -151,81 +146,65 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
 export default ProfilePointSection;
 
 const styles = StyleSheet.create({
-  card: {
-    marginTop: Spacing.lg,
-    borderRadius: 28,
-    padding: Spacing.lg,
-    minHeight: 150,
-    backgroundColor: '#8B5E3C',
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
+  // No shadow and a modest radius: this reads as a tinted band in the page,
+  // not another raised card stacked among the rest.
+  block: {
+    marginTop: Spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
 
-  leftContent: {
-    flex: 1,
-    paddingRight: Spacing.sm,
-    maxWidth: 220,
-  },
-
-  titleRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
 
-  title: {
-    fontSize: FontSize.lg,
-    fontWeight: '900',
-    color: Colors.white,
+  medallion: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  tierName: {
+    flex: 1,
+    fontSize: FontSize.md,
+    fontWeight: '800',
+    color: '#241812',
+    letterSpacing: -0.2,
   },
 
   points: {
-    marginTop: Spacing.md,
-    fontSize: FontSize.lg,
+    fontSize: 19,
     fontWeight: '900',
-    color: Colors.white,
+    letterSpacing: -0.4,
   },
 
-  description: {
-    marginTop: 4,
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.85)',
+  pointsUnit: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
   },
 
-  progressRow: {
-    marginTop: Spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-
-  progressTrack: {
-    flex: 1,
-    height: 10,
+  track: {
+    height: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(50,30,18,0.35)',
+    backgroundColor: 'rgba(36,24,18,0.08)',
     overflow: 'hidden',
+    marginTop: 12,
   },
 
-  progressFill: {
+  fill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#F6D48B',
   },
 
-  progressText: {
-    fontSize: FontSize.md,
-    fontWeight: '800',
-    color: Colors.white,
-  },
-
-  goldCardImage: {
-    position: 'absolute',
-    right: 8,
-    top: 35,
-    width: 150,
-    height: 105,
-    transform: [{ rotate: '2deg' }, { scale: 1.2 }],
+  caption: {
+    marginTop: 7,
+    fontSize: FontSize.xs,
+    color: '#7A6A60',
   },
 });

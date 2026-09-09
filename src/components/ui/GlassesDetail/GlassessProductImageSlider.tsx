@@ -14,6 +14,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors } from '../../../theme';
 import { useTranslation } from 'react-i18next';
 import AppText from '../../AppText';
+import AppImage from '../../AppImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -59,7 +60,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
         style={styles.slide}
         onPress={() => onPressImage?.(index)}
       >
-        <Image
+        <AppImage
           source={{ uri: item }}
           style={styles.image}
           resizeMode="contain"

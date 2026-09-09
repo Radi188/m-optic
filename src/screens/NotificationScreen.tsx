@@ -20,6 +20,7 @@ import AnnouncementSkeleton from '../components/ui/Loading/AnnouncementLoadingSk
 import Header from '../components/ui/Header/HeaderComponent';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 const getNotificationIcon = (title: string) => {
   const t = title.toLowerCase();
@@ -165,7 +166,7 @@ const NotificationListScreen = () => {
                     activeOpacity={0.86}
                   >
                     {item.banner_image ? (
-                      <Image
+                      <AppImage
                         source={{ uri: item.banner_image }}
                         style={styles.notificationImage}
                         resizeMode="cover"

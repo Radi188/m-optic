@@ -46,197 +46,6 @@ import AppText from '../components/AppText';
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
 
-const dummyHtml = `
-  <div>
-    <h2>Premium Eyewear Frame</h2>
-    <p>
-      This stylish eyewear frame is designed for everyday comfort and a modern look.
-      Made with durable materials, it offers a lightweight feel and a secure fit for daily wear.
-    </p>
-
-    <p>
-      The frame shape is ideal for both casual and professional use, making it a versatile
-      choice for different face shapes and personal styles.
-    </p>
-
-   <p>• Frame Type: Round Frame</p>
-    <p>• Brand: Ray-Ban</p>
-    <p>• Size: Medium</p>
-    <p>• Gender: Unisex</p>
-    <p>• Material: Lightweight acetate</p>
-
-    <p>
-      Available in multiple colors, this frame combines elegance, comfort, and durability
-      for a premium eyewear experience.
-    </p>
-  </div>
-`;
-
-// ─── Per-frame mock spec data ─────────────────────────────────────────────────
-
-const SPECS: Record<
-  string,
-  {
-    material: string;
-    lensType: string;
-    uv: string;
-    weight: string;
-    fit: string;
-    color: string;
-  }
-> = {
-  '1': {
-    material: 'Acetate',
-    lensType: 'CR-39 UV400',
-    uv: 'UV400',
-    weight: '22g',
-    fit: 'Medium',
-    color: 'Tortoise',
-  },
-  '2': {
-    material: 'Acetate',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '20g',
-    fit: 'Medium',
-    color: 'Black',
-  },
-  '3': {
-    material: 'Acetate + Metal',
-    lensType: 'CR-39 Polarized',
-    uv: 'UV400',
-    weight: '25g',
-    fit: 'Wide',
-    color: 'Havana',
-  },
-  '4': {
-    material: 'Titanium',
-    lensType: 'Polarized Glass',
-    uv: 'UV400',
-    weight: '15g',
-    fit: 'Medium',
-    color: 'Gold',
-  },
-  '5': {
-    material: 'Titanium',
-    lensType: 'Prizm Lens',
-    uv: 'UV400',
-    weight: '18g',
-    fit: 'Large',
-    color: 'Gunmetal',
-  },
-  '6': {
-    material: 'O-Matter Nylon',
-    lensType: 'Prizm Road',
-    uv: 'UV400',
-    weight: '26g',
-    fit: 'Large',
-    color: 'Matte Black',
-  },
-  '7': {
-    material: 'Acetate',
-    lensType: 'Blue-Light Filter',
-    uv: 'UV420',
-    weight: '21g',
-    fit: 'Slim',
-    color: 'Transparent',
-  },
-  '8': {
-    material: 'Acetate + Metal',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '28g',
-    fit: 'Wide',
-    color: 'Black',
-  },
-  '9': {
-    material: 'Acetate',
-    lensType: 'CR-39 Gradient',
-    uv: 'UV400',
-    weight: '24g',
-    fit: 'Large',
-    color: 'Rose',
-  },
-  '10': {
-    material: 'Acetate',
-    lensType: 'CR-39 Gradient',
-    uv: 'UV400',
-    weight: '23g',
-    fit: 'Medium',
-    color: 'Burgundy',
-  },
-  '11': {
-    material: 'Nylon',
-    lensType: 'Polarized',
-    uv: 'UV400',
-    weight: '19g',
-    fit: 'Sport',
-    color: 'Red',
-  },
-  '12': {
-    material: 'Acetate + Metal',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '22g',
-    fit: 'Medium',
-    color: 'Black',
-  },
-  '13': {
-    material: 'Acetate',
-    lensType: 'CR-39 Tinted',
-    uv: 'UV400',
-    weight: '27g',
-    fit: 'Large',
-    color: 'Gold',
-  },
-  '14': {
-    material: 'Acetate',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '24g',
-    fit: 'Medium',
-    color: 'Black',
-  },
-  '15': {
-    material: 'Metal',
-    lensType: 'CR-39 Gradient',
-    uv: 'UV400',
-    weight: '20g',
-    fit: 'Slim',
-    color: 'Gold',
-  },
-  '16': {
-    material: 'Acetate',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '26g',
-    fit: 'Wide',
-    color: 'Dark Havana',
-  },
-  '17': {
-    material: 'Acetate + Metal',
-    lensType: 'CR-39 Polarized',
-    uv: 'UV400',
-    weight: '28g',
-    fit: 'Wide',
-    color: 'Black',
-  },
-  '18': {
-    material: 'Titanium',
-    lensType: 'CR-39',
-    uv: 'UV400',
-    weight: '17g',
-    fit: 'Medium',
-    color: 'Silver',
-  },
-};
-
-const STOCK_COLORS: Record<string, string> = {
-  'In Stock': Colors.success,
-  'Low Stock': Colors.warning,
-  'Out of Stock': Colors.error,
-};
-
 // ─── Full-screen viewer modal ─────────────────────────────────────────────────
 
 type ViewMode = '3d' | 'tryon';
@@ -431,7 +240,7 @@ const GlassDetailScreen: React.FC = () => {
 
   const handleOpenTelegram = async () => {
     if (!inquiryLink) {
-      Alert.alert('Unavailable', 'Telegram link is not available.');
+      Alert.alert(t('Unavailable'), t('TelegramLinkUnavailable'));
       return;
     }
 
@@ -441,10 +250,10 @@ const GlassDetailScreen: React.FC = () => {
       if (supported) {
         await Linking.openURL(inquiryLink);
       } else {
-        Alert.alert('Error', 'Cannot open Telegram link.');
+        Alert.alert(t('Error'), t('CannotOpenTelegramLink'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to open Telegram link.');
+      Alert.alert(t('Error'), t('FailedToOpenTelegramLink'));
     }
   };
   if (loading) {
@@ -661,7 +470,7 @@ const GlassDetailScreen: React.FC = () => {
           size={frameSizeName(measurements) || '—'}
           gender={product?.gender || 'Unisex'}
           frameTypeName={product?.frame_shape?.name || '—'}
-          descriptionHtml={product?.description || dummyHtml}
+          descriptionHtml={product?.description ?? null}
           measurementLabel={measurementLabel(measurements)}
           materials={product?.materials?.map(m => m.name).join(', ') || null}
           colorHex={selectedColor?.hex || product?.color?.hex_code || '#D1D5DB'}

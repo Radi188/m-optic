@@ -20,10 +20,17 @@ const authPersistConfig = {
   whitelist: ['user', 'token', 'isAuthenticated'],
 };
 
+// Version 1 drops the seeded demo frames. Emptying the initial state is not
+// enough on its own: installs that ran an earlier build already have those
+// eighteen rows in AsyncStorage, and redux-persist would rehydrate them over
+// the empty list.
 const glassPersistConfig = {
   key: 'glass',
+  version: 1,
   storage: AsyncStorage,
   whitelist: ['items'],
+  migrate: async (state: any) =>
+    state ? { ...state, items: [] } : state,
 };
 
 // ─── Root reducer ─────────────────────────────────────────────────────────────

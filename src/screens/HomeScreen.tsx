@@ -42,11 +42,13 @@ import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
 import { useHome } from '../hook/useHome';
 import HeroSlider from '../components/ui/Home/HeroSlider';
+import HomeHeader from '../components/ui/Home/HomeHeader';
 import HomeSkeleton from '../components/ui/Loading/HomeLoadingScreen';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 // ─── Promo Modal ─────────────────────────────────────────────────────────────
 const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -104,7 +106,7 @@ const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         {/* Header — real image base + gradient overlay */}
         <View style={promoStyles.header}>
           {/* Real product image — base layer */}
-          <Image
+          <AppImage
             source={{
               uri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=800&q=85',
             }}
@@ -342,56 +344,6 @@ const promoStyles = StyleSheet.create({
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // ─── Hero Slider data ────────────────────────────────────────────────────────
-type Slide = {
-  id: string;
-  imageUri: string;
-  title: string;
-  subtitle: string;
-  cta: string;
-};
-
-const SLIDES: Slide[] = [
-  {
-    id: 's1',
-    imageUri:
-      'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=800&q=85',
-    title: 'New Spring\nCollection',
-    subtitle: 'Fresh frames for the season — in store now',
-    cta: 'Explore',
-  },
-  {
-    id: 's2',
-    imageUri:
-      'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&w=800&q=85',
-    title: 'Up to 30%\nOff Selected',
-    subtitle: 'Limited-time deals on premium eyewear brands',
-    cta: 'Shop Deals',
-  },
-  {
-    id: 's3',
-    imageUri:
-      'https://images.unsplash.com/photo-1577803645773-f96470509666?auto=format&fit=crop&w=800&q=85',
-    title: 'Try Before\nYou Buy',
-    subtitle: 'Virtual try-on available in our AR catalog',
-    cta: 'Try On',
-  },
-];
-
-// ─── HeroSlider ──────────────────────────────────────────────────────────────
-
-// ─── Best Sellers data ───────────────────────────────────────────────────────
-
-// ─── Promotions data ─────────────────────────────────────────────────────────
-type Promo = {
-  id: string;
-  title: string;
-  description: string;
-  discount: string;
-  validUntil: string;
-  accent: string;
-  imageUri: string;
-};
-
 // ─── Announcements data ──────────────────────────────────────────────────────
 type Announcement = {
   id: string;
@@ -440,6 +392,53 @@ type GlassScreenNav = CompositeNavigationProp<
 >;
 
 // ─── HomeScreen ──────────────────────────────────────────────────────────────
+const SCAN_GOLD = '#E3B778';
+
+/**
+ * One of the two Scan & Try On entry points.
+ *
+ * Dark and gold, matching the prescription and membership cards — these are
+ * the app's signature features, and a pair of plain white tiles inside a
+ * tinted panel read as a form, not as something worth trying.
+ */
+const ScanTile: React.FC<{
+  icon: string;
+  title: string;
+  subtitle: string;
+  cta: string;
+  onPress: () => void;
+}> = ({ icon, title, subtitle, cta, onPress }) => (
+  <TouchableOpacity
+    style={styles.scanTile}
+    activeOpacity={0.9}
+    onPress={onPress}
+  >
+    <LinearGradient
+      colors={['#5A4232', '#3A2A20']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFillObject}
+    />
+    <View pointerEvents="none" style={styles.scanTileSheen} />
+
+    <View style={styles.scanTileIcon}>
+      <Ionicons name={icon as any} size={20} color={SCAN_GOLD} />
+    </View>
+
+    <AppText style={styles.scanTileTitle} numberOfLines={2}>
+      {title}
+    </AppText>
+    <AppText style={styles.scanTileSub} numberOfLines={3}>
+      {subtitle}
+    </AppText>
+
+    <View style={styles.scanTileCta}>
+      <AppText style={styles.scanTileCtaText}>{cta}</AppText>
+      <Ionicons name="arrow-forward" size={13} color={SCAN_GOLD} />
+    </View>
+  </TouchableOpacity>
+);
+
 const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
@@ -476,6 +475,8 @@ const HomeScreen: React.FC = () => {
     <View style={styles.root}>
       {/* {showPromo && <PromoModal onClose={() => setShowPromo(false)} />} */}
 
+      <HomeHeader signinLabel={t('SignIn')} />
+
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -491,69 +492,35 @@ const HomeScreen: React.FC = () => {
           />
         }
       >
-        <HeroSlider slides={data?.banners || []} signinLabel={t('SignIn')} />
+        <HeroSlider slides={data?.banners || []} />
 
         {/* Scan & Try On — two entry points, each opening straight into its
-            own instructions. */}
-        <View style={styles.scanCard}>
-          <AppText style={styles.scanCardTitle}>{t('homeScanTitle')}</AppText>
+            own instructions. The pair used to sit inside a tinted card, so
+            two white tiles were nested in a third surface; the heading now
+            sits on the page and the tiles are the only cards. */}
+        <View style={[styles.pad, styles.scanHead]}>
+          <AppText style={styles.sectionTitle}>{t('homeScanTitle')}</AppText>
           <AppText style={styles.scanCardSubtitle}>
             {t('homeScanSubtitle')}
           </AppText>
+        </View>
 
-          <View style={styles.scanTileRow}>
-            <TouchableOpacity
-              style={styles.scanTile}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Scan', { mode: 'face' })}
-            >
-              <View style={styles.scanTileIcon}>
-                <Ionicons name="scan-outline" size={24} color={Colors.white} />
-              </View>
+        <View style={[styles.pad, styles.scanTileRow]}>
+          <ScanTile
+            icon="scan-outline"
+            title={t('FaceDetection')}
+            subtitle={t('FaceDetectionSub')}
+            cta={t('Start')}
+            onPress={() => navigation.navigate('Scan', { mode: 'face' })}
+          />
 
-              <AppText style={styles.scanTileTitle} numberOfLines={2}>
-                {t('FaceDetection')}
-              </AppText>
-              <AppText style={styles.scanTileSub} numberOfLines={3}>
-                {t('FaceDetectionSub')}
-              </AppText>
-
-              <View style={styles.scanTileCta}>
-                <AppText style={styles.scanTileCtaText}>{t('Start')}</AppText>
-                <Ionicons
-                  name="arrow-forward"
-                  size={14}
-                  color={Colors.primary}
-                />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.scanTile}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Scan', { mode: 'refraction' })}
-            >
-              <View style={styles.scanTileIcon}>
-                <Ionicons name="eye-outline" size={24} color={Colors.white} />
-              </View>
-
-              <AppText style={styles.scanTileTitle} numberOfLines={2}>
-                {t('EyeTestExam')}
-              </AppText>
-              <AppText style={styles.scanTileSub} numberOfLines={3}>
-                {t('EyeTestExamSub')}
-              </AppText>
-
-              <View style={styles.scanTileCta}>
-                <AppText style={styles.scanTileCtaText}>{t('Start')}</AppText>
-                <Ionicons
-                  name="arrow-forward"
-                  size={14}
-                  color={Colors.primary}
-                />
-              </View>
-            </TouchableOpacity>
-          </View>
+          <ScanTile
+            icon="eye-outline"
+            title={t('EyeTestExam')}
+            subtitle={t('EyeTestExamSub')}
+            cta={t('Start')}
+            onPress={() => navigation.navigate('Scan', { mode: 'refraction' })}
+          />
         </View>
 
         <View
@@ -586,13 +553,21 @@ const HomeScreen: React.FC = () => {
                 borderRadius={BorderRadius.lg}
                 style={{ overflow: 'hidden' }}
               >
-                <View style={{ height: 120, width: '100%' }}>
-                  <Image
+                {/* `cover` cropped the frame out of shot: product shots are
+                    eyewear centred on a plain background, so filling a 160x120
+                    box means cutting the temples off. `contain` on a light
+                    tile shows the whole frame, which is what the rest of the
+                    app's product cards do. */}
+                <View style={styles.bsImageWrap}>
+                  <AppImage
                     source={{ uri: item.image }}
-                    style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
+                    style={styles.bsImage}
+                    resizeMode="contain"
                   />
-                  <View style={StyleSheet.absoluteFillObject} />
+
+                  <View style={styles.rankBadge}>
+                    <AppText style={styles.rankText}>#{i + 1}</AppText>
+                  </View>
                 </View>
 
                 <View style={{ padding: Spacing.sm + 2, gap: 3 }}>
@@ -657,27 +632,15 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: Spacing.lg },
 
   // Scan & Try On card
-  scanCard: {
+  scanHead: {
     marginTop: Spacing.lg,
-    marginHorizontal: Spacing.md,
-    padding: Spacing.md,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.primary + '30',
-  },
-  scanCardTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '800',
-    color: Colors.black,
-    letterSpacing: -0.2,
+    marginBottom: Spacing.sm,
   },
   scanCardSubtitle: {
     fontSize: FontSize.xs,
     color: Colors.gray600,
     fontWeight: '500',
     marginTop: 2,
-    marginBottom: Spacing.md,
   },
   scanTileRow: {
     flexDirection: 'row',
@@ -686,32 +649,51 @@ const styles = StyleSheet.create({
   // Equal halves; minHeight keeps the pair level when one label wraps.
   scanTile: {
     flex: 1,
-    minHeight: 172,
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    ...Shadow.sm,
+    minHeight: 176,
+    borderRadius: 20,
+    padding: 14,
+    overflow: 'hidden',
+    backgroundColor: '#3A2A20',
+    borderWidth: 1,
+    borderColor: 'rgba(227,183,120,0.16)',
+    shadowColor: '#2A160A',
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  scanTileSheen: {
+    position: 'absolute',
+    top: -110,
+    right: -80,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: 'rgba(255,226,182,0.10)',
+    transform: [{ rotate: '18deg' }],
   },
   scanTileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(227,183,120,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(227,183,120,0.24)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
   scanTileTitle: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.black,
+    fontSize: FontSize.sm,
+    fontWeight: '900',
+    color: Colors.white,
     letterSpacing: -0.1,
   },
   scanTileSub: {
-    fontSize: FontSize.xs,
-    color: Colors.gray500,
+    fontSize: 11.5,
+    color: 'rgba(255,255,255,0.6)',
     fontWeight: '500',
-    marginTop: 3,
+    marginTop: 4,
     lineHeight: 16,
   },
   scanTileCta: {
@@ -723,8 +705,9 @@ const styles = StyleSheet.create({
   },
   scanTileCtaText: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontWeight: '900',
+    color: SCAN_GOLD,
+    letterSpacing: 0.3,
   },
 
   // Section headers
@@ -743,6 +726,18 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
 
   // Best Sellers
+  bsImageWrap: {
+    height: 132,
+    width: '100%',
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  bsImage: {
+    width: '100%',
+    height: '100%',
+  },
   rankBadge: {
     position: 'absolute',
     top: Spacing.sm,

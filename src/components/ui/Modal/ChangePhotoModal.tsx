@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../../../theme';
 import AppText from '../../AppText';
 
@@ -32,6 +33,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
   onImageSelected,
   onRemovePhoto,
 }) => {
+  const { t } = useTranslation();
   const handleSelectedImage = (image: any) => {
     const selectedImage: SelectedProfileImage = {
       uri: image.path,
@@ -57,7 +59,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
       handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Camera Error', 'Unable to open camera.');
+        Alert.alert(t('CameraError'), t('UnableToOpenCamera'));
       }
     }
   };
@@ -76,7 +78,7 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
       handleSelectedImage(image);
     } catch (error: any) {
       if (error?.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Gallery Error', 'Unable to open gallery.');
+        Alert.alert(t('GalleryError'), t('UnableToOpenGallery'));
       }
     }
   };

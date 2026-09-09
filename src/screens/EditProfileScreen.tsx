@@ -15,14 +15,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import EditProfileSkeleton from '../components/ui/Loading/EditProfileLoadingScreen';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing } from '../theme';
 import ChangePhotoModal, {
   SelectedProfileImage,
 } from '../components/ui/Modal/ChangePhotoModal';
 import { useUserProfile } from '../hook/useUserProfile';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 const EditProfileScreen = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
 
   const {
@@ -43,7 +46,7 @@ const EditProfileScreen = () => {
       setLocalAvatarUrl(image.uri);
       await uploadAvatar(image);
     } catch {
-      Alert.alert('Upload Error', 'Unable to update profile photo.');
+      Alert.alert(t('UploadError'), t('UnableToUpdatePhoto'));
     }
   };
 
@@ -147,7 +150,7 @@ const EditProfileScreen = () => {
             >
               <View style={styles.avatarWrap}>
                 {displayAvatar ? (
-                  <Image
+                  <AppImage
                     source={{ uri: displayAvatar }}
                     style={styles.avatar}
                   />

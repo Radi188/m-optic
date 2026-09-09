@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   RefreshControl,
   SafeAreaView,
@@ -13,19 +15,38 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '../theme';
 import { useReward } from '../hook/useReward';
-import { RewardItem } from '../types/reward';
+import {
+  redeemStatusOf,
+  rewardImageUrl,
+  RewardItem,
+} from '../types/reward';
+import type { RedeemHistoryItem, RedeemStatus } from '../types/reward';
 import SkeletonRewardScreen from '../components/ui/Loading/RewardLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import Header from '../components/ui/Header/HeaderComponent';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 type RewardScreenProps = {
   navigation?: any;
 };
 
 const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
-  const { t } = useTranslation();
-  const { rewardsData, isLoading, isRefreshing, error, refetch } = useReward();
+  const { t, i18n } = useTranslation();
+  const {
+    rewardsData,
+    isLoading,
+    isRefreshing,
+    error,
+    refetch,
+    redeemingId,
+    redeem,
+  } = useReward();
+
+  const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
+
+  const rewards = rewardsData?.rewards ?? [];
+  const history = rewardsData?.redeem_history ?? [];
 
   const handleBack = () => {
     if (navigation?.canGoBack?.()) {
@@ -33,12 +54,50 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
     }
   };
 
+  /**
+   * `can_redeem` is the server's own verdict and is authoritative; the balance
+   * comparison is only a fallback for a payload that omits it. `available` is
+   * the older spelling.
+   */
+  const canRedeemReward = (reward: RewardItem, balance: number): boolean => {
+    if (typeof reward.can_redeem === 'boolean') return reward.can_redeem;
+    if (typeof reward.available === 'boolean') return reward.available;
+    return balance >= reward.points_required;
+  };
+
+  /**
+   * Spending points is not undoable, so it takes a confirmation naming the
+   * reward and its cost before the request goes out.
+   */
   const handleRedeem = (userPoint: number, reward: RewardItem) => {
-    const canRedeem = userPoint >= reward.points_required && reward.available;
+    if (!canRedeemReward(reward, userPoint) || redeemingId !== null) return;
 
-    if (!canRedeem) return;
+    const name = reward.name ?? reward.title ?? t('Reward');
 
-    console.log('Redeem reward:', reward);
+    Alert.alert(
+      t('RedeemReward'),
+      t('RedeemConfirm', {
+        reward: name,
+        points: reward.points_required.toLocaleString(locale),
+      }),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Redeem'),
+          onPress: async () => {
+            const result = await redeem(reward.id);
+
+            Alert.alert(
+              result.ok ? t('RedeemSuccess') : t('RedeemFailed'),
+              result.message ??
+                (result.ok
+                  ? t('RedeemSuccessMessage', { reward: name })
+                  : t('SomethingWentWrongTryAgain')),
+            );
+          },
+        },
+      ],
+    );
   };
 
   if (isLoading) {
@@ -73,12 +132,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
 
           <AppText style={styles.headerTitle}>{t('Rewards')}</AppText>
 
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={[styles.headerButton, styles.headerRightButton]}
-          >
-            <Ionicons name="time-outline" size={22} color="#241812" />
-          </TouchableOpacity>
+          <View style={[styles.headerButton, styles.headerButtonPlaceholder]} />
         </View>
 
         <ScrollView
@@ -99,7 +153,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
                 {t('AvailablePoints')}
               </AppText>
               <AppText style={styles.balancePoint}>
-                {rewardsData?.available_points.toLocaleString()}
+                {(rewardsData?.available_points ?? 0).toLocaleString(locale)}
               </AppText>
               <AppText style={styles.balanceSubtitle}>
                 {t('RedeemPointsSubtitle')}
@@ -125,7 +179,7 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             </AppText>
           </View>
 
-          {rewardsData?.rewards?.length > 0 && (
+          {rewards.length > 0 && (
             <View style={styles.sectionHeader}>
               <AppText style={styles.sectionTitle}>
                 {t('AvailableRewards')}
@@ -134,148 +188,175 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
             </View>
           )}
 
-          {rewardsData?.rewards.map(reward => {
-            const canRedeem =
-              rewardsData.available_points >= reward.points_required &&
-              reward.available;
+          {rewards.map(reward => {
+            const canRedeem = canRedeemReward(
+              reward,
+              rewardsData.available_points,
+            );
 
+            // The API sends the shortfall itself; computing it locally is the
+            // fallback, floored so it never reads as a negative.
             const pointsLeft =
-              reward.points_required - rewardsData.available_points;
+              reward.points_needed ??
+              Math.max(
+                reward.points_required - rewardsData.available_points,
+                0,
+              );
+
+            const isRedeeming = redeemingId === reward.id;
+            const isBusy = redeemingId !== null;
+
+            const image = rewardImageUrl(reward.image ?? reward.image_url);
+            const name = reward.name ?? reward.title ?? '';
+            const badge = reward.badge ?? reward.tag;
 
             return (
               <TouchableOpacity
                 key={reward.id}
                 activeOpacity={0.82}
+                disabled={!canRedeem || isBusy}
                 style={[
                   styles.rewardCard,
                   !canRedeem && styles.rewardCardDisabled,
+                  isBusy && !isRedeeming && styles.rewardCardBusy,
                 ]}
                 onPress={() =>
                   handleRedeem(rewardsData.available_points, reward)
                 }
               >
-                <View style={styles.rewardTopRow}>
-                  <View
-                    style={[
-                      styles.rewardImageBox,
-                      !canRedeem && styles.rewardImageBoxDisabled,
-                    ]}
-                  >
-                    {reward.image_url ? (
-                      <Image
-                        source={{ uri: reward.image_url }}
-                        style={[
-                          styles.rewardImage,
-                          !canRedeem && styles.rewardImageDisabled,
-                        ]}
-                      />
-                    ) : (
-                      <Ionicons
-                        name="gift-outline"
-                        size={24}
-                        color={canRedeem ? '#9B6A3D' : '#AFA6A0'}
-                      />
-                    )}
-                  </View>
-
-                  <View style={styles.rewardContent}>
-                    <View style={styles.rewardTitleRow}>
-                      <AppText
-                        style={[
-                          styles.rewardTitle,
-                          !canRedeem && styles.rewardTitleDisabled,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {reward.title}
-                      </AppText>
-
-                      {reward.tag && canRedeem ? (
-                        <View style={styles.rewardTag}>
-                          <AppText style={styles.rewardTagText}>
-                            {reward.tag}
-                          </AppText>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <AppText
-                      style={[
-                        styles.rewardSubtitle,
-                        !canRedeem && styles.rewardSubtitleDisabled,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {reward.description}
-                    </AppText>
-                  </View>
+                <View
+                  style={[
+                    styles.rewardImageBox,
+                    !canRedeem && styles.rewardImageBoxDisabled,
+                  ]}
+                >
+                  {image ? (
+                    <AppImage
+                      source={{ uri: image }}
+                      resizeMode="contain"
+                      style={styles.rewardImage}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="gift-outline"
+                      size={22}
+                      color={canRedeem ? '#9B6A3D' : '#AFA6A0'}
+                    />
+                  )}
                 </View>
 
-                <View style={styles.rewardBottomRow}>
-                  <View style={styles.pointPill}>
+                <View style={styles.rewardContent}>
+                  <View style={styles.rewardTitleRow}>
+                    <AppText style={styles.rewardTitle} numberOfLines={1}>
+                      {name}
+                    </AppText>
+
+                    {/* The badge carries its own colour from the API; the
+                        beige default is used when none is supplied. */}
+                    {badge ? (
+                      <View
+                        style={[
+                          styles.rewardTag,
+                          !!reward.badge_color && {
+                            backgroundColor: reward.badge_color,
+                            borderColor: reward.badge_color,
+                          },
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.rewardTagText,
+                            !!reward.badge_color && styles.rewardTagTextOnFill,
+                          ]}
+                        >
+                          {badge}
+                        </AppText>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Cost and shortfall share one line — the card no longer
+                      needs a second row of its own for them. */}
+                  <View style={styles.rewardMetaRow}>
                     <Ionicons
-                      name="diamond-outline"
-                      size={14}
-                      color={canRedeem ? '#9B6A3D' : '#9B928B'}
+                      name="diamond"
+                      size={11}
+                      color={canRedeem ? '#9B6A3D' : '#A79C95'}
                     />
                     <AppText
                       style={[
-                        styles.pointPillText,
-                        !canRedeem && styles.pointPillTextDisabled,
+                        styles.rewardMeta,
+                        !canRedeem && styles.rewardMetaDisabled,
                       ]}
+                      numberOfLines={1}
                     >
-                      {reward.points_required.toLocaleString()} {t('Pts')}
+                      {reward.points_required.toLocaleString(locale)} {t('Pts')}
+                      {!canRedeem && pointsLeft > 0
+                        ? `  ·  ${t('NeedPoints', {
+                            points: pointsLeft.toLocaleString(locale),
+                          })}`
+                        : ''}
                     </AppText>
                   </View>
-
-                  {canRedeem ? (
-                    <View style={styles.redeemButton}>
-                      <AppText style={styles.redeemButtonText}>
-                        {t('Redeem')}
-                      </AppText>
-                    </View>
-                  ) : (
-                    <View style={styles.lockedButton}>
-                      <Ionicons
-                        name="lock-closed-outline"
-                        size={13}
-                        color="#8B7C72"
-                      />
-                      <AppText style={styles.lockedButtonText}>
-                        {t('NeedPoints', {
-                          points: pointsLeft.toLocaleString(),
-                        })}
-                      </AppText>
-                    </View>
-                  )}
                 </View>
+
+                {isRedeeming ? (
+                  <View style={styles.redeemButton}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
+                ) : canRedeem ? (
+                  <View style={styles.redeemButton}>
+                    <AppText style={styles.redeemButtonText}>
+                      {t('Redeem')}
+                    </AppText>
+                  </View>
+                ) : (
+                  <View style={styles.lockedButton}>
+                    <Ionicons
+                      name="lock-closed"
+                      size={13}
+                      color="#A79C95"
+                    />
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
 
           <View style={styles.sectionHeader}>
             <AppText style={styles.sectionTitle}>{t('RedeemHistory')}</AppText>
-
-            <TouchableOpacity activeOpacity={0.75} style={styles.viewAllButton}>
-              <AppText style={styles.viewAllText}>{t('ViewAll')}</AppText>
-              <Ionicons name="chevron-forward" size={18} color="#9B6A3D" />
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.historyCard}>
-            <View style={styles.emptyHistoryIcon}>
-              <Ionicons name="receipt-outline" size={24} color="#9B6A3D" />
+          {/* This block used to render the empty state unconditionally, so a
+              redemption never appeared once the backend recorded one. */}
+          {history.length > 0 ? (
+            <View style={styles.historyListCard}>
+              {history.map((item, index) => (
+                <HistoryRow
+                  key={item.id ?? index}
+                  item={item}
+                  rewards={rewards}
+                  locale={locale}
+                  isLast={index === history.length - 1}
+                />
+              ))}
             </View>
+          ) : (
+            <View style={styles.historyCard}>
+              <View style={styles.emptyHistoryIcon}>
+                <Ionicons name="receipt-outline" size={24} color="#9B6A3D" />
+              </View>
 
-            <View style={styles.historyTextBox}>
-              <AppText style={styles.historyTitle}>
-                {t('NoRewardsRedeemedYet')}
-              </AppText>
-              <AppText style={styles.historySubtitle}>
-                {t('RedeemedRewardsAppearHere')}
-              </AppText>
+              <View style={styles.historyTextBox}>
+                <AppText style={styles.historyTitle}>
+                  {t('NoRewardsRedeemedYet')}
+                </AppText>
+                <AppText style={styles.historySubtitle}>
+                  {t('RedeemedRewardsAppearHere')}
+                </AppText>
+              </View>
             </View>
-          </View>
+          )}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -283,6 +364,117 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
 };
 
 export default RewardScreen;
+
+
+/**
+ * One past redemption.
+ *
+ * The history row carries the item the customer redeemed — its picture and
+ * name — because "-10 pts" on its own does not tell them what to collect. The
+ * endpoint may not repeat the artwork on a history row, so it is looked up in
+ * the rewards catalogue by `reward_id` when absent.
+ */
+const HistoryRow: React.FC<{
+  item: RedeemHistoryItem;
+  rewards: RewardItem[];
+  locale: string;
+  isLast: boolean;
+}> = ({ item, rewards, locale, isLast }) => {
+  const { t } = useTranslation();
+
+  const rewardId = item.loyalty_reward_id ?? item.reward_id ?? item.reward?.id;
+  const source = rewards.find(reward => reward.id === rewardId);
+
+  // `reward.image` is a bare storage path here, unlike the catalogue's
+  // absolute URL — both go through the same resolver.
+  const image = rewardImageUrl(
+    item.reward?.image ?? item.image ?? source?.image ?? source?.image_url,
+  );
+  const name =
+    item.reward?.name ??
+    item.name ??
+    item.title ??
+    source?.name ??
+    source?.title ??
+    t('Reward');
+
+  const status = redeemStatusOf(item);
+  const code = item.code ?? item.redeem_code;
+  const date = formatDate(item.redeemed_at ?? item.created_at, locale);
+
+  return (
+    <View style={[styles.historyRow, !isLast && styles.historyDivider]}>
+      <View style={styles.historyIconBox}>
+        {image ? (
+          <AppImage
+            source={{ uri: image }}
+            resizeMode="contain"
+            style={styles.historyImage}
+          />
+        ) : (
+          <Ionicons name="gift-outline" size={18} color="#9B6A3D" />
+        )}
+      </View>
+
+      <View style={styles.historyTextBox}>
+        <AppText style={styles.historyTitle} numberOfLines={1}>
+          {name}
+        </AppText>
+
+        <AppText style={styles.historySubtitle} numberOfLines={1}>
+          {[date, code ? `#${code}` : null].filter(Boolean).join('  ·  ')}
+        </AppText>
+
+        <StatusPill status={status} />
+      </View>
+
+      <AppText style={styles.historyPoints}>
+        -{(item.points_used ?? item.points ?? 0).toLocaleString(locale)}{' '}
+        {t('Pts')}
+      </AppText>
+    </View>
+  );
+};
+
+const StatusPill: React.FC<{ status: RedeemStatus }> = ({ status }) => {
+  const { t } = useTranslation();
+
+  // Pending is the state that needs an action from the customer, so it is the
+  // one that carries colour; collected is settled and stays quiet.
+  const theme =
+    status === 'collected'
+      ? { bg: '#E7F6EE', fg: '#1F8A54', icon: 'checkmark-circle' }
+      : status === 'cancelled'
+      ? { bg: '#F3F0EE', fg: '#8B7C72', icon: 'close-circle' }
+      : { bg: '#FFF3D9', fg: '#A16A26', icon: 'time' };
+
+  const label =
+    status === 'collected'
+      ? t('Collected')
+      : status === 'cancelled'
+      ? t('Cancelled')
+      : t('AwaitingCollection');
+
+  return (
+    <View style={[styles.statusPill, { backgroundColor: theme.bg }]}>
+      <Ionicons name={theme.icon as any} size={11} color={theme.fg} />
+      <AppText style={[styles.statusPillText, { color: theme.fg }]}>
+        {label}
+      </AppText>
+    </View>
+  );
+};
+
+const formatDate = (iso?: string | null, locale = 'en-GB'): string | null => {
+  if (!iso) return null;
+  const date = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+};
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -457,86 +649,96 @@ const styles = StyleSheet.create({
     color: '#9B6A3D',
   },
 
+  // One compact row: thumbnail, name + cost, action. The card used to stack a
+  // 62pt image block over a separate pill/button row, which made every reward
+  // ~150pt tall for two short lines of text.
   rewardCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 26,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#EFE5DD',
-    shadowColor: '#2A160A',
-    shadowOpacity: 0.045,
-    shadowRadius: 14,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    elevation: 2,
-  },
-
-  rewardCardDisabled: {
-    backgroundColor: '#FFFCFA',
-    opacity: 0.9,
-  },
-
-  rewardTopRow: {
+    borderColor: '#F0E8E2',
     flexDirection: 'row',
     alignItems: 'center',
   },
 
+  // Locked rewards are marked by the lock and the muted cost line, not by
+  // fading the whole card — washing out the artwork read as a blurry image.
+  rewardCardDisabled: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  // Other cards dim while one redemption is in flight, so it is clear the
+  // list is momentarily locked rather than unresponsive.
+  rewardCardBusy: {
+    opacity: 0.5,
+  },
+
   rewardImageBox: {
-    width: 62,
-    height: 62,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: '#FBF1E8',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
     overflow: 'hidden',
   },
 
   rewardImageBoxDisabled: {
-    backgroundColor: '#F3F0EE',
+    backgroundColor: '#F5F1EE',
   },
 
   rewardImage: {
-    width: 62,
-    height: 62,
-    resizeMode: 'cover',
-  },
-
-  rewardImageDisabled: {
-    opacity: 0.45,
+    width: 38,
+    height: 38,
   },
 
   rewardContent: {
     flex: 1,
+    marginRight: 10,
   },
 
   rewardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
   },
 
   rewardTitle: {
     flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: '#241812',
     letterSpacing: -0.2,
     marginRight: 8,
   },
 
-  rewardTitleDisabled: {
-    color: '#7F7771',
+  rewardMetaRow: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  rewardMeta: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9B6A3D',
+  },
+
+  rewardMetaDisabled: {
+    fontWeight: '600',
+    color: '#A79C95',
   },
 
   rewardTag: {
     backgroundColor: '#FFF3D9',
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: '#F0D49D',
   },
@@ -547,74 +749,34 @@ const styles = StyleSheet.create({
     color: '#A16A26',
   },
 
-  rewardSubtitle: {
-    marginTop: 5,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#8B7C72',
-  },
-
-  rewardSubtitleDisabled: {
-    color: '#A39B95',
-  },
-
-  rewardBottomRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  pointPill: {
-    height: 34,
-    borderRadius: 17,
-    paddingHorizontal: 11,
-    backgroundColor: '#FAF1E9',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  pointPillText: {
-    marginLeft: 5,
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#9B6A3D',
-  },
-
-  pointPillTextDisabled: {
-    color: '#8B7C72',
+  // When the API supplies `badge_color` the pill is filled with it, so the
+  // label has to flip to white to stay legible.
+  rewardTagTextOnFill: {
+    color: '#FFFFFF',
   },
 
   redeemButton: {
-    height: 38,
-    borderRadius: 19,
-    paddingHorizontal: 18,
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   redeemButtonText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '900',
     color: '#FFFFFF',
   },
 
   lockedButton: {
-    height: 38,
-    borderRadius: 19,
-    paddingHorizontal: 13,
-    backgroundColor: '#F5EFEB',
-    flexDirection: 'row',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F1EE',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  lockedButtonText: {
-    marginLeft: 5,
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#8B7C72',
   },
 
   viewAllButton: {
@@ -664,5 +826,69 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: '#8B7C72',
+  },
+
+  historyListCard: {
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE5DD',
+    overflow: 'hidden',
+  },
+
+  historyRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  historyDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1EAE5',
+  },
+
+  historyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FBF1E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+
+  historyImage: {
+    width: 36,
+    height: 36,
+  },
+
+  statusPill: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+
+  statusPillText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+  },
+
+  historyPoints: {
+    marginLeft: 10,
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#8F3E2F',
+  },
+
+  headerButtonPlaceholder: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
 });

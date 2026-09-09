@@ -37,6 +37,7 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
 import { useProductList } from '../hook/useProductList';
 import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1885,7 +1886,7 @@ const ProductRecommendations: React.FC<{
           activeOpacity={0.8}
           onPress={() => onPickProduct(p.id)}
         >
-          <Image
+          <AppImage
             source={{ uri: p.image }}
             style={prStyles.image}
             resizeMode="contain"

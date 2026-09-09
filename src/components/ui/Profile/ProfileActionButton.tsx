@@ -2,7 +2,6 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import React from 'react';
 import {
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   ViewStyle,
@@ -10,18 +9,27 @@ import {
 import { Spacing } from '../../../theme';
 import AppText from '../../AppText';
 
-type RewardButtonProps = {
-  title?: string;
+/**
+ * A full-width row on the profile tab: icon, title, supporting line, chevron.
+ *
+ * Was `RewardButton`; generalised when the rewards row was replaced by
+ * notifications, since the two differ only in icon, copy and an unread count.
+ */
+type ProfileActionButtonProps = {
+  title: string;
   subtitle?: string;
   icon?: string;
+  /** Unread indicator on the icon. Hidden at zero. */
+  badgeCount?: number;
   onPress?: () => void;
   style?: ViewStyle;
 };
 
-const RewardButton: React.FC<RewardButtonProps> = ({
-  title = 'Rewards',
-  subtitle = 'Redeem your points for exclusive discounts and gifts',
-  icon = 'gift-outline',
+const ProfileActionButton: React.FC<ProfileActionButtonProps> = ({
+  title,
+  subtitle,
+  icon = 'notifications-outline',
+  badgeCount = 0,
   onPress,
   style,
 }) => {
@@ -34,13 +42,23 @@ const RewardButton: React.FC<RewardButtonProps> = ({
       <View style={styles.rewardPreviewLeft}>
         <View style={styles.rewardIconBox}>
           <Ionicons name={icon as any} size={22} color="#9B6A3D" />
+
+          {badgeCount > 0 && (
+            <View style={styles.badge}>
+              <AppText style={styles.badgeText}>
+                {badgeCount > 99 ? '99+' : badgeCount}
+              </AppText>
+            </View>
+          )}
         </View>
 
         <View style={styles.rewardTextBox}>
           <AppText style={styles.rewardPreviewTitle}>{title}</AppText>
-          <AppText style={styles.rewardPreviewSubtitle} numberOfLines={2}>
-            {subtitle}
-          </AppText>
+          {!!subtitle && (
+            <AppText style={styles.rewardPreviewSubtitle} numberOfLines={2}>
+              {subtitle}
+            </AppText>
+          )}
         </View>
       </View>
 
@@ -49,7 +67,7 @@ const RewardButton: React.FC<RewardButtonProps> = ({
   );
 };
 
-export default RewardButton;
+export default ProfileActionButton;
 
 const styles = StyleSheet.create({
   rewardPreviewCard: {
@@ -94,6 +112,27 @@ const styles = StyleSheet.create({
 
   rewardTextBox: {
     flex: 1,
+  },
+
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: '#D92D20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   rewardPreviewTitle: {

@@ -10,6 +10,7 @@ import {
 import { Colors, FontSize, Spacing } from '../../../theme';
 import { BrandResponse } from '../../../types/brand';
 import AppText from '../../AppText';
+import AppImage from '../../AppImage';
 
 type BrandSectionProps = {
   title?: string;
@@ -29,7 +30,11 @@ const BrandSection: React.FC<BrandSectionProps> = ({
       onPress={() => onPressBrand?.(item)}
     >
       {item.logo ? (
-        <Image source={{ uri: item.logo }} style={styles.logo} />
+        <AppImage
+          source={{ uri: item.logo }}
+          style={styles.logo}
+          resizeMode="contain"
+        />
       ) : (
         <AppText style={styles.brandText}>{item.name}</AppText>
       )}

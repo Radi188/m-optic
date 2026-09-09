@@ -9,6 +9,8 @@
  * file is the only place that needs tightening.
  */
 
+import { buildFileUrl } from '../utils/fileUrlHelper';
+
 export type HistoryResponse = {
   invoices?: RawInvoice[] | null;
   refractions?: RawRefraction[] | null;
@@ -62,8 +64,31 @@ export type RawRefraction = {
   seller_name?: string | null;
 };
 
+export type RawItemInventory = {
+  id?: number | string;
+  item_code?: string | null;
+  item_name?: string | null;
+  item_name_kh?: string | null;
+  image?: string | null;
+  product_type?: string | null;
+  slug?: string | null;
+};
+
 export type RawInvoiceItem = {
   id?: number | string;
+  reference?: string | null;
+  item_id?: number | string | null;
+  item_name?: string | null;
+  /** Unit price. Some rows carry 0 here and put the charge on `grand_total`. */
+  item_price?: number | string | null;
+  order_qty?: number | string | null;
+  total_amount?: number | string | null;
+  discount_amount?: number | string | null;
+  grand_total?: number | string | null;
+  note?: string | null;
+  item_inventory?: RawItemInventory | null;
+
+  /** Older/alternate spellings, kept so a shape change does not blank the list. */
   name?: string | null;
   product_name?: string | null;
   description?: string | null;
@@ -74,25 +99,55 @@ export type RawInvoiceItem = {
   total?: number | string | null;
 };
 
+export type RawBranch = {
+  id?: number | string;
+  branch_name?: string | null;
+  address?: string | null;
+  phone_number?: string | null;
+};
+
 export type RawInvoice = {
   id?: number | string;
+  invoice_reference?: string | null;
+  transaction_date?: string | null;
+  created_at?: string | null;
+  /** "Receipt", "Order", … — the human-readable document kind. */
+  event?: string | null;
+  /** "1"/"0" row state, not a payment state — never shown as a badge. */
+  status?: string | number | null;
+  payment_method?: string | null;
+  currency?: string | null;
+  exchange_rate?: number | string | null;
+  queue_number?: number | string | null;
+  is_ready?: boolean | null;
+  note?: string | null;
+  description?: string | null;
+
+  total_amount_usd?: number | string | null;
+  total_amount_khr?: number | string | null;
+  grand_total_usd?: number | string | null;
+  grand_total_khr?: number | string | null;
+  discount_amount?: number | string | null;
+  discount_percentage?: number | string | null;
+  receive_amount?: number | string | null;
+
+  invoice_details?: RawInvoiceItem[] | null;
+  branch?: RawBranch | string | null;
+
+  /** Older/alternate spellings. */
   invoice_number?: string | null;
   invoice_no?: string | null;
   number?: string | null;
   code?: string | null;
-  created_at?: string | null;
   date?: string | null;
   issued_at?: string | null;
-  status?: string | null;
   payment_status?: string | null;
   total?: number | string | null;
   total_amount?: number | string | null;
   grand_total?: number | string | null;
   amount?: number | string | null;
-  currency?: string | null;
   items?: RawInvoiceItem[] | null;
   details?: RawInvoiceItem[] | null;
-  branch?: { branch_name?: string | null } | string | null;
   branch_name?: string | null;
 };
 
@@ -126,18 +181,40 @@ export type Refraction = {
 export type InvoiceItem = {
   id: string;
   name: string;
+  /** Stock code, e.g. "0AX10726103" — what the customer sees on the receipt. */
+  code: string | null;
+  /** Absolute URL, already resolved from the API's relative upload path. */
+  image: string | null;
+  productType: string | null;
   quantity: number | null;
+  unitPrice: number | null;
   total: number | null;
 };
 
 export type Invoice = {
   id: string;
+  /** `invoice_reference`, e.g. "I2609031527448438778". */
   number: string | null;
   date: string | null;
+  /** Document kind — "Receipt". Shown as the card's badge. */
   status: string | null;
+  /** Line-items total before discount, in USD. */
+  subtotal: number | null;
+  discount: number | null;
+  /** Payable total, in USD. */
   total: number | null;
+  /** The same total in riel, as the backend computed it. */
+  totalKhr: number | null;
   currency: string;
+  exchangeRate: number | null;
+  paymentMethod: string | null;
+  queueNumber: string | null;
+  /** Whether the order has been prepared for collection. */
+  isReady: boolean;
+  note: string | null;
   branch: string | null;
+  branchAddress: string | null;
+  branchPhone: string | null;
   items: InvoiceItem[];
 };
 
@@ -164,6 +241,14 @@ function toNumber(...values: unknown[]): number | null {
       const n = Number(v.replace(/[^0-9.-]/g, ''));
       if (Number.isFinite(n)) return n;
     }
+  }
+  return null;
+}
+
+/** Reads a field off a nested object only — a bare string is a name, not an address. */
+function fieldOf(value: unknown, key: string): string | null {
+  if (value && typeof value === 'object') {
+    return firstString((value as Record<string, unknown>)[key]);
   }
   return null;
 }
@@ -280,24 +365,98 @@ export function normaliseRefraction(raw: RawRefraction, index: number): Refracti
   };
 }
 
+/**
+ * Money arrives as "248.0000" strings, and a zero is meaningful (a free
+ * lens) — so `0` must survive rather than falling through to the next
+ * candidate the way `toNumber`'s truthiness check would allow.
+ */
+function money(...values: unknown[]): number | null {
+  for (const v of values) {
+    if (v === null || v === undefined || v === '') continue;
+    const n = toNumber(v);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+function normaliseInvoiceItem(raw: RawInvoiceItem, index: number): InvoiceItem {
+  const inventory = raw.item_inventory ?? null;
+
+  // `item_price` is 0 on rows where the charge was written to `grand_total`
+  // instead (a lens billed as part of the frame), so the line total is the
+  // reliable figure and the unit price is only shown when it is non-zero.
+  const total = money(raw.grand_total, raw.total_amount, raw.total, raw.price);
+  const unitPrice = money(raw.item_price, raw.unit_price, raw.price);
+
+  return {
+    id: String(raw.id ?? raw.reference ?? `item-${index}`),
+    name:
+      firstString(
+        raw.item_name,
+        inventory?.item_name,
+        raw.name,
+        raw.product_name,
+        raw.description,
+      ) ?? '—',
+    code: firstString(inventory?.item_code, raw.reference),
+    image: buildFileUrl(inventory?.image ?? null),
+    productType: firstString(inventory?.product_type),
+    quantity: toNumber(raw.order_qty, raw.quantity, raw.qty),
+    unitPrice: unitPrice && unitPrice > 0 ? unitPrice : null,
+    total,
+  };
+}
+
 export function normaliseInvoice(raw: RawInvoice, index: number): Invoice {
-  const items = (raw.items ?? raw.details ?? []).map((item, i) => ({
-    id: String(item.id ?? `item-${i}`),
-    name: firstString(item.name, item.product_name, item.description) ?? '—',
-    quantity: toNumber(item.quantity, item.qty),
-    total: toNumber(item.total, item.price, item.unit_price),
-  }));
+  const items = (raw.invoice_details ?? raw.items ?? raw.details ?? []).map(
+    normaliseInvoiceItem,
+  );
 
   return {
     id: String(raw.id ?? `invoice-${index}`),
-    number: firstString(raw.invoice_number, raw.invoice_no, raw.number, raw.code),
-    date: firstString(raw.created_at, raw.date, raw.issued_at),
-    status: firstString(raw.status, raw.payment_status),
-    total: toNumber(raw.total, raw.total_amount, raw.grand_total, raw.amount),
-    currency: firstString(raw.currency) ?? '$',
+    number: firstString(
+      raw.invoice_reference,
+      raw.invoice_number,
+      raw.invoice_no,
+      raw.number,
+      raw.code,
+    ),
+    // `transaction_date` is local store time and is what the receipt shows;
+    // `created_at` is the UTC fallback.
+    date: firstString(raw.transaction_date, raw.created_at, raw.date, raw.issued_at),
+    // `status` is a "1"/"0" row flag, so the badge uses `event` ("Receipt")
+    // and falls back to the payment status when a future payload sends one.
+    status: firstString(raw.event, raw.payment_status),
+    subtotal: money(raw.total_amount_usd, raw.total_amount),
+    discount: money(raw.discount_amount),
+    total: money(
+      raw.grand_total_usd,
+      raw.grand_total,
+      raw.total,
+      raw.total_amount_usd,
+      raw.amount,
+    ),
+    totalKhr: money(raw.grand_total_khr, raw.total_amount_khr),
+    // The API's `currency` is a code ("usd"); the UI wants a symbol.
+    currency: currencySymbol(raw.currency),
+    exchangeRate: money(raw.exchange_rate),
+    paymentMethod: firstString(raw.payment_method),
+    queueNumber: firstString(raw.queue_number),
+    isReady: raw.is_ready === true,
+    note: firstString(raw.note, raw.description),
     branch: nameOf(raw.branch, 'branch_name') ?? firstString(raw.branch_name),
+    branchAddress: fieldOf(raw.branch, 'address'),
+    branchPhone: fieldOf(raw.branch, 'phone_number'),
     items,
   };
+}
+
+function currencySymbol(code: unknown): string {
+  const value = firstString(code)?.toLowerCase();
+  if (!value) return '$';
+  if (value === 'usd' || value === '$') return '$';
+  if (value === 'khr' || value === '៛') return '៛';
+  return value.toUpperCase() + ' ';
 }
 
 /** Milliseconds for sorting; undated rows sort last. */

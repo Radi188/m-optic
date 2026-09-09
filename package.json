@@ -13,6 +13,7 @@
     "pod": "cd ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install && cd .."
   },
   "dependencies": {
+    "@d11/react-native-fast-image": "^8.13.0",
     "@gorhom/bottom-sheet": "^5.2.8",
     "@likashefqet/react-native-image-zoom": "^4.3.0",
     "@react-native-async-storage/async-storage": "^3.0.2",

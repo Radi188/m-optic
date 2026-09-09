@@ -28,39 +28,22 @@ const ProfilePointSectionSkeleton: React.FC = () => {
   });
 
   return (
-    <View style={styles.card}>
-      <View style={styles.leftContent}>
-        {/* Title row */}
-        <View style={styles.titleRow}>
-          <Animated.View style={[styles.iconSkeleton, { backgroundColor }]} />
-          <Animated.View
-            style={[styles.textSkeletonShort, { backgroundColor }]}
-          />
-        </View>
-
-        {/* Points */}
-        <Animated.View
-          style={[
-            styles.textSkeletonLong,
-            { height: 28, marginTop: 12, backgroundColor },
-          ]}
-        />
-
-        {/* Description */}
-        <Animated.View
-          style={[
-            styles.textSkeletonLong,
-            { height: 16, marginTop: 6, backgroundColor },
-          ]}
-        />
-
-        {/* Progress bar */}
-        <View style={styles.progressTrack}>
-          <Animated.View
-            style={[styles.progressFill, { width: '40%', backgroundColor }]}
-          />
-        </View>
+    <View style={styles.block}>
+      {/* Mirrors the loaded layout: medallion + tier name on one row with the
+          points figure at the right, then the bar and its caption. */}
+      <View style={styles.topRow}>
+        <Animated.View style={[styles.medallion, { backgroundColor }]} />
+        <Animated.View style={[styles.tierName, { backgroundColor }]} />
+        <Animated.View style={[styles.points, { backgroundColor }]} />
       </View>
+
+      <View style={styles.track}>
+        <Animated.View
+          style={[styles.fill, { width: '40%', backgroundColor }]}
+        />
+      </View>
+
+      <Animated.View style={[styles.caption, { backgroundColor }]} />
     </View>
   );
 };
@@ -68,60 +51,51 @@ const ProfilePointSectionSkeleton: React.FC = () => {
 export default ProfilePointSectionSkeleton;
 
 const styles = StyleSheet.create({
-  card: {
-    marginTop: Spacing.lg,
-    borderRadius: 28,
-    padding: Spacing.lg,
-    minHeight: 150,
-    backgroundColor: '#E0DFDD',
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
+  block: {
+    marginTop: Spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EBE7E3',
+    backgroundColor: '#F4F2F0',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  leftContent: {
-    flex: 1,
-    paddingRight: Spacing.sm,
-    maxWidth: 220,
-  },
-  titleRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  iconSkeleton: {
-    width: 23,
-    height: 23,
-    borderRadius: 12,
+  medallion: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
-  textSkeletonShort: {
-    width: 120,
+  tierName: {
+    flex: 1,
+    height: 16,
+    borderRadius: 8,
+    maxWidth: 120,
+  },
+  points: {
+    width: 70,
     height: 18,
     borderRadius: 8,
-    marginLeft: 10,
   },
-  textSkeletonLong: {
-    width: '80%',
-    borderRadius: 8,
-  },
-  progressTrack: {
-    marginTop: 16,
-    width: '100%',
-    height: 10,
+  track: {
+    marginTop: 12,
+    height: 6,
     borderRadius: 999,
-    backgroundColor: '#CFCBC7',
+    backgroundColor: '#DFDCD9',
     overflow: 'hidden',
   },
-  progressFill: {
+  fill: {
     height: '100%',
     borderRadius: 999,
   },
-  cardImageSkeleton: {
-    position: 'absolute',
-    right: 8,
-    top: 35,
-    width: 150,
-    height: 105,
-    borderRadius: 16,
-    transform: [{ rotate: '2deg' }, { scale: 1.2 }],
+  caption: {
+    marginTop: 9,
+    width: '60%',
+    height: 11,
+    borderRadius: 6,
   },
 });

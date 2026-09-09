@@ -3,7 +3,13 @@ import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../../../theme';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  Shadow,
+} from '../../../theme';
 import { LENS_CATEGORIES, localize } from '../../../types/lens';
 import type { LensProduct, LensTier } from '../../../types/lens';
 import AppText from '../../AppText';
@@ -33,9 +39,7 @@ const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
           </>
         )}
       </AppText>
-      {!!tier.note && (
-        <AppText style={styles.rangeNote}>{tier.note}</AppText>
-      )}
+      {!!tier.note && <AppText style={styles.rangeNote}>{tier.note}</AppText>}
     </View>
 
     <View style={styles.tierPrice}>
@@ -60,7 +64,9 @@ const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
       <AppText style={styles.lensName}>{product.name}</AppText>
 
       <View style={styles.coatingRow}>
-        <View style={[styles.dot, { backgroundColor: product.coating.color }]} />
+        <View
+          style={[styles.dot, { backgroundColor: product.coating.color }]}
+        />
         <AppText style={styles.coatingLabel}>
           {localize(product.coating.label, lang)}
         </AppText>
@@ -103,8 +109,7 @@ const LensTechSection: React.FC = () => {
   const [productId, setProductId] = useState<string | null>(null);
 
   const active = useMemo(
-    () =>
-      LENS_CATEGORIES.find(c => c.id === activeId) ?? LENS_CATEGORIES[0],
+    () => LENS_CATEGORIES.find(c => c.id === activeId) ?? LENS_CATEGORIES[0],
     [activeId],
   );
 
@@ -112,8 +117,7 @@ const LensTechSection: React.FC = () => {
   // selection on its own — the stored id simply won't exist in the new list,
   // so there is no effect to keep in sync.
   const activeProduct = useMemo(
-    () =>
-      active.products.find(p => p.id === productId) ?? active.products[0],
+    () => active.products.find(p => p.id === productId) ?? active.products[0],
     [active, productId],
   );
 
@@ -234,19 +238,9 @@ const LensTechSection: React.FC = () => {
           <View style={styles.emptyState}>
             <Ionicons name="layers-outline" size={26} color={Colors.gray400} />
             <AppText style={styles.emptyTitle}>{t('LensComingSoon')}</AppText>
-            <AppText style={styles.emptyText}>{t('LensComingSoonHint')}</AppText>
-          </View>
-        )}
-
-        {active.tips.length > 0 && (
-          <View style={styles.tipsBox}>
-            <AppText style={styles.tipsTitle}>{t('LensTips')}</AppText>
-            {active.tips.map((tip, i) => (
-              <View key={`tip-${i}`} style={styles.tipRow}>
-                <View style={styles.tipBullet} />
-                <AppText style={styles.tipText}>{localize(tip, lang)}</AppText>
-              </View>
-            ))}
+            <AppText style={styles.emptyText}>
+              {t('LensComingSoonHint')}
+            </AppText>
           </View>
         )}
       </View>

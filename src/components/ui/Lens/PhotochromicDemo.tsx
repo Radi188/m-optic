@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -17,8 +17,17 @@ const TINTS = [
   { id: 'pink', labelKey: 'TintPink', dark: '#E0447A' },
 ] as const;
 
+/** Tap targets so the demo works without a drag at all. */
+const PRESETS = [
+  { id: 'indoor', labelKey: 'LensPhotoIndoor', value: 0 },
+  { id: 'adapting', labelKey: 'LensPhotoAdapting', value: 0.5 },
+  { id: 'sunlight', labelKey: 'LensPhotoSunlight', value: 1 },
+] as const;
+
 const TRACK_HEIGHT = 4;
 const KNOB = 20;
+const AUTO_STEP = 0.02;
+const AUTO_INTERVAL = 40;
 
 function hexToRgb(hex: string) {
   const h = hex.replace('#', '');
@@ -37,37 +46,83 @@ function hexToRgb(hex: string) {
  * like part-way through a transition, not just at its two extremes.
  *
  * The slider is hand-rolled on PanResponder rather than pulling in a slider
- * dependency for one widget.
+ * dependency for one widget. Position comes from the touch's `pageX` measured
+ * against the track's own window position, so grabbing the knob (a child view
+ * with its own coordinate space) reads the same as grabbing bare track.
  */
 const PhotochromicDemo: React.FC = () => {
   const { t } = useTranslation();
 
   const [tint, setTint] = useState<(typeof TINTS)[number]>(TINTS[0]);
   const [amount, setAmount] = useState(0); // 0 = indoor, 1 = full sun
+  const [auto, setAuto] = useState(false);
+
+  const trackRef = useRef<View>(null);
   const trackWidth = useRef(0);
+  const trackPageX = useRef(0);
+
+  function measureTrack() {
+    trackRef.current?.measureInWindow((x, _y, w) => {
+      trackPageX.current = x;
+      if (w) trackWidth.current = w;
+    });
+  }
+
+  function update(pageX: number) {
+    const w = trackWidth.current || 1;
+    setAmount(Math.max(0, Math.min(1, (pageX - trackPageX.current) / w)));
+  }
 
   const pan = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: e => update(e.nativeEvent.locationX),
-        onPanResponderMove: (_e, g) => update(g.moveX - trackLeft.current),
+        // Claim horizontal drags only, so a vertical flick still scrolls the page.
+        onMoveShouldSetPanResponder: (_e, g) =>
+          Math.abs(g.dx) > Math.abs(g.dy),
+        // Once we own the gesture the parent ScrollView may not take it back
+        // mid-drag; otherwise the slider dies as soon as the finger drifts.
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: e => {
+          setAuto(false);
+          measureTrack();
+          update(e.nativeEvent.pageX);
+        },
+        onPanResponderMove: e => update(e.nativeEvent.pageX),
       }),
     [],
   );
 
-  const trackLeft = useRef(0);
-
-  function update(x: number) {
-    const w = trackWidth.current || 1;
-    setAmount(Math.max(0, Math.min(1, x / w)));
-  }
+  // Auto play: ping-pong indoor <-> sunlight so the effect can be seen hands-free.
+  useEffect(() => {
+    if (!auto) return;
+    let dir = 1;
+    const id = setInterval(() => {
+      setAmount(prev => {
+        let next = prev + dir * AUTO_STEP;
+        if (next >= 1) {
+          next = 1;
+          dir = -1;
+        } else if (next <= 0) {
+          next = 0;
+          dir = 1;
+        }
+        return next;
+      });
+    }, AUTO_INTERVAL);
+    return () => clearInterval(id);
+  }, [auto]);
 
   const { r, g, b } = hexToRgb(tint.dark);
   // Never quite opaque: even a fully-activated lens is tinted glass, not paint.
   const lensColor = `rgba(${r}, ${g}, ${b}, ${(amount * 0.78).toFixed(3)})`;
   const percent = Math.round(amount * 100);
+
+  function jumpTo(value: number) {
+    setAuto(false);
+    setAmount(value);
+  }
 
   return (
     <View style={styles.card}>
@@ -114,19 +169,15 @@ const PhotochromicDemo: React.FC = () => {
       </View>
 
       <View
+        ref={trackRef}
         style={styles.trackHit}
         onLayout={e => {
           trackWidth.current = e.nativeEvent.layout.width;
+          measureTrack();
         }}
-        onTouchStart={() => {}}
         {...pan.panHandlers}
       >
-        <View
-          style={styles.track}
-          onLayout={e => {
-            trackLeft.current = e.nativeEvent.layout.x;
-          }}
-        />
+        <View style={styles.track} />
         <View style={[styles.trackFill, { width: `${percent}%` }]} />
         <View
           style={[
@@ -134,6 +185,33 @@ const PhotochromicDemo: React.FC = () => {
             { left: `${percent}%`, backgroundColor: tint.dark },
           ]}
         />
+      </View>
+
+      <View style={styles.presetRow}>
+        {PRESETS.map(preset => {
+          const on = Math.abs(amount - preset.value) < 0.02;
+          return (
+            <TouchableOpacity
+              key={preset.id}
+              onPress={() => jumpTo(preset.value)}
+              activeOpacity={0.8}
+              style={[styles.preset, on && styles.presetActive]}
+            >
+              <AppText style={[styles.presetText, on && styles.presetTextActive]}>
+                {t(preset.labelKey)}
+              </AppText>
+            </TouchableOpacity>
+          );
+        })}
+        <TouchableOpacity
+          onPress={() => setAuto(v => !v)}
+          activeOpacity={0.8}
+          style={[styles.preset, auto && styles.presetActive]}
+        >
+          <AppText style={[styles.presetText, auto && styles.presetTextActive]}>
+            {auto ? t('LensPhotoStop') : t('LensPhotoAutoPlay')}
+          </AppText>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -261,4 +339,30 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.white,
   },
+
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  preset: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    backgroundColor: Colors.white,
+  },
+  presetActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary,
+  },
+  presetText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray600,
+  },
+  presetTextActive: { color: Colors.white },
 });

@@ -51,121 +51,14 @@ export const deleteGlassThunk = createAsyncThunk(
   },
 );
 
-// ─── Initial Data ─────────────────────────────────────────────────────────────
+// ─── Initial Data ────────────────────────────────────────────────────────────
 
-const INITIAL_FRAMES: GlassItem[] = [
-  
-  {
-    id: '1', brand: 'Ray-Ban', name: 'Classic Round', price: 120, stock: 8,
-    status: 'In Stock', frameShape: 'round',
-    image: 'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=400&q=75',
-    description: 'Timeless circular frames with spring hinges and UV400 lenses.',
-  },
-  {
-    id: '817', brand: 'Ray-Ban', name: 'Wayfarer Plus', price: 99, stock: 0,
-    status: 'Out of Stock', frameShape: 'wayfarer',
-    image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&w=400&q=75',
-    description: 'Iconic squared silhouette, scratch-resistant CR-39 lenses.',
-  },
-  {
-    id: '3', brand: 'Ray-Ban', name: 'Club Master', price: 145, stock: 6,
-    status: 'In Stock', frameShape: 'browline',
-    image: 'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=400&q=75',
-    description: 'Browline design with premium acetate and double bridge.',
-  },
-  {
-    id: '4', brand: 'Oakley', name: 'Aviator Pro', price: 150, stock: 2,
-    status: 'Low Stock', frameShape: 'aviator',
-    image: 'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=400&q=75',
-    description: 'Lightweight aviator-style with polarized lenses and titanium finish.',
-  },
-  {
-    id: '5', brand: 'Oakley', name: 'Titanium Edge', price: 310, stock: 3,
-    status: 'Low Stock', frameShape: 'rectangle',
-    image: 'https://images.unsplash.com/photo-1556306535-0f09a537f0a3?auto=format&w=400&q=75',
-    description: 'Premium titanium build, feather-light at just 18g.',
-  },
-  {
-    id: '6', brand: 'Oakley', name: 'Radar EV Path', price: 180, stock: 9,
-    status: 'In Stock', frameShape: 'shield',
-    image: 'https://images.unsplash.com/photo-1559813114-cef7f1d35553?auto=format&w=400&q=75',
-    description: 'Wrap-around sport shield for maximum coverage and protection.',
-  },
-  {
-    id: '7', brand: 'Gucci', name: 'Rectangle Slim', price: 250, stock: 5,
-    status: 'In Stock', frameShape: 'rectangle',
-    image: 'https://images.unsplash.com/photo-1583394293756-51b5163eb3b2?auto=format&w=400&q=75',
-    description: 'Slim rectangular profile with ultra-thin acetate and blue-light filter.',
-  },
-  {
-    id: '8', brand: 'Gucci', name: 'GG Shield', price: 290, stock: 0,
-    status: 'Out of Stock', frameShape: 'shield',
-    image: 'https://images.unsplash.com/photo-1587222538504-8e7e30ebe8e5?auto=format&w=400&q=75',
-    description: 'Bold single-lens shield with signature GG metal logo.',
-  },
-  {
-    id: '9', brand: 'Gucci', name: 'Bloom Square', price: 275, stock: 4,
-    status: 'In Stock', frameShape: 'square',
-    image: 'https://images.unsplash.com/photo-1483394879078-51e59d3e8ddc?auto=format&w=400&q=75',
-    description: 'Oversized square with floral embossed temple detail.',
-  },
-  {
-    id: '10', brand: 'Prada', name: 'Cat-Eye Chic', price: 200, stock: 12,
-    status: 'In Stock', frameShape: 'cat-eye',
-    image: 'https://images.unsplash.com/photo-1591076482161-42ce6da69f67?auto=format&w=400&q=75',
-    description: 'Retro cat-eye design with gradient tint and gold temple detail.',
-  },
-  {
-    id: '11', brand: 'Prada', name: 'Linea Rossa', price: 230, stock: 1,
-    status: 'Low Stock', frameShape: 'rectangle',
-    image: 'https://images.unsplash.com/photo-1556306535-0f09a537f0a3?auto=format&w=400&q=75',
-    description: 'Sporty rectangle in lightweight nylon with rubber nose pads.',
-  },
-  {
-    id: '12', brand: 'Prada', name: 'Symbole', price: 215, stock: 7,
-    status: 'In Stock', frameShape: 'cat-eye',
-    image: 'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&w=400&q=75',
-    description: 'Architectural cat-eye with minimalist triangular logo.',
-  },
-  {
-    id: '13', brand: 'Versace', name: 'Medusa Biggie', price: 265, stock: 4,
-    status: 'In Stock', frameShape: 'square',
-    image: 'https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&w=400&q=75',
-    description: 'Oversized square with iconic Medusa head at temples.',
-  },
-  {
-    id: '14', brand: 'Versace', name: 'VE4361', price: 240, stock: 0,
-    status: 'Out of Stock', frameShape: 'cat-eye',
-    image: 'https://images.unsplash.com/photo-1591076482161-42ce6da69f67?auto=format&w=400&q=75',
-    description: 'Bold cat-eye in acetate with Greca pattern arms.',
-  },
-  {
-    id: '15', brand: 'Versace', name: 'Greek Frame', price: 285, stock: 6,
-    status: 'In Stock', frameShape: 'rectangle',
-    image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&w=400&q=75',
-    description: 'Slim rectangle with baroque Greek key detail in gold.',
-  },
-  {
-    id: '16', brand: 'Tom Ford', name: 'Edward', price: 340, stock: 3,
-    status: 'Low Stock', frameShape: 'square',
-    image: 'https://images.unsplash.com/photo-1483394879078-51e59d3e8ddc?auto=format&w=400&q=75',
-    description: 'Classic square with subtle T-bar hinge and horn-tipped ends.',
-  },
-  {
-    id: '17', brand: 'Tom Ford', name: 'Hawkings II', price: 320, stock: 8,
-    status: 'In Stock', frameShape: 'browline',
-    image: 'https://images.unsplash.com/photo-1511499767150-a7a1371514e4?auto=format&w=400&q=75',
-    description: 'Browline silhouette in polished acetate with gunmetal hardware.',
-  },
-  {
-    id: '18', brand: 'Tom Ford', name: 'Henry', price: 360, stock: 2,
-    status: 'Low Stock', frameShape: 'round',
-    image: 'https://images.unsplash.com/photo-1559813114-cef7f1d35553?auto=format&w=400&q=75',
-    description: 'Refined round with brushed titanium and TF logo rivets.',
-  },
-];
-
-// ─── State ────────────────────────────────────────────────────────────────────
+/**
+ * Empty by design. This list used to ship with eighteen invented frames
+ * (Ray-Ban, Oakley, Unsplash photography) which rendered as real stock before
+ * the catalogue endpoint answered; products now come from `useProductList`.
+ */
+const INITIAL_FRAMES: GlassItem[] = [];
 
 interface GlassState {
   items: GlassItem[];

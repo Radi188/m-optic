@@ -32,17 +32,16 @@ import {
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import ProfileHeader from '../components/ui/Profile/ProfileHeader';
 import ProfileSettingSection from '../components/ui/Profile/ProfileSettingSection';
-import ProfilePointSection from '../components/ui/Profile/ProfilePointSection';
+import MembershipCard from '../components/ui/Profile/MembershipCard';
 import NotLoginProfile from '../components/ui/Profile/NotLoginProfile';
 import LanguagePickerModal from '../components/ui/Modal/LanguagePickerModal';
 import LogoutModal from '../components/ui/Modal/LogoutModal';
-import RewardButton from '../components/ui/Profile/RewardButton';
 import { useUserProfile } from '../hook/useUserProfile';
 import { formatDate } from '../utils/dateHelper';
 import { formatEye, splitCombinedEye } from '../types/history';
 import ProfileHeaderSkeleton from '../components/ui/Profile/Loading/ProfileHeaderSkeleton';
 import CurrentPrescriptionCardSkeleton from '../components/ui/Profile/Loading/CurrentPrescriptionCardSkeleton';
-import ProfilePointSectionSkeleton from '../components/ui/Profile/Loading/ProfilePointSkeleton';
+import MembershipCardSkeleton from '../components/ui/Profile/Loading/MembershipCardSkeleton';
 import ProfileTitleHeader from '../components/ui/Profile/ProfileTitleHeader';
 import ProfileErrorState from '../components/ui/Profile/ProfileErrorState';
 import { AppLanguage, changeAppLanguage } from '../localizations/i18n';
@@ -127,8 +126,7 @@ const ProfileScreen: React.FC = () => {
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
-  const { profile, isLoading, isRefreshing, error, refetch } =
-    useUserProfile();
+  const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
 
   // The prescription arrives as two combined strings ("-4.00/-2.00x180"), the
   // same shape the history rows use. Splitting it here lets this card render
@@ -273,6 +271,7 @@ const ProfileScreen: React.FC = () => {
             notificationCount={unreadCount}
             hasUnreadNotification={unreadCount > 0}
             notificationPress={() => navigation.navigate('NotificationList')}
+            rewardPress={() => navigation.navigate('Reward')}
             label={t('MyProfile')}
           />
 
@@ -294,23 +293,51 @@ const ProfileScreen: React.FC = () => {
                 <ProfileErrorState onRetry={refetch} />
               ) : !isLoading ? (
                 <>
-                  <ProfileHeader
+                  {/* <ProfileHeader
                     name={profile?.customer_name}
                     subtitle={profile?.tier?.name}
                     avatarUrl={profile?.avatar_url || ''}
                     notificationCount={unreadCount}
                     editLabel={t('Edit')}
                     onEditPress={() => navigation.navigate('EditProfile')}
-                  />
+                  /> */}
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('PointMember')}
+                    style={{ marginBottom: Spacing.lg }}
+                  >
+                    <MembershipCard
+                      name={profile?.customer_name}
+                      tierName={profile?.tier?.name}
+                      memberId={profile?.id}
+                      points={profile?.loyalty_total_points}
+                      remainingPoints={profile?.points_to_next_tier}
+                      nextTier={profile?.next_tier?.name}
+                      progress={
+                        // The API computes this itself; the local calculation
+                        // is only a fallback for payloads that omit it.
+                        profile?.progress_percentage ??
+                        calculateTierProgress(
+                          profile?.loyalty_total_points,
+                          profile?.tier?.min_points,
+                          profile?.next_tier?.min_points,
+                        )
+                      }
+                    />
+                  </TouchableOpacity>
 
                   <CurrentPrescriptionCard
                     rightEye={rightEye}
                     leftEye={leftEye}
                     rightSub={
-                      rightReading.va ? `${t('Va')} ${rightReading.va}` : undefined
+                      rightReading.va
+                        ? `${t('Va')} ${rightReading.va}`
+                        : undefined
                     }
                     leftSub={
-                      leftReading.va ? `${t('Va')} ${leftReading.va}` : undefined
+                      leftReading.va
+                        ? `${t('Va')} ${leftReading.va}`
+                        : undefined
                     }
                     meta={prescriptionMeta || undefined}
                     updatedAt={prescriptionDate}
@@ -322,27 +349,6 @@ const ProfileScreen: React.FC = () => {
                     leftLabel={t('LeftEye')}
                   />
 
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('PointMember')}
-                  >
-                    <ProfilePointSection
-                      tierName={profile?.tier?.name}
-                      points={profile?.loyalty_total_points}
-                      remainingPoints={profile?.points_to_next_tier}
-                      nextTier={profile?.next_tier?.name}
-                      progress={calculateTierProgress(
-                        profile?.loyalty_total_points,
-                        profile?.tier?.min_points,
-                        profile?.next_tier?.min_points,
-                      )}
-                    />
-                  </TouchableOpacity>
-
-                  <RewardButton
-                    title={t('Rewards')}
-                    subtitle={t('RewardSubtitle')}
-                    onPress={() => navigation.navigate('Reward')}
-                  />
                 </>
               ) : (
                 <>
@@ -350,7 +356,7 @@ const ProfileScreen: React.FC = () => {
 
                   <CurrentPrescriptionCardSkeleton />
 
-                  <ProfilePointSectionSkeleton />
+                  <MembershipCardSkeleton />
                 </>
               )}
             </>

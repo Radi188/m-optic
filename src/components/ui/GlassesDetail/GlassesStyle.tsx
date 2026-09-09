@@ -32,7 +32,7 @@ interface Props {
   frameTypeName: string;
   colorHex?: string;
   colorName?: string;
-  descriptionHtml: string;
+  descriptionHtml: string | null;
   /** Frame dimensions as "53–17–140", when the API has them. */
   measurementLabel?: string | null;
   materials?: string | null;
@@ -181,23 +181,25 @@ const GlassesStyleSection: React.FC<Props> = ({
         ) : null}
       </View>
 
-      <View style={styles.descriptionWrap}>
-        <AppText style={styles.blockTitle}>{t('commonDescription')}</AppText>
+      {!!descriptionHtml && (
+        <View style={styles.descriptionWrap}>
+          <AppText style={styles.blockTitle}>{t('commonDescription')}</AppText>
 
-        <RenderHTML
-          contentWidth={width - Spacing.md * 2}
-          source={{ html: descriptionHtml }}
-          baseStyle={styles.htmlBase}
-          tagsStyles={{
-            p: styles.htmlP,
-            ul: styles.htmlUl,
-            ol: styles.htmlOl,
-            li: styles.htmlLi,
-            strong: styles.htmlStrong,
-            b: styles.htmlStrong,
-          }}
-        />
-      </View>
+          <RenderHTML
+            contentWidth={width - Spacing.md * 2}
+            source={{ html: descriptionHtml }}
+            baseStyle={styles.htmlBase}
+            tagsStyles={{
+              p: styles.htmlP,
+              ul: styles.htmlUl,
+              ol: styles.htmlOl,
+              li: styles.htmlLi,
+              strong: styles.htmlStrong,
+              b: styles.htmlStrong,
+            }}
+          />
+        </View>
+      )}
     </View>
   );
 };

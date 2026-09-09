@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -21,6 +20,37 @@ type PointsMemberScreenProps = {
   navigation?: any;
 };
 
+/**
+ * Maps the backend's benefit `icon` slug onto an Ionicon.
+ *
+ * The API sends short words ("gift", "frame", "tag", "case") rather than icon
+ * names, so an unknown slug has to degrade to a generic badge instead of
+ * rendering as a missing glyph.
+ */
+const BENEFIT_ICONS: Record<string, string> = {
+  gift: 'gift-outline',
+  frame: 'glasses-outline',
+  glasses: 'glasses-outline',
+  tag: 'pricetag-outline',
+  discount: 'pricetag-outline',
+  case: 'briefcase-outline',
+  clean: 'sparkles-outline',
+  cleaning: 'sparkles-outline',
+  star: 'star-outline',
+  eye: 'eye-outline',
+};
+
+const benefitIcon = (icon?: string | null): string =>
+  BENEFIT_ICONS[(icon ?? '').toLowerCase().trim()] ?? 'ribbon-outline';
+
+/** "5.00" → "5", "12.50" → "12.5". Percentages arrive as money-style strings. */
+const formatPercent = (value?: string | number | null): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `${Number(n.toFixed(2))}%`;
+};
+
 const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   navigation,
 }) => {
@@ -28,26 +58,26 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   const { pointsData, transactions, isLoading, isRefreshing, error, refetch } =
     usePoints();
 
-  const currentTierName = pointsData?.tier?.name ?? t('Silver');
-  const nextTierName = pointsData?.next_tier?.name ?? t('MaxTier');
+  // Passed through as-is: the card themes itself from the real tier, and a
+  // null tier must read as "no tier yet" rather than defaulting to Silver.
+  const currentTierName = pointsData?.tier?.name ?? null;
+  const nextTierName = pointsData?.next_tier?.name ?? null;
   const progress = pointsData?.progress_percentage ?? 0;
 
   const tiers = useMemo(() => pointsData?.all_tiers ?? [], [pointsData]);
 
-  const activeTierIndex = useMemo(() => {
-    return tiers.findIndex(tier => tier.id === pointsData?.tier?.id);
-  }, [tiers, pointsData?.tier?.id]);
+  const activeTierIndex = useMemo(
+    () => tiers.findIndex(tier => tier.id === pointsData?.tier?.id),
+    [tiers, pointsData?.tier?.id],
+  );
 
   const tierLineProgress = useMemo(() => {
-    if (!tiers.length || activeTierIndex < 0) {
-      return 0;
-    }
-
-    if (!pointsData?.next_tier) {
-      return 100;
-    }
+    if (!tiers.length || activeTierIndex < 0) return 0;
+    if (!pointsData?.next_tier) return 100;
 
     const maxIndex = tiers.length - 1;
+    if (maxIndex <= 0) return 100;
+
     const currentStepProgress = progress / 100;
     const totalProgress =
       ((activeTierIndex + currentStepProgress) / maxIndex) * 100;
@@ -55,54 +85,34 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
     return Math.min(Math.max(totalProgress, 0), 100);
   }, [tiers, activeTierIndex, progress, pointsData?.next_tier]);
 
-  const benefits = useMemo(
-    () => [
-      {
-        icon: 'sparkles-outline',
-        title: t('FreeCleaning'),
-        subtitle: t('UnlimitedLensCleaning'),
-      },
-      {
-        icon: 'gift-outline',
-        title: t('BirthdayGift'),
-        subtitle: t('SpecialGiftOnBirthday'),
-      },
-      {
-        icon: 'pricetag-outline',
-        title: `${pointsData?.tier?.discount_percentage ?? '0'}% ${t(
-          'Discount',
-        )}`,
-        subtitle: t('ExclusiveProductDiscount'),
-      },
-    ],
-    [t, pointsData?.tier?.discount_percentage],
-  );
+  // The tier's own benefits, ordered the way the shop arranged them.
+  const benefits = useMemo(() => {
+    const rows = pointsData?.tier?.benefits ?? [];
+    return [...rows].sort(
+      (a: any, b: any) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0),
+    );
+  }, [pointsData?.tier?.benefits]);
 
-  const earnPoints = useMemo(
-    () => [
-      {
-        icon: 'eye-outline',
-        title: t('BuyGlasses'),
-        points: `+100 ${t('Pts')}`,
-      },
-      {
-        icon: 'eye-outline',
-        title: t('EyeCheckUp'),
-        points: `+50 ${t('Pts')}`,
-      },
-      {
-        icon: 'people-outline',
-        title: t('ReferFriend'),
-        points: `+200 ${t('Pts')}`,
-      },
-      {
-        icon: 'star-outline',
-        title: t('ReviewOurStore'),
-        points: `+30 ${t('Pts')}`,
-      },
-    ],
-    [t],
-  );
+  // What the next tier adds. `next_tier` itself arrives without benefits, so
+  // the full row is looked up in `all_tiers`.
+  const nextTierBenefits = useMemo(() => {
+    const nextId = pointsData?.next_tier?.id;
+    if (!nextId) return [];
+    const full = tiers.find(tier => tier.id === nextId);
+    return [...(full?.benefits ?? [])].sort(
+      (a: any, b: any) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0),
+    );
+  }, [tiers, pointsData?.next_tier?.id]);
+
+  // `/profile/transactions` is the paginated history; `recent_transactions` on
+  // the points payload is the same data trimmed, and covers the case where the
+  // paginated call comes back empty.
+  const activity = useMemo(() => {
+    const paged = transactions?.data ?? [];
+    return paged.length ? paged : pointsData?.recent_transactions ?? [];
+  }, [transactions?.data, pointsData?.recent_transactions]);
+
+  const discount = formatPercent(pointsData?.tier?.discount_percentage);
 
   const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
@@ -144,9 +154,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
 
           <AppText style={styles.headerTitle}>{t('MyPoints')}</AppText>
 
-          <TouchableOpacity activeOpacity={0.75} style={styles.headerButton}>
-            <Ionicons name="time-outline" size={22} color="#241812" />
-          </TouchableOpacity>
+          <View style={styles.headerButtonPlaceholder} />
         </View>
 
         <ScrollView
@@ -158,42 +166,183 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
         >
           <ProfilePointSection
             tierName={currentTierName}
-            points={pointsData.loyalty_total_points ?? 0}
-            remainingPoints={pointsData.points_to_next_tier ?? 0}
+            points={pointsData.loyalty_total_points}
+            remainingPoints={pointsData.points_to_next_tier}
             nextTier={nextTierName}
             progress={progress}
           />
 
-          <View style={styles.tierCard}>
-            <View style={styles.tierLineContainer}>
-              <View style={styles.tierLine} />
-              <View
-                style={[
-                  styles.tierActiveLine,
-                  { width: `${tierLineProgress}%` },
-                ]}
+          {/* The tier is earned on lifetime points, but only the balance can be
+              spent — showing one number for both was the ambiguity here. */}
+          <View style={styles.statRow}>
+            <StatTile
+              icon="wallet-outline"
+              label={t('AvailablePoints')}
+              value={(pointsData.loyalty_points ?? 0).toLocaleString(locale)}
+            />
+            <StatTile
+              icon="trending-up-outline"
+              label={t('TotalEarned')}
+              value={(pointsData.loyalty_total_points ?? 0).toLocaleString(
+                locale,
+              )}
+            />
+            {!!discount && (
+              <StatTile
+                icon="pricetag-outline"
+                label={t('MemberDiscount')}
+                value={discount}
               />
-            </View>
+            )}
+          </View>
 
-            <View style={styles.tierRow}>
-              {tiers.map((tier, index) => {
-                const isActive = tier.id === pointsData.tier?.id;
-                const isCompleted = index < activeTierIndex;
+          {/* ── Tier rail ── */}
+          {tiers.length > 0 && (
+            <View style={styles.tierCard}>
+              <View style={styles.tierLineContainer}>
+                <View style={styles.tierLine} />
+                <View
+                  style={[
+                    styles.tierActiveLine,
+                    { width: `${tierLineProgress}%` },
+                  ]}
+                />
+              </View>
 
-                return (
+              <View style={styles.tierRow}>
+                {tiers.map((tier, index) => (
                   <TierItem
                     key={tier.id}
                     title={tier.name}
-                    points={`${tier.min_points.toLocaleString()} ${t('Pts')}`}
-                    icon={isActive ? 'diamond' : 'diamond-outline'}
-                    active={isActive}
-                    completed={isCompleted}
+                    points={`${tier.min_points.toLocaleString(locale)} ${t(
+                      'Pts',
+                    )}`}
+                    active={tier.id === pointsData.tier?.id}
+                    completed={activeTierIndex >= 0 && index < activeTierIndex}
                   />
-                );
-              })}
+                ))}
+              </View>
             </View>
+          )}
+
+          {/* ── Benefits of the tier the member is on ── */}
+          <View style={styles.sectionHeader}>
+            <AppText style={styles.sectionTitle}>{t('YourBenefits')}</AppText>
+            {!!currentTierName && (
+              <View style={styles.sectionChip}>
+                <AppText style={styles.sectionChipText}>
+                  {currentTierName}
+                </AppText>
+              </View>
+            )}
           </View>
 
+          {benefits.length > 0 ? (
+            <View style={styles.listCard}>
+              {benefits.map((benefit: any, index: number) => (
+                <View
+                  key={benefit.id ?? index}
+                  style={[
+                    styles.listItem,
+                    index !== benefits.length - 1 && styles.listDivider,
+                  ]}
+                >
+                  <View style={styles.listLeft}>
+                    <View style={styles.listIconBox}>
+                      <Ionicons
+                        name={benefitIcon(benefit.icon) as any}
+                        size={18}
+                        color="#9B6A3D"
+                      />
+                    </View>
+
+                    <View style={styles.activityTextBox}>
+                      <AppText style={styles.listTitle}>
+                        {benefit.title ?? benefit.name ?? '—'}
+                      </AppText>
+                      {!!benefit.description && (
+                        <AppText style={styles.activityDate}>
+                          {benefit.description}
+                        </AppText>
+                      )}
+                    </View>
+                  </View>
+
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color="#2DBD7E"
+                  />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyActivityCard}>
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="ribbon-outline" size={24} color="#9B6A3D" />
+              </View>
+              <AppText style={styles.emptyTitle}>{t('NoBenefitsYet')}</AppText>
+            </View>
+          )}
+
+          {/* ── What the next tier unlocks ── */}
+          {!!nextTierName && (
+            <>
+              <View style={styles.sectionHeader}>
+                <AppText style={styles.sectionTitle}>
+                  {t('NextTierBenefits', { tier: nextTierName })}
+                </AppText>
+              </View>
+
+              <View style={styles.nextTierCard}>
+                <View style={styles.nextTierHeader}>
+                  <View style={styles.nextTierIconBox}>
+                    <Ionicons name="lock-closed" size={18} color="#FFFFFF" />
+                  </View>
+
+                  <View style={styles.rewardPreviewTextBox}>
+                    <AppText style={styles.rewardPreviewTitle}>
+                      {nextTierName}
+                    </AppText>
+                    <AppText style={styles.rewardPreviewSubtitle}>
+                      {t('PointsToUnlock', {
+                        points: (
+                          pointsData.points_to_next_tier ?? 0
+                        ).toLocaleString(locale),
+                      })}
+                    </AppText>
+                  </View>
+
+                  {!!formatPercent(
+                    pointsData.next_tier?.discount_percentage,
+                  ) && (
+                    <View style={styles.nextTierBadge}>
+                      <AppText style={styles.nextTierBadgeText}>
+                        {formatPercent(
+                          pointsData.next_tier?.discount_percentage,
+                        )}
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+
+                {nextTierBenefits.map((benefit: any, index: number) => (
+                  <View key={benefit.id ?? index} style={styles.lockedRow}>
+                    <Ionicons
+                      name={benefitIcon(benefit.icon) as any}
+                      size={16}
+                      color="#A08976"
+                    />
+                    <AppText style={styles.lockedText} numberOfLines={1}>
+                      {benefit.title ?? benefit.name ?? '—'}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* ── Rewards shortcut ── */}
           <View style={styles.sectionHeader}>
             <AppText style={styles.sectionTitle}>{t('Rewards')}</AppText>
           </View>
@@ -201,7 +350,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.rewardPreviewCard}
-            onPress={() => navigation?.navigate?.('RewardScreen')}
+            onPress={() => navigation?.navigate?.('Reward')}
           >
             <View style={styles.rewardPreviewLeft}>
               <View style={styles.rewardIconBox}>
@@ -221,81 +370,23 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
             <Ionicons name="chevron-forward" size={22} color="#A39186" />
           </TouchableOpacity>
 
-          <View style={styles.sectionHeader}>
-            <AppText style={styles.sectionTitle}>{t('YourBenefits')}</AppText>
-          </View>
-
-          <View style={styles.benefitRow}>
-            {benefits.map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                activeOpacity={0.8}
-                style={styles.benefitCard}
-              >
-                <View style={styles.smallIconBox}>
-                  <Ionicons name={item.icon as any} size={20} color="#8A552E" />
-                </View>
-
-                <AppText style={styles.benefitTitle} numberOfLines={1}>
-                  {item.title}
-                </AppText>
-
-                <AppText style={styles.benefitSubtitle} numberOfLines={2}>
-                  {item.subtitle}
-                </AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.sectionHeader}>
-            <AppText style={styles.sectionTitle}>{t('EarnMorePoints')}</AppText>
-          </View>
-
-          <View style={styles.listCard}>
-            {earnPoints.map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                activeOpacity={0.75}
-                style={[
-                  styles.listItem,
-                  index !== earnPoints.length - 1 && styles.listDivider,
-                ]}
-              >
-                <View style={styles.listLeft}>
-                  <View style={styles.listIconBox}>
-                    <Ionicons
-                      name={item.icon as any}
-                      size={18}
-                      color="#9B6A3D"
-                    />
-                  </View>
-                  <AppText style={styles.listTitle}>{item.title}</AppText>
-                </View>
-
-                <View style={styles.listRight}>
-                  <AppText style={styles.earnPointText}>{item.points}</AppText>
-                  <Ionicons name="chevron-forward" size={20} color="#A39186" />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
+          {/* ── Activity ── */}
           <View style={styles.sectionHeader}>
             <AppText style={styles.sectionTitle}>{t('RecentActivity')}</AppText>
           </View>
 
-          {transactions?.data?.length > 0 ? (
+          {activity.length > 0 ? (
             <View style={styles.listCard}>
-              {pointsData.recent_transactions.map((item, index) => {
-                const isMinus = item.points < 0 || item.type === 'redeem';
+              {activity.map((item: any, index: number) => {
+                const isMinus =
+                  item.points < 0 || /redeem|spend|deduct/i.test(item.type ?? '');
 
                 return (
                   <View
-                    key={item.id}
+                    key={item.id ?? index}
                     style={[
                       styles.activityItem,
-                      index !== pointsData.recent_transactions.length - 1 &&
-                        styles.listDivider,
+                      index !== activity.length - 1 && styles.listDivider,
                     ]}
                   >
                     <View style={styles.listLeft}>
@@ -310,7 +401,7 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                       </View>
 
                       <View style={styles.activityTextBox}>
-                        <AppText style={styles.listTitle}>
+                        <AppText style={styles.listTitle} numberOfLines={2}>
                           {item.description || t('PointTransaction')}
                         </AppText>
                         <AppText style={styles.activityDate}>
@@ -325,6 +416,8 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
                         isMinus && styles.minusPointText,
                       ]}
                     >
+                      {/* The sign already lives in the number when it is
+                          negative; only earnings need one added. */}
                       {isMinus ? '' : '+'}
                       {item.points} {t('Pts')}
                     </AppText>
@@ -350,10 +443,27 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   );
 };
 
+const StatTile: React.FC<{ icon: string; label: string; value: string }> = ({
+  icon,
+  label,
+  value,
+}) => (
+  <View style={styles.statTile}>
+    <View style={styles.statIconBox}>
+      <Ionicons name={icon as any} size={16} color="#9B6A3D" />
+    </View>
+    <AppText style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+      {value}
+    </AppText>
+    <AppText style={styles.statLabel} numberOfLines={2}>
+      {label}
+    </AppText>
+  </View>
+);
+
 type TierItemProps = {
   title: string;
   points: string;
-  icon: string;
   active?: boolean;
   completed?: boolean;
 };
@@ -361,7 +471,6 @@ type TierItemProps = {
 const TierItem: React.FC<TierItemProps> = ({
   title,
   points,
-  icon,
   active,
   completed,
 }) => {
@@ -375,13 +484,16 @@ const TierItem: React.FC<TierItemProps> = ({
         ]}
       >
         <Ionicons
-          name={icon as any}
-          size={22}
+          name={completed ? 'checkmark' : active ? 'diamond' : 'lock-closed'}
+          size={20}
           color={active ? '#FFFFFF' : completed ? '#9B6A3D' : '#B8B0AA'}
         />
       </View>
 
-      <AppText style={[styles.tierTitle, active && styles.tierTitleActive]}>
+      <AppText
+        style={[styles.tierTitle, active && styles.tierTitleActive]}
+        numberOfLines={1}
+      >
         {title}
       </AppText>
       <AppText style={styles.tierPoint}>{points}</AppText>
@@ -467,6 +579,106 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
   },
+  headerButtonPlaceholder: {
+    width: 44,
+    height: 44,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  statTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EFE5DD',
+  },
+  statIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FBF1E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statValue: {
+    alignSelf: 'stretch',
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#241812',
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
+  statLabel: {
+    marginTop: 2,
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: '#8B7C72',
+    textAlign: 'center',
+  },
+  sectionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F7ECE2',
+  },
+  sectionChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8A552E',
+  },
+  nextTierCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EFE5DD',
+    borderStyle: 'dashed',
+  },
+  nextTierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  nextTierIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#A08976',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextTierBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#FBF1E8',
+  },
+  nextTierBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#8A552E',
+  },
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F5EDE7',
+  },
+  lockedText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#7A6A60',
+  },
   header: {
     height: 64,
     paddingHorizontal: 20,
@@ -520,9 +732,9 @@ const styles = StyleSheet.create({
   },
   tierLineContainer: {
     position: 'absolute',
-    top: 39,
-    left: 54,
-    right: 54,
+    top: 44,
+    left: 44,
+    right: 44,
     height: 3,
     justifyContent: 'center',
   },
@@ -540,11 +752,13 @@ const styles = StyleSheet.create({
   },
   tierRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 8,
   },
   tierItem: {
-    width: '31%',
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 2,
   },
   tierIconBox: {
     width: 46,

@@ -63,6 +63,18 @@ export const initializeLanguage = async (): Promise<void> => {
       },
 
       returnNull: false,
+
+      // Last-resort readability. A key that is missing from both locales used
+      // to render as-is, so the UI showed "RedeemReward" where a sentence
+      // belonged. Splitting camel case at least yields "Redeem Reward" until
+      // the copy is added.
+      parseMissingKeyHandler: (key: string) =>
+        key
+          .split('.')
+          .pop()!
+          .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+          .replace(/[_-]+/g, ' ')
+          .trim(),
     });
 
     return;

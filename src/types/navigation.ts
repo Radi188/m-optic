@@ -1,3 +1,5 @@
+import type { Invoice } from './history';
+
 export type FrameShape =
   | 'round'
   | 'wayfarer'
@@ -58,6 +60,8 @@ export type RootStackParamList = {
   PointMember: undefined;
   Reward: undefined;
   PrescriptionDetail: undefined;
+  /** The invoice is passed whole — History already fetched every line item. */
+  InvoiceDetail: { invoice: Invoice };
   GlassesList: {
   from?: 'brand' | 'frame';
   brandId?: number | 'all';

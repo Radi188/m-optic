@@ -19,6 +19,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import PointsMemberScreen from '../screens/PointsMemberScreen';
 import RewardScreen from '../screens/RewardScreen';
 import PrescriptionDetailScreen from '../screens/PrescriptionDetailScreen';
+import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
 import GlassesListScreen from '../screens/GlassesListScreen';
 import SearchResultScreen from '../screens/SearchResultScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -109,6 +110,15 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="PrescriptionDetail"
             component={PrescriptionDetailScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+
+          <Stack.Screen
+            name="InvoiceDetail"
+            component={InvoiceDetailScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_right',

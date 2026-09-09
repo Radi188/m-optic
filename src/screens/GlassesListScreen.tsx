@@ -35,6 +35,7 @@ import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 type GlassesListNav = NativeStackNavigationProp<RootStackParamList>;
 type GlassesListRoute = NativeStackScreenProps<
@@ -448,7 +449,7 @@ const GlassesListScreen: React.FC = () => {
                           {b.name}
                         </AppText>
                       ) : (
-                        <Image
+                        <AppImage
                           source={{ uri: logoUri }}
                           style={styles.logo}
                           resizeMode="contain"

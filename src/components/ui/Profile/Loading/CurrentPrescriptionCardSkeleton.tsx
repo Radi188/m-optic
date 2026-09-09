@@ -24,19 +24,18 @@ const CurrentPrescriptionCardSkeleton: React.FC = () => {
 
   const backgroundColor = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#CFCBC7', '#E0DFDD'], // pulsing effect
+    outputRange: ['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.20)'],
   });
 
   return (
     <View style={styles.card}>
-      {/* Top section skeleton */}
+      {/* Mirrors the loaded card: header row, then the inset readings panel. */}
       <View style={styles.header}>
         <Animated.View style={[styles.iconSkeleton, { backgroundColor }]} />
         <Animated.View style={[styles.titleSkeleton, { backgroundColor }]} />
       </View>
 
-      {/* Center section: Right and Left Eye */}
-      <View style={styles.valueRow}>
+      <View style={styles.readingsPanel}>
         <View style={styles.eyeBlock}>
           <Animated.View style={[styles.labelSkeleton, { backgroundColor }]} />
           <Animated.View style={[styles.valueSkeleton, { backgroundColor }]} />
@@ -57,60 +56,58 @@ export default CurrentPrescriptionCardSkeleton;
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#E0DFDD',
-    borderRadius: 32,
+    marginTop: Spacing.md,
+    backgroundColor: '#3A2A20',
+    borderRadius: 22,
     padding: 16,
-    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(227,183,120,0.16)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
   },
   iconSkeleton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   titleSkeleton: {
-    flex: 1,
-    height: 18,
-    borderRadius: 8,
+    width: 148,
+    height: 15,
+    borderRadius: 7,
   },
-  valueRow: {
+  readingsPanel: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
   },
   eyeBlock: {
     flex: 1,
+    alignItems: 'center',
   },
   labelSkeleton: {
-    width: 80,
-    height: 14,
-    borderRadius: 6,
-    marginBottom: 6,
+    width: 74,
+    height: 11,
+    borderRadius: 5,
+    marginBottom: 9,
   },
   valueSkeleton: {
-    width: 50,
-    height: 22,
-    borderRadius: 6,
+    width: 92,
+    height: 23,
+    borderRadius: 7,
   },
   divider: {
     width: 1,
-    height: 45,
-    backgroundColor: '#D6D1CB',
-    marginHorizontal: 24,
-    marginTop: 8,
-  },
-  cardImageSkeleton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 110,
-    height: 100,
-    borderRadius: 16,
-    transform: [{ scale: 2 }],
+    alignSelf: 'stretch',
+    marginHorizontal: 6,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
 });

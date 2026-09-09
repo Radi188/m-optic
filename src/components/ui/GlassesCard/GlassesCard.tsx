@@ -5,6 +5,7 @@ import FaceIdIcon from '../../../assets/svg/face-id.svg';
 import { Colors } from '../../../theme';
 import { Product } from '../../../types/glasses';
 import AppText from '../../AppText';
+import AppImage from '../../AppImage';
 
 type Props = {
   item: Product;
@@ -41,7 +42,11 @@ const GlassCard: React.FC<Props> = ({
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       {/* Image */}
       <View style={styles.imageWrap}>
-        <Image source={{ uri: item.image }} style={styles.image} />
+        <AppImage
+          source={{ uri: item.image }}
+          style={styles.image}
+          resizeMode="contain"
+        />
 
         {/* Heart Icon */}
         <TouchableOpacity style={styles.heartIcon} onPress={toggleHeart}>

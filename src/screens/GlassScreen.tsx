@@ -29,16 +29,13 @@ import type {
 
 import { useAppDispatch, useAppSelector } from '../store';
 import {
-  selectFilteredGlasses,
   selectBrands,
-  selectSelectedBrand,
   selectSearchQuery,
   setSelectedBrand,
   setSearchQuery,
   addItem,
 } from '../store/slices/glassSlice';
 import GlassCard from '../components/ui/GlassesCard/GlassesCard';
-import { brandsData } from '../components/ui/Home/BrandSection';
 import SearchTrigger from '../components/ui/Search/SearchBar';
 import { Product } from '../types/glasses';
 import { useProductList } from '../hook/useProductList';
@@ -47,6 +44,7 @@ import FilterModal from '../components/ui/Modal/FilterModal';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -88,9 +86,7 @@ const GlassScreen: React.FC = () => {
   const { t } = useTranslation();
 
   // ── Redux state ────────────────────────────────────────────────────────────
-  const filtered = useAppSelector(selectFilteredGlasses);
 
-  const selectedBrand = useAppSelector(selectSelectedBrand);
   const searchQuery = useAppSelector(selectSearchQuery);
 
   const {
@@ -220,6 +216,15 @@ const GlassScreen: React.FC = () => {
     [brands],
   );
 
+  /** The brand the list is filtered by, or null while showing everything. */
+  const activeBrandName = useMemo(() => {
+    if (!filters.brand_1) return null;
+    return (
+      brandTabs.find(b => b.id !== 'all' && b.id === filters.brand_1)?.name ??
+      null
+    );
+  }, [brandTabs, filters.brand_1]);
+
   const hasMore =
     meta?.current_page && meta?.last_page
       ? meta.current_page < meta.last_page
@@ -335,10 +340,10 @@ const GlassScreen: React.FC = () => {
                         numberOfLines={1}
                         style={[styles.tabText, active && styles.tabTextActive]}
                       >
-                        {t(b.name)}
+                        {b.id === 'all' ? t('All') : b.name}
                       </AppText>
                     ) : (
-                      <Image
+                      <AppImage
                         source={{ uri: logoUri }}
                         style={styles.logo}
                         resizeMode="contain"
@@ -350,8 +355,8 @@ const GlassScreen: React.FC = () => {
         </ScrollView>
         {/* Count */}
         <AppText style={styles.countLine}>
-          {filtered.length} frame{filtered.length !== 1 ? 's' : ''}
-          {selectedBrand !== 'All' ? ` · ${selectedBrand}` : ''}
+          {t('FrameCount', { count: products.length })}
+          {activeBrandName ? ` · ${activeBrandName}` : ''}
         </AppText>
         {/* Grid */}
         {loading && products.length === 0 ? (

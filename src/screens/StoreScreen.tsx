@@ -8,12 +8,14 @@ import React, {
 import {
   Image,
   Linking,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Animated, {
@@ -39,6 +41,7 @@ import { fetchBranches, groupHours } from '../services/branchService';
 import StoreSkeleton from '../components/ui/Loading/StoreLoadingScreen';
 import type { StoreLocation } from '../services/branchService';
 import AppText from '../components/AppText';
+import AppImage from '../components/AppImage';
 
 const MARKER_LOGO = require('../assets/logo_icon_transparent.png');
 
@@ -53,10 +56,88 @@ const PHNOM_PENH_REGION = {
   longitudeDelta: 0.4,
 };
 
+
+/**
+ * Full-screen photo viewer for a branch gallery.
+ *
+ * Paged horizontally so the customer can swipe through the shopfront without
+ * returning to the sheet, and dismissed by the close button or the hardware
+ * back button.
+ */
+const PhotoViewer: React.FC<{
+  photos: string[];
+  index: number | null;
+  onClose: () => void;
+}> = ({ photos, index, onClose }) => {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [current, setCurrent] = useState(index ?? 0);
+
+  useEffect(() => {
+    if (index !== null) setCurrent(index);
+  }, [index]);
+
+  if (index === null || !photos.length) return null;
+
+  return (
+    <Modal
+      visible
+      transparent={false}
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={s.viewerRoot}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          contentOffset={{ x: index * width, y: 0 }}
+          onMomentumScrollEnd={e =>
+            setCurrent(Math.round(e.nativeEvent.contentOffset.x / width))
+          }
+        >
+          {photos.map(uri => (
+            <View key={uri} style={{ width, height }}>
+              <AppImage
+                source={{ uri }}
+                style={s.viewerImage}
+                resizeMode="contain"
+              />
+            </View>
+          ))}
+        </ScrollView>
+
+        <TouchableOpacity
+          style={[s.viewerClose, { top: insets.top + 12 }]}
+          activeOpacity={0.8}
+          onPress={onClose}
+        >
+          <Ionicons name="close" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {photos.length > 1 && (
+          <View style={[s.viewerDots, { bottom: insets.bottom + 24 }]}>
+            {photos.map((uri, i) => (
+              <View
+                key={uri}
+                style={[s.viewerDot, i === current && s.viewerDotActive]}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+};
+
 const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
   const { t } = useTranslation();
   const today = todayIndex();
   const hours = groupHours(location.weekdayText);
+
+  /** Index of the photo open in the viewer, or null when it is closed. */
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const headerOpacity = useSharedValue(0);
   const headerOffset = useSharedValue(10);
@@ -137,8 +218,10 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Image
-            source={MARKER_LOGO}
+          <AppImage
+            source={
+              location.photoUri ? { uri: location.photoUri } : MARKER_LOGO
+            }
             style={s.logoBadgeImg}
             resizeMode="contain"
           />
@@ -181,23 +264,17 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
                 <View
                   style={[
                     s.statusDot,
-                    {
-                      backgroundColor:
-                        location.status === 'open'
-                          ? Colors.success
-                          : Colors.error,
-                    },
+                    location.status === 'open'
+                      ? s.statusDotOpen
+                      : s.statusDotClosed,
                   ]}
                 />
                 <AppText
                   style={[
                     s.statusText,
-                    {
-                      color:
-                        location.status === 'open'
-                          ? Colors.success
-                          : Colors.error,
-                    },
+                    location.status === 'open'
+                      ? s.statusTextOpen
+                      : s.statusTextClosed,
                   ]}
                 >
                   {location.status === 'open' ? t('OpenNow') : t('Closed')}
@@ -211,23 +288,62 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
       <Animated.View style={detailsStyle}>
         <View style={s.sep} />
 
-        {[
-          { icon: 'location-outline', text: location.address },
-          ...(location.phone
-            ? [{ icon: 'call-outline', text: location.phone }]
-            : []),
-        ].map(row => (
-          <View key={row.icon} style={s.detailRow}>
+        {/* Address and phone sit side by side: both are short, and stacking
+            them pushed the hours and the gallery below the fold. The phone
+            takes only the width it needs, so a long address keeps the rest. */}
+        <View style={s.detailRow}>
+          <View style={s.detailItem}>
             <View style={s.detailIconWrap}>
               <Ionicons
-                name={row.icon as any}
+                name="location-outline"
                 size={15}
                 color={Colors.primary}
               />
             </View>
-            <AppText style={s.detailText}>{row.text}</AppText>
+            <AppText style={s.detailText} numberOfLines={2}>
+              {location.address}
+            </AppText>
           </View>
-        ))}
+
+          {!!location.phone && (
+            <TouchableOpacity
+              style={s.detailItemPhone}
+              activeOpacity={0.72}
+              onPress={callStore}
+            >
+              <View style={s.detailIconWrap}>
+                <Ionicons name="call-outline" size={15} color={Colors.primary} />
+              </View>
+              <AppText style={s.detailTextPhone} numberOfLines={1}>
+                {location.phone}
+              </AppText>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {location.photos.length > 0 && (
+          <>
+            <View style={s.sep} />
+
+            {/* Only some branches have a gallery, so the whole block is
+                omitted rather than leaving an empty strip. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.galleryRow}
+            >
+              {location.photos.map((uri, index) => (
+                <TouchableOpacity
+                  key={uri}
+                  activeOpacity={0.85}
+                  onPress={() => setViewerIndex(index)}
+                >
+                  <AppImage source={{ uri }} style={s.galleryImage} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {hours.length > 0 && (
           <>
@@ -265,6 +381,12 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
 
         <View style={s.sep} />
       </Animated.View>
+
+      <PhotoViewer
+        photos={location.photos}
+        index={viewerIndex}
+        onClose={() => setViewerIndex(null)}
+      />
 
       <Animated.View style={[s.ctaRow, ctaStyle]}>
         <TouchableOpacity
@@ -308,6 +430,14 @@ const StoreMarker: React.FC<{
 }> = ({ location, active, onPress }) => {
   const [loaded, setLoaded] = useState(false);
   const [settled, setSettled] = useState(false);
+  // A branch logo that 404s would leave an empty pin, so a failed load falls
+  // back to the app mark rather than showing nothing.
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  const markerLogo =
+    location.photoUri && !logoFailed
+      ? { uri: location.photoUri }
+      : MARKER_LOGO;
 
   useEffect(() => {
     setSettled(false);
@@ -327,10 +457,14 @@ const StoreMarker: React.FC<{
       <View style={mk.wrap}>
         <View style={[mk.head, active ? mk.headActive : mk.headInactive]}>
           <Image
-            source={MARKER_LOGO}
+            source={markerLogo}
             style={mk.logo}
             resizeMode="contain"
             onLoad={() => setLoaded(true)}
+            onError={() => {
+              setLogoFailed(true);
+              setLoaded(true);
+            }}
           />
         </View>
         <View style={[mk.tail, active ? mk.tailActive : mk.tailInactive]} />
@@ -671,6 +805,54 @@ const s = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
+  viewerRoot: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  viewerImage: {
+    flex: 1,
+    width: '100%',
+  },
+  viewerClose: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerDots: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  viewerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  viewerDotActive: {
+    backgroundColor: '#FFFFFF',
+    width: 18,
+  },
+
+  galleryRow: {
+    gap: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 2,
+  },
+
+  galleryImage: {
+    width: 168,
+    height: 122,
+    borderRadius: 16,
+    backgroundColor: Colors.gray100,
+  },
+
   logoBadge: {
     width: 52,
     height: 52,
@@ -715,25 +897,52 @@ const s = StyleSheet.create({
     marginLeft: 3,
   },
   reviewCount: { fontSize: FontSize.xs, color: Colors.gray400 },
+  // A bordered chip on the sheet's own surface rather than a solid tint
+  // block: the rest of this screen is white cards with hairline borders, and
+  // the filled pill read as a button sitting in the middle of the title.
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: BorderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 4,
+    paddingLeft: 7,
+    paddingRight: 10,
+    paddingVertical: 4,
+    gap: 6,
+    borderWidth: 1,
   },
-  statusOpen: { backgroundColor: Colors.successLight },
-  statusClosed: { backgroundColor: Colors.errorLight },
+  statusOpen: {
+    backgroundColor: 'rgba(45,189,126,0.08)',
+    borderColor: 'rgba(45,189,126,0.28)',
+  },
+  statusClosed: {
+    backgroundColor: 'rgba(217,45,32,0.06)',
+    borderColor: 'rgba(217,45,32,0.22)',
+  },
   statusDot: {
-    width: 5,
-    height: 5,
+    width: 6,
+    height: 6,
     borderRadius: 3,
+  },
+  // The dot carries a soft halo so "open" reads as a live indicator rather
+  // than a bullet point.
+  statusDotOpen: {
+    backgroundColor: Colors.success,
+    shadowColor: Colors.success,
+    shadowOpacity: 0.5,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
+  },
+  statusDotClosed: {
+    backgroundColor: Colors.error,
   },
   statusText: {
     fontSize: FontSize.xs,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
+  statusTextOpen: { color: '#1F8A54' },
+  statusTextClosed: { color: Colors.error },
   sep: {
     height: 1,
     backgroundColor: 'rgba(156,129,120,0.14)',
@@ -742,10 +951,33 @@ const s = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
     marginBottom: Spacing.sm,
     paddingHorizontal: Spacing.lg,
+  },
+  // `minWidth: 0` is what actually lets this half shrink: without it a flex
+  // child refuses to go below its content width and pushes into its sibling.
+  detailItem: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  // Sized to its number rather than sharing the width evenly — the address is
+  // the variable-length half.
+  detailItemPhone: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  detailTextPhone: {
+    fontSize: FontSize.sm,
+    color: Colors.gray600,
+    lineHeight: 20,
   },
   detailIconWrap: {
     width: 30,
@@ -763,8 +995,8 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray600,
     flex: 1,
+    minWidth: 0,
     lineHeight: 20,
-    paddingTop: 5,
   },
   sectionHeader: {
     flexDirection: 'row',

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing } from '../../../theme';
 import AppText from '../../AppText';
+import AppImage from '../../AppImage';
 
 type ProfileHeaderProps = {
   name?: string;
@@ -26,7 +27,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <View style={styles.avatarContainer}>
           <View style={styles.avatarWrap}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+              <AppImage source={{ uri: avatarUrl }} style={styles.avatar} />
             ) : (
               <Ionicons name="person" size={46} color={Colors.primary} />
             )}

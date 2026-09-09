@@ -1,8 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import AppText from '../../AppText';
+
+/**
+ * Gold, used for every accent on the card: the eye labels, the eye glyph and
+ * the exam metadata. One accent against the dark ground is what keeps it
+ * reading as premium rather than merely dark.
+ */
+const GOLD = '#E3B778';
 
 type CurrentPrescriptionCardProps = {
   rightEye?: string;
@@ -13,9 +21,9 @@ type CurrentPrescriptionCardProps = {
   rightLabel: string;
   leftLabel: string;
   /**
-   * Show `updatedAt` in the top-right corner. Opt-in: the profile and
-   * prescription screens deliberately render this card without a date, while
-   * the history list needs one per entry to tell the exams apart.
+   * Show `updatedAt` in the header. Opt-in: the profile screen renders this
+   * card without a date, while the history list needs one per entry to tell
+   * the exams apart.
    */
   showDate?: boolean;
   /**
@@ -30,86 +38,116 @@ type CurrentPrescriptionCardProps = {
   /** Optional free-text note or diagnosis from the exam. */
   note?: string;
   /**
-   * Let the two eye blocks share the card's full width, with the divider
-   * centred between them. Opt-in: the profile and prescription screens keep
-   * the compact, left-hugging layout so the decorative lens stays clear.
+   * Retained for the existing call sites. The two eye blocks always share the
+   * card's full width now — the old left-hugging variant existed to clear a
+   * decorative lens image that is no longer drawn.
    */
   fullWidthEyes?: boolean;
-  /**
-   * Surface override. The default beige is tuned for the white profile
-   * canvas; on a warm-background screen it needs a lighter surface to stay
-   * distinguishable from the page.
-   */
+  /** Surface override, for screens whose background needs a different card. */
   style?: StyleProp<ViewStyle>;
 };
 
+/** One eye's reading. */
+const EyeColumn: React.FC<{
+  label: string;
+  value: string;
+  sub?: string;
+}> = ({ label, value, sub }) => (
+  <View style={styles.eyeBlock}>
+    <AppText style={styles.eyeLabel} numberOfLines={1}>
+      {label}
+    </AppText>
+
+    {/* A full sphere/cylinder reading is long, so the type shrinks to fit
+        rather than wrapping or being clipped. */}
+    <AppText
+      style={styles.eyeValue}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.55}
+    >
+      {value}
+    </AppText>
+
+    {!!sub && <AppText style={styles.eyeSub}>{sub}</AppText>}
+  </View>
+);
+
 const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
-  rightEye = '-4.00',
-  leftEye = '-3.75',
-  updatedAt = '12 May 2026',
-  title = 'Current Prescription',
-  rightLabel = 'Right Eye',
-  leftLabel = 'Left Eye',
+  rightEye = '—',
+  leftEye = '—',
+  updatedAt,
+  title,
+  rightLabel,
+  leftLabel,
   onPress,
   showDate = false,
   rightSub,
   leftSub,
   meta,
   note,
-  fullWidthEyes = false,
   style,
 }) => {
   return (
     <TouchableOpacity
       style={[styles.card, style]}
       onPress={onPress}
-      activeOpacity={onPress ? 0.85 : 1}
+      activeOpacity={onPress ? 0.9 : 1}
       disabled={!onPress}
     >
-      {/* Background/Bottom-Right Lens Image */}
-      {/* <Image
-        source={require('../../../assets/images/lens.png')}
-        style={styles.cardImage}
-        resizeMode="contain"
-      /> */}
+      <LinearGradient
+        colors={['#5A4232', '#3A2A20']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-      {/* Top Section: Icon, Title, and Date */}
+      {/* A single rotated highlight across the top-right corner — the light
+          catch that keeps a flat dark panel from looking like a void. */}
+      <View pointerEvents="none" style={styles.sheen} />
+
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="eye-outline" size={20} color={'#5B3A26'} />
-          </View>
-          {/* Title wraps naturally onto two lines because of the width constraint */}
-          <AppText style={styles.title} numberOfLines={2}>
+        <View style={styles.iconCircle}>
+          <Ionicons name="eye-outline" size={17} color={GOLD} />
+        </View>
+
+        <View style={styles.headerText}>
+          <AppText style={styles.title} numberOfLines={1}>
             {title}
           </AppText>
+          {showDate && !!updatedAt && (
+            <AppText style={styles.updatedText}>{updatedAt}</AppText>
+          )}
         </View>
-        {showDate && updatedAt && (
-          <AppText style={styles.updatedText}>{updatedAt}</AppText>
+
+        {!!onPress && (
+          <Ionicons
+            name="chevron-forward"
+            size={17}
+            color="rgba(255,255,255,0.45)"
+          />
         )}
       </View>
 
-      {/* Center Section: Eye Prescription Numbers */}
-      <View style={[styles.valueRow, fullWidthEyes && styles.valueRowFull]}>
-        <View style={[styles.eyeBlock, fullWidthEyes && styles.eyeBlockFull]}>
-          <AppText style={styles.eyeLabel}>{rightLabel} </AppText>
-          <AppText style={styles.eyeValue}>{rightEye}</AppText>
-          {!!rightSub && <AppText style={styles.eyeSub}>{rightSub}</AppText>}
-        </View>
+      {/* The readings sit on their own inset panel: it separates the numbers
+          from the chrome around them and is what gives the card its depth
+          without resorting to a heavier shadow. */}
+      <View style={styles.readingsPanel}>
+        <EyeColumn label={rightLabel} value={rightEye} sub={rightSub} />
 
-        <View style={[styles.divider, fullWidthEyes && styles.dividerFull]} />
+        <View style={styles.divider} />
 
-        <View style={[styles.eyeBlock, fullWidthEyes && styles.eyeBlockFull]}>
-          <AppText style={styles.eyeLabel}>{leftLabel}</AppText>
-          <AppText style={styles.eyeValue}>{leftEye}</AppText>
-          {!!leftSub && <AppText style={styles.eyeSub}>{leftSub}</AppText>}
-        </View>
+        <EyeColumn label={leftLabel} value={leftEye} sub={leftSub} />
       </View>
 
-      {(meta || note) && (
+      {(!!meta || !!note) && (
         <View style={styles.footer}>
-          {meta && <AppText style={styles.meta}>{meta}</AppText>}
-          {note && <AppText style={styles.note}>{note}</AppText>}
+          {!!meta && (
+            <AppText style={styles.meta} numberOfLines={1}>
+              {meta}
+            </AppText>
+          )}
+          {!!note && <AppText style={styles.note}>{note}</AppText>}
         </View>
       )}
     </TouchableOpacity>
@@ -119,136 +157,150 @@ const CurrentPrescriptionCard: React.FC<CurrentPrescriptionCardProps> = ({
 export default CurrentPrescriptionCard;
 
 const styles = StyleSheet.create({
+  // Deep espresso rather than the tier colours of the membership card above
+  // it: two saturated cards stacked would compete, so this one stays neutral
+  // and lets gold do the talking.
   card: {
-    backgroundColor: '#F5ECE6',
-    borderRadius: 32,
+    backgroundColor: '#3A2A20',
+    borderRadius: 22,
     padding: 16,
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: '#EFE2DA',
-    // Keeps the decorative lens inside the rounded shape.
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(227,183,120,0.16)',
+    shadowColor: '#2A160A',
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  // Was `width: 110 … transform: scale(2)`, which drew the art 220x147 and
-  // pushed it ~35pt past the card's right edge, leaving the text underneath
-  // it. Sized explicitly (source is 3:2) so it sits in the bottom-right
-  // corner and leaves a clear column on the left.
-  cardImage: {
+
+  sheen: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 110,
-    height: 73,
+    top: -120,
+    right: -90,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(255,226,182,0.10)',
+    transform: [{ rotate: '18deg' }],
   },
+
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  headerLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 10,
+    marginBottom: 14,
   },
+
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EBE0D7',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(227,183,120,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(227,183,120,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
+
+  headerText: { flex: 1 },
+
+  // Small tracked caps rather than a sentence-case heading — it reads as a
+  // document label, which is what a prescription is.
   title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1310',
-  },
-  updatedText: {
-    fontSize: 13,
-    color: '#7F726A',
-    paddingTop: 4,
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start', // Keeps the labels aligned at the top
-    marginBottom: 12,
-  },
-  // Full-width variant: the two blocks split the card evenly and sit above
-  // the decorative lens, instead of hugging the left column.
-  valueRowFull: {
-    alignSelf: 'stretch',
-    // Lets the divider run the full height of the tallest block, so it still
-    // reaches past the VA line underneath the readings.
-    alignItems: 'stretch',
-    zIndex: 1,
-  },
-  eyeBlock: {
-    maxWidth: 110,
-  },
-  eyeBlockFull: {
-    flex: 1,
-    maxWidth: undefined,
-  },
-  eyeSub: {
     fontSize: 12,
-    color: '#7F726A',
-    marginTop: 4,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
   },
-  eyeLabel: {
-    fontSize: 14,
-    color: '#8A7A71',
+
+  updatedText: {
+    marginTop: 3,
+    fontSize: 11.5,
+    color: 'rgba(255,255,255,0.58)',
+  },
+
+  readingsPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+  },
+
+  eyeBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  eyeLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 8,
   },
-  eyeValue: {
-    fontSize: 22,
+
+  eyeMarker: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: GOLD,
+    letterSpacing: 0.8,
+  },
+
+  eyeLabel: {
+    flexShrink: 1,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#1A1310',
-    letterSpacing: -0.5,
+    color: 'rgba(255,255,255,0.55)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
-  // The lens occupies the right ~32% of the card, so the doctor/branch line
-  // and the note stay in the left column rather than running across it.
-  footer: {
-    maxWidth: '100%',
-    zIndex: 1,
+
+  eyeValue: {
+    alignSelf: 'stretch',
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: -0.6,
   },
-  meta: {
-    fontSize: 13,
-    color: '#7F726A',
-    marginBottom: 4,
+
+  eyeSub: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.55)',
   },
-  note: {
-    fontSize: 13,
-    color: '#5B4A42',
-    lineHeight: 19,
-    marginBottom: 4,
-  },
+
   divider: {
     width: 1,
-    height: 45,
-    backgroundColor: '#E5D6CD',
-    marginHorizontal: 24,
-    marginTop: 8, // Pushes divider down to align nicely with the text layout
+    alignSelf: 'stretch',
+    marginHorizontal: 6,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  dividerFull: {
-    marginHorizontal: 16,
-    height: undefined,
-    marginBottom: 4,
+
+  footer: {
+    marginTop: 13,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.12)',
   },
-  button: {
-    width: 145,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  buttonText: {
-    fontSize: 14,
+
+  meta: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#412616',
+    color: 'rgba(227,183,120,0.92)',
+    letterSpacing: 0.2,
+  },
+
+  note: {
+    marginTop: 5,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.7)',
   },
 });

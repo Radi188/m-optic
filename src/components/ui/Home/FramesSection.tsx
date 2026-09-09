@@ -10,6 +10,7 @@ import {
 import { Colors, FontSize, Spacing } from '../../../theme';
 import { FrameShapeItem } from '../../../types/home';
 import AppText from '../../AppText';
+import AppImage from '../../AppImage';
 
 type FramesSectionProps = {
   title?: string;
@@ -29,7 +30,11 @@ const FramesSection: React.FC<FramesSectionProps> = ({
       onPress={() => onPressFrame?.(item)}
     >
       {item.icon_url ? (
-        <Image source={{ uri: item.icon_url }} style={styles.image} />
+        <AppImage
+          source={{ uri: item.icon_url }}
+          style={styles.image}
+          resizeMode="cover"
+        />
       ) : (
         <View style={styles.imagePlaceholder}>
           <AppText style={styles.placeholderText}>{item.name}</AppText>

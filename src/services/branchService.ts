@@ -6,9 +6,10 @@
  * but it carries less than Places did, and most of the work here is being
  * honest about the gaps rather than inventing values:
  *
- *  • Most branches have no latitude/longitude yet, so `hasCoords` says whether
- *    a branch can be put on the map at all. Never fall back to 0/0: that is a
- *    real point in the Gulf of Guinea and it renders as a pin in the ocean.
+ *  • `hasCoords` says whether a branch can be put on the map at all. Every
+ *    branch carries coordinates today, but the fields are nullable, and a
+ *    missing pair must never fall back to 0/0: that is a real point in the
+ *    Gulf of Guinea and it renders as a pin in the ocean.
  *  • The endpoint has one open/close window, not per-day hours, so every day
  *    gets the same row.
  *  • There are no ratings. `rating` stays 0, which the sheet already treats as
@@ -16,6 +17,16 @@
  */
 import api from './api';
 import { buildFileUrl } from '../utils/fileUrlHelper';
+
+/** A shopfront photo. `image_path` is a storage path, not a URL. */
+export interface BranchGalleryItem {
+  id: number;
+  branch_id?: number;
+  image_path: string | null;
+  type?: string | null;
+  /** The shop's own ordering. Ties fall back to id, which is upload order. */
+  sort_order?: number | null;
+}
 
 /** Raw row from GET /api/v1/branches. */
 export interface BranchResponse {
@@ -34,7 +45,7 @@ export interface BranchResponse {
   is_manually_closed: boolean;
   /** 'Open' | 'Closed' | 'Unknown' — 'Unknown' when no hours are set. */
   current_status: string;
-  gallery: unknown[];
+  gallery: BranchGalleryItem[] | null;
 }
 
 /**
@@ -59,7 +70,10 @@ export interface StoreLocation {
   /** False when the branch has no coordinates — it cannot be mapped. */
   hasCoords: boolean;
   mapsLink: string | null;
+  /** The branch's own logo. */
   photoUri: string | null;
+  /** Shopfront photos, ordered as the shop arranged them. Often empty. */
+  photos: string[];
 }
 
 // Monday first, to match todayIndex() in the store screen.
@@ -92,6 +106,17 @@ function toCoord(raw: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Gallery rows carry storage paths and an explicit `sort_order` that is 0 on
+ * every row today, so id (upload order) settles the ties.
+ */
+function toPhotos(gallery: BranchGalleryItem[] | null | undefined): string[] {
+  return [...(gallery ?? [])]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id)
+    .map(item => buildFileUrl(item.image_path))
+    .filter((url): url is string => !!url);
+}
+
 function toStatus(branch: BranchResponse): StoreStatus {
   if (branch.is_manually_closed) return 'closed';
   const status = (branch.current_status || '').toLowerCase();
@@ -122,6 +147,7 @@ export function mapBranch(branch: BranchResponse): StoreLocation {
     hasCoords: lat !== null && lng !== null,
     mapsLink: branch.google_maps_link,
     photoUri: buildFileUrl(branch.logo),
+    photos: toPhotos(branch.gallery),
   };
 }
 

@@ -24,33 +24,11 @@ interface NotificationsState {
 
 // ─── Initial State ────────────────────────────────────────────────────────────
 
+// Empty until FCM delivers something: the seeded "New shipment" / "Low stock"
+// / "Sale completed" rows were placeholders and counted towards the unread
+// badge on the profile header.
 const initialState: NotificationsState = {
-  items: [
-    {
-      id: 'n1',
-      title: 'New shipment',
-      message: 'Your order #1042 has been dispatched.',
-      type: 'info',
-      read: false,
-      timestamp: Date.now() - 1000 * 60 * 30, // 30 min ago
-    },
-    {
-      id: 'n2',
-      title: 'Low stock alert',
-      message: 'Oakley frame (black) has only 2 left.',
-      type: 'warning',
-      read: false,
-      timestamp: Date.now() - 1000 * 60 * 120, // 2 h ago
-    },
-    {
-      id: 'n3',
-      title: 'Sale completed',
-      message: '3 glasses sold successfully today.',
-      type: 'success',
-      read: true,
-      timestamp: Date.now() - 1000 * 60 * 60 * 5, // 5 h ago
-    },
-  ],
+  items: [],
   fcmToken: null,
   permissionGranted: false,
 };
