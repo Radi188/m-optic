@@ -59,6 +59,8 @@
   "frameRound": "Round",
   "frameRectangle": "Rectangle",
   "frameSquare": "Square",
+  "frameSoftSquare": "Soft Square",
+  "frameNarrowRectangle": "Narrow Rectangle",
   "frameCatEye": "Cat Eye",
   "frameAviator": "Aviator",
   "stockIn": "In Stock",

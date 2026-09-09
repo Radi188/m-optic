@@ -124,6 +124,8 @@ const GlassScreen: React.FC = () => {
     { label: 'Round', value: 'round' },
     { label: 'Rectangle', value: 'rectangle' },
     { label: 'Square', value: 'square' },
+    { label: 'Soft Square', value: 'soft-square' },
+    { label: 'Narrow Rectangle', value: 'narrow-rectangle' },
     { label: 'Cat Eye', value: 'cat-eye' },
     { label: 'Aviator', value: 'aviator' },
   ];

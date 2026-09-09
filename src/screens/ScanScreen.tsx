@@ -109,7 +109,7 @@ const FACE_SHAPE_INFO: Record<
     icon: 'ellipse-outline',
     description:
       'Balanced proportions — slightly wider at the cheeks and gently tapering to the forehead and jaw.',
-    frames: ['Wayfarer', 'Aviator', 'Round', 'Cat-Eye'],
+    frames: ['Soft-Square', 'Narrow-Rectangle', 'Aviator', 'Browline'],
     tip: 'Lucky you — almost any frame style suits an oval face.',
   },
   Round: {
@@ -129,7 +129,7 @@ const FACE_SHAPE_INFO: Record<
   Heart: {
     icon: 'heart-outline',
     description: 'Wider forehead tapering down to a narrow, pointed chin.',
-    frames: ['Aviator', 'Round', 'Rimless', 'Oval'],
+    frames: ['Narrow-Rectangle', 'Soft-Square', 'Aviator', 'Rimless'],
     tip: 'Bottom-heavy or light frames balance a wider forehead.',
   },
   Oblong: {
@@ -2370,6 +2370,15 @@ const FRAME_INFO: Record<string, { reason: string }> = {
   Decorative: {
     reason: 'Detailing and depth add width and visual interest to a long face.',
   },
+  // Keyed with a hyphen to match the names used in FACE_SHAPE_INFO.frames —
+  // an underscore here never matched, so the card fell back to the generic
+  // reason and FrameShapeIcon drew its Rectangle default.
+  'Soft-Square': {
+    reason: 'Rounded corners soften a strong jawline and angular features.',
+  },
+  'Narrow-Rectangle': {
+    reason: 'Slim, low lenses keep the frame light and never widen the face.',
+  },
 };
 
 // Why a frame flatters THIS face. FRAME_INFO's reason is written per frame
@@ -2379,6 +2388,10 @@ const FRAME_INFO: Record<string, { reason: string }> = {
 // pair, so each card argues from the features the scan actually found.
 const SHAPE_FRAME_REASON: Record<FaceShape, Record<string, string>> = {
   Oval: {
+    'Soft-Square':
+      'Softly squared lenses add gentle structure while keeping your proportions balanced.',
+    'Narrow-Rectangle':
+      'Slim, low lenses follow your natural line and keep an oval face from looking longer.',
     Wayfarer:
       'Clean angular lines add structure without upsetting your balanced proportions.',
     Aviator:
@@ -2407,6 +2420,10 @@ const SHAPE_FRAME_REASON: Record<FaceShape, Record<string, string>> = {
       'Upswept corners lift attention from the jaw up toward your eyes.',
   },
   Heart: {
+    'Narrow-Rectangle':
+      'A slim, low frame stays clear of your wider forehead and keeps the balance on your chin.',
+    'Soft-Square':
+      'Rounded corners and a squared base add fullness where your face tapers to the chin.',
     Aviator:
       'Curved lower edges add width where your face narrows toward the chin.',
     Round:
@@ -2456,9 +2473,13 @@ const ProductRecommendations: React.FC<{
     limit: 50,
   });
 
-  const wanted = recommendedFrames.map(f => f.toLowerCase());
+  // Compare on letters only, so a catalogue shape stored as "Soft Square" or
+  // "soft_square" still matches the "Soft-Square" name used here. A plain
+  // lowercase compare made the separator significant and failed silently.
+  const canon = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const wanted = recommendedFrames.map(canon);
   const isRecommended = (p: Product) =>
-    !!p.frame_shape?.name && wanted.includes(p.frame_shape.name.toLowerCase());
+    !!p.frame_shape?.name && wanted.includes(canon(p.frame_shape.name));
   const matched = products.filter(isRecommended);
   // Fall back to the general catalogue if nothing matches the face shape.
   const recommended = (matched.length ? matched : products).slice(0, 6);

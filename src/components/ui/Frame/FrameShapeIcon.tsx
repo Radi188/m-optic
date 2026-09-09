@@ -57,6 +57,19 @@ const GEOM: Record<string, Geom> = {
     bridge: <Path d="M28.4 12.4 C30.8 11 33.2 11 35.6 12.4" />,
   },
 
+  // Square proportions, but every corner heavily rounded — the structure of a
+  // square without the hard edges.
+  'Soft-Square': {
+    lens: <Rect x={4.6} y={5.8} width={22.8} height={16.4} rx={6.8} />,
+    bridge: FLAT_BRIDGE,
+  },
+
+  // A rectangle with far less lens depth: long, low and slim.
+  'Narrow-Rectangle': {
+    lens: <Rect x={3.4} y={9.2} width={25.2} height={9.6} rx={2.4} />,
+    bridge: <Path d="M28.6 12.6 C30.8 11.6 33.2 11.6 35.4 12.6" />,
+  },
+
   // Flat brow, gently tapering to a rounded bottom.
   Wayfarer: {
     lens: (
