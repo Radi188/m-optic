@@ -69,10 +69,12 @@ type FaceShape =
   | 'Oval'
   | 'Round'
   | 'Square'
+  | 'Rectangle'
   | 'Heart'
   | 'Oblong'
   | 'Diamond'
-  | 'Triangle';
+  | 'Triangle'
+  | 'Inverted Triangle';
 
 // Normalized 0..100 measurement readouts posted from the scanner.
 type FaceMetrics = {
@@ -88,10 +90,16 @@ type FaceMetrics = {
 type FaceDebug = {
   raw: {
     aspect: number;
+    /** Brow-to-chin facial index — the axis the classifier actually uses. */
+    aspect2?: number;
     fVc: number;
     jVc: number;
     chinTaper: number;
     jawDeg: number;
+    jawBow?: number;
+    lowerFull?: number;
+    yaw?: number;
+    pitch?: number;
   } | null;
   scores: Record<string, number> | null;
   samples: number;
@@ -153,6 +161,20 @@ const FACE_SHAPE_INFO: Record<
       'Narrow forehead widening to a strong, broad jawline — the jaw is the widest point.',
     frames: ['Browline', 'Cat-Eye', 'Aviator', 'Round'],
     tip: 'Frames wider on top, like browline or cat-eye, balance a strong jaw.',
+  },
+  Rectangle: {
+    icon: 'tablet-portrait-outline',
+    description:
+      'Long like an oblong face, but squared off — a broad forehead and a strong, angular jaw of about the same width.',
+    frames: ['Round', 'Oval', 'Aviator', 'Cat-Eye'],
+    tip: 'Deep, rounded frames shorten a long face and soften a squared jaw at the same time.',
+  },
+  'Inverted Triangle': {
+    icon: 'caret-down-outline',
+    description:
+      'Broad forehead and temples narrowing to a slim jaw, with a chin that stays flat rather than pointed.',
+    frames: ['Round', 'Oval', 'Aviator', 'Rimless'],
+    tip: 'Light, rounded frames that sit narrow at the top keep the focus away from a wider forehead.',
   },
 };
 
@@ -717,7 +739,10 @@ body.smooth #softLayer.on{opacity:.5}
 }
 #shapeBadge.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #shapeBadge .ic{color:#fff;font-size:15px}
-#shapeBadge span{color:#fff;font-weight:700;font-size:14px;letter-spacing:0.3px}
+/* nowrap + a cap keeps the longest shape name ("Inverted Triangle Face") on
+   one line and inside the frame on a narrow phone. */
+#shapeBadge span{color:#fff;font-weight:700;font-size:14px;letter-spacing:0.3px;white-space:nowrap}
+#shapeBadge{max-width:88vw}
 
 #loading{
   position:absolute;z-index:10;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -810,6 +835,7 @@ window.armScan=function(){armed=true;};
 var facing='user';
 var MIRROR=true;           // front-camera preview is mirrored; rear is not
 var FRONT_MAX=0.10;        // max yaw to count as "looking straight"
+var PITCH_MAX=0.22;        // max head pitch, radians (~12.5°), chin up or down
 
 // The rear camera is almost always pointed at somebody else, so the coaching
 // copy switches from first to second person along with it.
@@ -951,6 +977,37 @@ function widestIn(pts,y0,y1,steps){
   return best;
 }
 
+// How far the jaw line bows outward between its widest point and the chin,
+// as a fraction of the straight line between those two points.
+//
+// This is the one measurement that tells a round jaw from a square one without
+// needing to know anything about the rest of the face: a round jaw traces a
+// curve that stands well clear of that line, a square jaw turns its corner at
+// the gonion and then runs almost straight down, hugging it. Being a ratio of
+// two distances on the same face it is scale-free, so unlike the facial index
+// it carries no calibration constant of its own.
+function jawBow(pts,jw,chin){
+  var mid=(jw.l+jw.r)/2;
+  function side(x0,sign){
+    var ax=x0,ay=jw.y,dx=chin.x-ax,dy=chin.y-ay;
+    var len2=dx*dx+dy*dy,len=Math.sqrt(len2);
+    if(len<1)return 0;
+    var best=0,i,p,t,d;
+    for(i=0;i<pts.length;i++){
+      p=pts[i];
+      if(p.y<jw.y||p.y>chin.y)continue;
+      // Each side is measured on its own half of the contour.
+      if(sign<0?(p.x>mid):(p.x<mid))continue;
+      t=((p.x-ax)*dx+(p.y-ay)*dy)/len2;
+      if(t<0||t>1)continue;
+      d=(p.x-(ax+dx*t))*sign;          // outward from the midline is positive
+      if(d>best)best=d;
+    }
+    return best/len;
+  }
+  return (side(jw.l,-1)+side(jw.r,1))/2;
+}
+
 function computeMetrics(lm){
   var W=(video&&video.videoWidth)||640, H=(video&&video.videoHeight)||480;
   var fr=ovalFrame(lm,W,H);
@@ -985,14 +1042,38 @@ function computeMetrics(lm){
   var gonR=angleP({x:jwS.r,y:jwS.y},{x:ckS.r,y:ckS.y},chin);
   var jawDeg=(gonL+gonR)/2;
 
-  var FI=faceL/ckS.w;                  // facial index (length ÷ cheekbone)
+  // Undo what is left of the head's pose. The frame gate keeps the head
+  // near-frontal, but "near" still foreshortens: a width shrinks with
+  // cos(yaw) and a length with cos(pitch). Both corrections are clamped, so a
+  // bad pose estimate can nudge a reading but never invent one.
+  var po=poseOf(lm,W,H);
+  var cy=Math.cos(po.yaw),cp=Math.cos(po.pitch);
+  if(cy<0.88)cy=0.88;
+  if(cp<0.88)cp=0.88;
+  var cheekW=ckS.w/cy;
+  var faceLp=faceL/cp;
+
+  var FI=faceLp/cheekW;                // facial index (length ÷ cheekbone)
+  // The same index measured brow-to-chin, on two landmarks the mesh actually
+  // has. FI above reaches the hairline through the facial-thirds rule, which
+  // is an estimate layered on top of a measurement — fine for the readout the
+  // user sees, but the classifier's length axis is the one place where that
+  // estimate's error turns into the wrong answer, so it uses this instead.
+  var FI2=((chin.y-brow.y)/cp)/cheekW;
   var FHc=fhS.w/ckS.w;                 // forehead ÷ cheekbone
   var JWc=jwS.w/ckS.w;                 // jaw ÷ cheekbone
   var CHj=cnS.w/jwS.w;                 // chin ÷ jaw — low = pointed chin
+  var bow=jawBow(pts,jwS,chin);        // round jaw vs square jaw
+  // How wide the face still is down at the mouth line — a different height
+  // from the jaw's widest point, so it separates a face that stays full all
+  // the way down (round) from one that has already tapered (heart, diamond).
+  var lowS=sliceAt(pts,mouthY);
+  var LWc=lowS?lowS.w/ckS.w:JWc;
 
   return {
     faceL:faceL,cheekW:ckS.w,jawW:jwS.w,fhW:fhS.w,chinW:cnS.w,jawDeg:jawDeg,
-    aspect:FI, fVc:FHc, jVc:JWc, chinTaper:CHj,
+    aspect:FI, aspect2:FI2, fVc:FHc, jVc:JWc, chinTaper:CHj,
+    jawBow:bow, lowerFull:LWc, yaw:po.yaw, pitch:po.pitch,
     pFaceWidth:mapPct(1/FI,0.62,0.92),
     pFaceLength:mapPct(FI,1.08,1.58),
     pJawAngle:mapPct(jawDeg,104,152),
@@ -1001,18 +1082,26 @@ function computeMetrics(lm){
     pJawline:mapPct(JWc,0.70,1.06)
   };
 }
-// ── 7-way classification ─────────────────────────────────────────────────────
+// ── 9-way classification ─────────────────────────────────────────────────────
 // The definitions below are the standard ones (as used in optical dispensing
-// guidance), expressed against the four measurements above:
+// guidance), expressed against the measurements above:
 //
-//   Oval     length clearly greater than width, forehead a touch wider than the
-//            jaw, everything tapering smoothly — no single dominant feature
-//   Round    length ≈ width, soft rounded jaw, full lower face
-//   Square   length ≈ width, forehead / cheek / jaw all near-equal, sharp jaw
-//   Oblong   length markedly greater than width, the three widths near-equal
-//   Heart    forehead the widest, jaw distinctly narrow, chin pointed
-//   Diamond  cheekbones the widest by a clear margin, narrow forehead AND jaw
-//   Triangle jaw the widest, forehead the narrowest
+//   Oval      length clearly greater than width, forehead a touch wider than
+//             the jaw, everything tapering smoothly — no dominant feature
+//   Round     length ≈ width, soft rounded jaw, full lower face
+//   Square    length ≈ width, forehead / cheek / jaw near-equal, sharp jaw
+//   Oblong    length markedly greater than width, widths near-equal, soft jaw
+//   Rectangle the same long face as Oblong but on an angular, squared jaw
+//   Heart     forehead the widest, jaw narrow, chin pointed
+//   Inverted  forehead the widest, jaw narrow, but the chin stays broad and
+//    Triangle flat rather than coming to a point
+//   Diamond   cheekbones the widest by a clear margin, narrow forehead AND jaw
+//   Triangle  jaw the widest, forehead the narrowest
+//
+// Oblong/Rectangle and Heart/Inverted Triangle are the two pairs added here.
+// Each shares a gate with its sibling and is separated by one clean,
+// independent signal — jaw angularity for the first pair, chin taper for the
+// second — so neither can quietly absorb the other.
 //
 // Scoring rather than a decision tree. Every shape gets a 0..1 score from soft
 // membership ramps, and the highest wins. Two earlier attempts failed here for
@@ -1036,8 +1125,33 @@ function computeMetrics(lm){
 // VERIFY THIS ON REAL FACES: scan a few people, read "aspect" off the sheet's
 // calibration panel, and set FI_REF to the average you see. It is the one
 // number that can systematically skew every result long or short.
-var FI_REF=1.32;    // typical face length ÷ cheekbone width
+var FI_REF=1.32;    // typical face length ÷ cheekbone width (display axis)
+// The classifier's own length axis: brow→chin ÷ cheekbone width.
+//
+// Two independent derivations, because this single number decides whether a
+// face reads short (Round, Square) or long (Oblong, Rectangle), and the old
+// one sat low enough that round faces were coming back as Oval:
+//
+//   1. From FI_REF, via the facial-thirds rule — the brow sits a third of the
+//      way down from the hairline, so brow→chin is two thirds of the length
+//      FI_REF describes: 1.32 × 2/3 ≈ 0.88.
+//   2. From published anthropometry — glabella→gnathion averages ~133mm
+//      against a bizygomatic breadth of ~139mm, i.e. ~0.96. That is bone; what
+//      we measure is the silhouette, which carries soft tissue and runs a few
+//      per cent wider, bringing it to ~0.91.
+//
+// (1) is the reference the old constant was built on, (2) is the one that does
+// not inherit the thirds estimate. 0.91 splits them, leaning to (2).
+//
+// THIS is the number to tune if results skew: every scan logs the measured
+// "aspect2" under [FaceScan DBG]. Raise it and more faces read short; lower it
+// and more read long.
+var FI2_REF=0.91;
 var GON_REF=131;    // typical gonial angle, degrees
+// Jaw bow, for reference only: a square jaw sits near 0.03, a round one near
+// 0.12. Untested against real faces, which is why bow is weighted a third of
+// the gonial angle everywhere it appears — it refines the angle's verdict, it
+// never overrules it.
 
 function up(v,a,b){return v<=a?0:(v>=b?1:(v-a)/(b-a));}
 function down(v,a,b){return 1-up(v,a,b);}
@@ -1051,12 +1165,23 @@ function wsum(terms){
 // Full score table — kept separate from classify() so confidence can read the
 // margin between the winner and the runner-up.
 function scoreShapes(m){
-  var FI=m.aspect,FHc=m.fVc,JWc=m.jVc,CHj=m.chinTaper,gon=m.jawDeg;
+  var FHc=m.fVc,JWc=m.jVc,CHj=m.chinTaper,gon=m.jawDeg;
+  // Prefer the brow→chin index; fall back to the hairline one (and its own
+  // reference) if an older sample without it ever reaches here.
+  var hasFI2=(m.aspect2!=null&&isFinite(m.aspect2)&&m.aspect2>0);
+  var FI=hasFI2?m.aspect2:m.aspect;
+  var REF=hasFI2?FI2_REF:FI_REF;
+  var bow=(m.jawBow==null||!isFinite(m.jawBow))?0.07:m.jawBow;
+  var low=(m.lowerFull==null||!isFinite(m.lowerFull))?JWc:m.lowerFull;
 
   // Length axis, relative to the reference facial index.
-  var lenShort=down(FI,FI_REF*0.96,FI_REF*1.04);
-  var lenMid  =band(FI,FI_REF*0.92,FI_REF*1.00,FI_REF*1.10,FI_REF*1.18);
-  var lenLong =up(FI,FI_REF*1.10,FI_REF*1.22);
+  var lenShort=down(FI,REF*0.96,REF*1.05);
+  var lenMid  =band(FI,REF*0.92,REF*1.00,REF*1.09,REF*1.17);
+  var lenLong =up(FI,REF*1.09,REF*1.20);
+
+  // The two long shapes keep half a claim on a mid-length face. The two short
+  // ones are gated further down, once their own evidence has been measured.
+  var longish=lenLong>0.5*lenMid?lenLong:0.5*lenMid;
 
   // Width profile. dFJ compares two parts of the same face, so it is a true
   // relative measure and needs no reference constant.
@@ -1067,25 +1192,63 @@ function scoreShapes(m){
   var cheeksWidest=down(FHc>JWc?FHc:JWc,0.84,0.95);
   var widthsFull=up(FHc<JWc?FHc:JWc,0.84,0.94);
 
-  // Jaw and chin character.
+  // Jaw and chin character. The gonial angle says how sharply the jaw turns;
+  // the bow says how much the line between that corner and the chin curves.
+  // They agree on most faces and, where they disagree, the angle wins: it is
+  // the calibrated one, so the bow only ever refines its verdict.
   var chinPointed=down(CHj,0.50,0.70);
   var chinFull=up(CHj,0.52,0.72);
   var jawSharp=down(gon,GON_REF*0.93,GON_REF*1.04);
   var jawSoft=up(gon,GON_REF*0.96,GON_REF*1.07);
+  var soft=wsum([[3,jawSoft],[1,up(bow,0.05,0.13)]]);
+  var angular=wsum([[3,jawSharp],[1,down(bow,0.04,0.10)]]);
+  // Still wide at the mouth line — a fuller lower face than the jaw width
+  // alone reports.
+  var lowerFull=up(low,0.80,0.93);
+
+  // Round and Square used to be gated on lenShort alone, and that gate is why
+  // a plainly round face could come back as anything but Round. The length
+  // axis is the single measurement here that needs an outside reference, so a
+  // reference sitting a few per cent low makes every face read longer than it
+  // is and zeroes both short-face shapes before their own evidence is even
+  // looked at — which is exactly how a round face ended up an oval one.
+  //
+  // So a mid-length face can now claim them outright, but only on unanimous
+  // evidence: the weakest of the two signals that DEFINE the shape carries the
+  // gate. For Round that is a soft, bowed jaw and a lower face that stays
+  // wide; for Square, an angular jaw and near-equal widths. A face that is
+  // merely somewhat soft gets a correspondingly small claim, and a long face
+  // gets almost none, because lenMid has already faded by then.
+  var roundEvidence=soft<lowerFull?soft:lowerFull;
+  var squareEvidence=angular<widthsFull?angular:widthsFull;
+  var shortish=lenShort>lenMid*roundEvidence?lenShort:lenMid*roundEvidence;
+  var squarish=lenShort>lenMid*squareEvidence?lenShort:lenMid*squareEvidence;
 
   return {
-    // Oval is the "no dominant feature" bucket. Its gate is the absence of a
-    // dominant width, so a face with a clearly wider forehead or jaw can't be
-    // swallowed by Oval on the strength of its length alone — that shadowing
-    // is what made the previous versions answer Oval for nearly everyone.
-    Oval:     (1-0.7*(foreheadWidest>jawWidest?foreheadWidest:jawWidest))*
-              wsum([[3,lenMid],[2,band(dFJ,-0.04,0.00,0.06,0.11)],[2,down(cheeksWidest,0.3,0.8)]]),
-    Oblong:   lenLong*wsum([[2,1],[2,balanced],[1,down(cheeksWidest,0.3,0.8)]]),
-    Round:    lenShort*wsum([[2,1],[2,jawSoft],[2,chinFull],[1,widthsFull]]),
-    Square:   lenShort*wsum([[2,1],[3,jawSharp],[2,widthsFull],[1,chinFull]]),
-    Heart:    foreheadWidest*wsum([[3,1],[2,chinPointed],[1,down(JWc,0.78,0.92)]]),
-    Diamond:  cheeksWidest*wsum([[3,1],[2,lenMid>lenLong?lenMid:lenLong],[1,chinPointed]]),
-    Triangle: jawWidest*wsum([[3,1],[2,up(JWc,0.90,1.02)],[1,chinFull]])
+    // Oval is the "no dominant feature" bucket, and the one every other shape
+    // has to be defended against: with nothing of its own to prove, it scores
+    // well on any face that isn't strongly anything. Two gates hold it back.
+    // The first is the absence of a dominant width, so a wider forehead or jaw
+    // can't be swallowed by it. The second is length: Oval is by definition
+    // the balanced middle, so a clearly long or clearly short face keeps only
+    // a third of its claim — without that, a long soft face outscored Oblong
+    // on full marks for every term Oblong shares with it.
+    // The third term is the taper an oval face has and a round one does not:
+    // the jaw sits clearly inside the cheekbones. Oval used to score on
+    // softness here instead, which is the very evidence Round is built from —
+    // it was competing with Round using Round's own case.
+    Oval:     (0.30+0.70*lenMid)*
+              (1-0.7*(foreheadWidest>jawWidest?foreheadWidest:jawWidest))*
+              wsum([[2,band(dFJ,-0.04,0.00,0.06,0.11)],[2,down(cheeksWidest,0.3,0.8)],[2,band(JWc,0.70,0.80,0.86,0.94)]]),
+    Oblong:   longish*wsum([[2,1],[2,balanced],[2,soft],[1,down(cheeksWidest,0.3,0.8)]]),
+    Rectangle:longish*wsum([[2,1],[2,balanced],[3,angular],[1,widthsFull]]),
+    Round:    shortish*wsum([[2,1],[3,soft],[2,chinFull],[1,widthsFull],[1,lowerFull]]),
+    Square:   squarish*wsum([[2,1],[3,angular],[2,widthsFull],[1,chinFull]]),
+    Heart:    foreheadWidest*wsum([[3,1],[3,chinPointed],[1,down(JWc,0.78,0.92)]]),
+    'Inverted Triangle':
+              foreheadWidest*wsum([[3,1],[3,chinFull],[1,down(JWc,0.78,0.92)],[1,angular]]),
+    Diamond:  cheeksWidest*wsum([[3,1],[2,lenMid>lenLong?lenMid:lenLong],[1,chinPointed],[1,down(lowerFull,0.2,0.8)]]),
+    Triangle: jawWidest*wsum([[3,1],[2,up(JWc,0.90,1.02)],[1,chinFull],[1,lowerFull]])
   };
 }
 
@@ -1106,12 +1269,29 @@ function avgMetrics(arr){
   for(var x=0;x<k.length;x++){var s=0;for(i=0;i<n;i++)s+=arr[i][k[x]];o[k[x]]=Math.round(s/n);}
   return o;
 }
-// Average the raw classification features across the front stage — logged as
-// "[FaceScan DBG]" for reference/debugging.
-function avgRaw(arr){
+// Collapse the buffered samples into the one reading the shape is decided on,
+// and log it as "[FaceScan DBG]".
+//
+// Per feature this takes the MEDIAN, not the mean. The buffer is the last
+// second or so of tracking, and the tracker does not fail gracefully: it fails
+// by throwing one frame where a landmark jumps. A mean carries a single bad
+// frame straight into the answer in proportion to how bad it was, while a
+// median ignores it entirely as long as most frames are sane.
+function robustRaw(arr){
   if(!arr.length)return null;
-  var k=['aspect','fVc','jVc','chinTaper','jawDeg'],o={},i,n=arr.length;
-  for(var x=0;x<k.length;x++){var s=0;for(i=0;i<n;i++)s+=arr[i][k[x]];o[k[x]]=+(s/n).toFixed(3);}
+  var k=['aspect','aspect2','fVc','jVc','chinTaper','jawDeg','jawBow','lowerFull','yaw','pitch'];
+  var o={},i,x,vals,mid;
+  for(x=0;x<k.length;x++){
+    vals=[];
+    for(i=0;i<arr.length;i++){
+      var v=arr[i][k[x]];
+      if(v!=null&&isFinite(v))vals.push(v);
+    }
+    if(!vals.length)continue;
+    vals.sort(function(a,b){return a-b;});
+    mid=vals.length>>1;
+    o[k[x]]=+((vals.length%2?vals[mid]:(vals[mid-1]+vals[mid])/2).toFixed(4));
+  }
   return o;
 }
 
@@ -1129,6 +1309,22 @@ function yawOf(lm){
   var w=Math.abs(R.x-L.x)||0.0001;
   var raw=(nose.x-center)/w;
   return MIRROR?-raw:raw;
+}
+
+// Head pose from the mesh's 3-D landmarks. yawOf() above is a 2-D heuristic
+// kept for the on-screen HUD; this is the one the measurements trust, because
+// it also gives us pitch — and pitch is what quietly ruins a face-shape
+// reading. A chin lifted or dropped by ten degrees foreshortens the face's
+// LENGTH while leaving its width alone, which is precisely the ratio that
+// decides round versus long.
+//
+// MediaPipe's z is in roughly the same units as x, so both are taken into
+// pixel space through the frame's width before the angles are formed.
+function poseOf(lm,W,H){
+  var L=lm[234],R=lm[454],T=lm[10],B=lm[152];
+  var yaw=Math.atan2((L.z-R.z)*W,((R.x-L.x)*W)||1);
+  var pitch=Math.atan2((T.z-B.z)*W,((B.y-T.y)*H)||1);
+  return {yaw:yaw,pitch:pitch};
 }
 
 function setCaptureEnabled(v){
@@ -1580,7 +1776,7 @@ analyzeBtn.addEventListener('click',function(){
   // Classify once on the average of the buffered measurements rather than
   // voting per frame — averaging the measurements first cancels tracker jitter
   // that a per-frame vote would just carry into the tally.
-  var rawAvg=avgRaw(recentMetrics)||computeMetrics(capturedLm);
+  var rawAvg=robustRaw(recentMetrics)||computeMetrics(capturedLm);
   var result=rawAvg?bestOf(scoreShapes(rawAvg)):null;
   var modal=result?result.shape:'Oval';
 
@@ -1663,12 +1859,30 @@ faceMesh.onResults(function(results){
     oval.className='guide-oval';hint.className='warn';
     hint.textContent=facing==='user'?'Look straight at the camera':'Ask them to look straight at the camera';return;
   }
+  // A tipped chin is the pose error nobody notices in themselves, and it is
+  // the one that matters most here: it shortens or stretches the face's length
+  // while leaving every width alone — exactly the ratio that decides round
+  // versus long.
+  //
+  // It coaches but never blocks. Unlike yaw, which the 2-D heuristic above
+  // measures directly, pitch is inferred from the mesh's depth values, and a
+  // depth estimate that reads hot on some device would leave the user holding
+  // a capture button that never enables. So a tipped frame is simply left out
+  // of the sample buffer below, and if every frame is tipped the reading still
+  // goes through on what there is.
+  var pitch=poseOf(lm,(video&&video.videoWidth)||640,(video&&video.videoHeight)||480).pitch;
+  var levelChin=Math.abs(pitch)<=PITCH_MAX;
 
   setCaptureEnabled(true);
   oval.className='guide-oval locked';
-  hint.className='success';
-  hint.textContent='Perfect - tap to capture';
-  var mm=computeMetrics(lm);
+  if(levelChin){
+    hint.className='success';
+    hint.textContent='Perfect - tap to capture';
+  }else{
+    hint.className='warn';
+    hint.textContent=facing==='user'?'Keep your chin level':'Ask them to keep their chin level';
+  }
+  var mm=levelChin?computeMetrics(lm):null;
   if(mm){
     recentMetrics.push(mm);
     recentShapes.push(classify(mm));
@@ -2324,6 +2538,8 @@ const SHAPE_EFFECT: Record<FaceShape, string> = {
   Oblong: 'adds width and makes your face appear shorter.',
   Diamond: 'highlights your cheekbones and softens the angles.',
   Triangle: 'adds balance to your wider jawline.',
+  Rectangle: 'shortens your longer face and softens its squared jaw.',
+  'Inverted Triangle': 'balances your broader forehead against a slimmer jaw.',
 };
 
 // Per-frame-shape icon + the reason it flatters a face — shown in the
@@ -2458,6 +2674,24 @@ const SHAPE_FRAME_REASON: Record<FaceShape, Record<string, string>> = {
     Aviator: 'A wide top bar broadens the brow line to match a strong jaw.',
     Round:
       'Soft curves take the edge off an angular jaw while adding width up top.',
+  },
+  Rectangle: {
+    Round:
+      'Deep circular lenses break up the length of the face and soften a squared jaw.',
+    Oval: 'Gentle curves add width across the middle and take the edge off angular corners.',
+    Aviator:
+      'A wide, deep lens adds width where a long face needs it and rounds off a strong jaw.',
+    'Cat-Eye':
+      'Upswept corners draw the eye across rather than down the length of the face.',
+  },
+  'Inverted Triangle': {
+    Round:
+      'Soft curves below the brow line shift attention down towards a slimmer jaw.',
+    Oval: 'Rounded lenses that sit narrow at the top keep a broad forehead in proportion.',
+    Aviator:
+      'Teardrop lenses taper downward, echoing the way your face narrows to the jaw.',
+    Rimless:
+      'Minimal frames add no extra width up top, where your face is already widest.',
   },
 };
 
