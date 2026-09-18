@@ -608,11 +608,20 @@ const StoreScreen: React.FC = () => {
     [locations],
   );
 
+  // The backdrop is a full-screen view that swallows every touch above the
+  // sheet whenever the sheet sits above `disappearsOnIndex` — even while it is
+  // fully transparent. Keeping it at -1 therefore killed panning and zooming on
+  // the map the moment the sheet opened at 42%.
+  //
+  // Tied to index 0 instead, the backdrop is inert at the half snap (the map
+  // behaves exactly as it does with the sheet closed) and only takes over at
+  // the 88% snap, where it dims the sliver of map left and a tap collapses the
+  // sheet back to 42%.
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
         {...props}
-        disappearsOnIndex={-1}
+        disappearsOnIndex={0}
         appearsOnIndex={1}
         opacity={0.22}
         pressBehavior="collapse"

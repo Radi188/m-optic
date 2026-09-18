@@ -43,6 +43,7 @@ import type { StoreLocation } from '../services/branchService';
 import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
+import { useAllowScreenCapture } from '../hook/useAllowScreenCapture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -4401,6 +4402,11 @@ const ScanScreen: React.FC = () => {
   // The home screen sends the user straight into one experience, so there is
   // no picker here — the mode is fixed for the life of the screen.
   const mode: Tab = route.params?.mode ?? 'face';
+
+  // Face scan and the eye test are both the user's own result to keep, so this
+  // screen lifts the app-wide screenshot / screen-recording block while it is
+  // focused. Everything outside these features stays blocked.
+  useAllowScreenCapture();
 
   // The eye test is a self-screening tool, not a medical exam, so it stays
   // behind an explicit consent gate. Re-asked on every entry rather than

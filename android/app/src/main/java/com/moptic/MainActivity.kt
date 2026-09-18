@@ -27,6 +27,10 @@ class MainActivity : ReactActivity() {
     // window in the app switcher. Set before super.onCreate so the very first frame
     // is already protected.
     //
+    // The capture-friendly screens (face scan, eye test, 3-D model, AR try-on)
+    // clear this flag for as long as they are on screen through ScreenGuardModule;
+    // every other screen keeps the block.
+    //
     // To keep screenshots working while developing, wrap this in `if (!BuildConfig.DEBUG)`.
     window.setFlags(
         WindowManager.LayoutParams.FLAG_SECURE,

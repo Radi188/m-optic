@@ -75,6 +75,13 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
     capture session runs. `isCaptured` stays false on the Simulator.
  3. The app-switcher snapshot is covered on resign-active, matching what
     FLAG_SECURE gives us on Android.
+
+ A few screens are allowed to be captured — face scan, eye test, 3-D model and
+ AR try-on, all of which show the user their own face or a product they are
+ shopping for, and nothing private. Those screens call `setCaptureAllowed(true)`
+ through ScreenGuardModule while they are on screen (1 and 2 are lifted) and
+ hand the block back when they leave. Blocked is always the fallback state: a
+ fresh launch, a JS reload or a crash all come up protected.
  */
 final class ScreenGuard {
   static let shared = ScreenGuard()
@@ -99,6 +106,9 @@ final class ScreenGuard {
 
   private let secureField = UITextField()
   private var secureLayerApplied = false
+  /// Set by the capture-friendly screens through ScreenGuardModule. Never
+  /// persisted — every launch starts blocked.
+  private(set) var captureAllowed = false
   /// How strong the app-switcher blur is, 0...1.
   private static let blurIntensity: CGFloat = 0.5
 
@@ -129,7 +139,8 @@ final class ScreenGuard {
       // The root view controller is attached by startReactNative on this run loop
       // turn, so take the next one.
       DispatchQueue.main.async { [weak self] in
-        self?.applySecureLayer(in: window)
+        guard let self = self, !self.captureAllowed else { return }
+        self.applySecureLayer(in: window)
       }
     }
 
@@ -163,6 +174,37 @@ final class ScreenGuard {
     captureStateChanged()
   }
 
+  // MARK: - Per-screen policy
+
+  /// Lifts or restores the capture block. Main thread only — it touches views.
+  ///
+  /// Calls are counted on the JS side, so this only ever sees the resolved
+  /// state and a repeated call with the same value is a no-op.
+  func setCaptureAllowed(_ allowed: Bool) {
+    guard captureAllowed != allowed else { return }
+    captureAllowed = allowed
+
+    if allowed {
+      removeSecureLayer()
+      // A cover or notice raised a moment ago belongs to the screen the user
+      // just left; nothing on this one is blocked.
+      dismissScreenshotNotice()
+      hidePrivacyCover()
+    } else {
+      if useSecureLayerTrick, let window = window {
+        applySecureLayer(in: window)
+      }
+      // Re-entering a protected screen mid-recording must cover it right away.
+      if UIScreen.main.isCaptured {
+        showPrivacyCover(
+          title: Copy.recordingTitle,
+          subtitle: Copy.recordingTitleKm,
+          style: .opaque
+        )
+      }
+    }
+  }
+
   // MARK: - Screenshot block
 
   /// Re-parents the React Native root view's layer under the secure field's canvas.
@@ -187,10 +229,26 @@ final class ScreenGuard {
     // -[NSLayoutConstraint _addToEngine:] on the window's first layout pass.
     secureField.frame = .zero
 
-    content.addSubview(secureField)
+    // The field is parked on the WINDOW, never inside the content it is about to
+    // host. As a subview of `content` it deadlocks UIKit's own traversals: the
+    // field is then a subview of the view whose layer the field's canvas holds,
+    // and -[UIView(MultiLayer) _allSubviews] follows layers as well as subviews,
+    // so a visibility change walks content → field → content forever and
+    // overflows the main thread's stack (EXC_BAD_ACCESS in
+    // _updateAncestorHiddenForSubtreeBeingNotifiedOfVisibilityChange:). RN
+    // toggles view visibility constantly — modals, navigation, tab switches —
+    // so that fires at random moments during ordinary use.
+    //
+    // On the window the field is a sibling of the content instead of its child,
+    // which leaves no way back and keeps the capture block intact: what makes
+    // captures come out black is the content's LAYER sitting in the field's
+    // canvas, not where the field's view happens to live.
+    window.addSubview(secureField)
 
-    // Lift the field's layer out of the content it is about to host, otherwise the
-    // next step would make the content layer an ancestor of itself.
+    // Belt and braces: the field's layer must not sit inside the content it is
+    // about to host, or that content's layer becomes its own ancestor. Adding it
+    // to the window above already put it here; this keeps the invariant explicit
+    // if that ever changes.
     contentSuperlayer.addSublayer(secureField.layer)
 
     // The canvas UIKit keeps out of captures is the field's last sublayer on
@@ -211,9 +269,30 @@ final class ScreenGuard {
     secureLayerApplied = true
   }
 
+  /// Undoes `applySecureLayer`: the content layer goes back under the layer the
+  /// secure field was lifted into — the root view controller's original
+  /// superlayer — and the field is taken out of the tree.
+  private func removeSecureLayer() {
+    defer { secureLayerApplied = false }
+    guard secureLayerApplied,
+          let content = window?.rootViewController?.view,
+          let host = secureField.layer.superlayer
+    else { return }
+
+    // Order matters: move the content out of the field's canvas first, so
+    // tearing the field down can never take the app's own layer with it.
+    host.addSublayer(content.layer)
+    secureField.removeFromSuperview()
+    secureField.layer.removeFromSuperlayer()
+  }
+
   // MARK: - Events
 
   @objc private func captureStateChanged() {
+    if captureAllowed {
+      hidePrivacyCover()
+      return
+    }
     if UIScreen.main.isCaptured {
       showPrivacyCover(title: Copy.recordingTitle, subtitle: Copy.recordingTitleKm, style: .opaque)
     } else {
@@ -222,17 +301,20 @@ final class ScreenGuard {
   }
 
   @objc private func didTakeScreenshot() {
+    guard !captureAllowed else { return }
     showScreenshotNotice()
   }
 
   @objc private func willResignActive() {
+    // Applied on every screen, capture-friendly or not: the app-switcher card is
+    // not a screenshot the user asked for, and blurring it costs them nothing.
     // No text: this one only has to make the app-switcher snapshot unreadable.
     showPrivacyCover(title: nil, subtitle: nil, style: .blurred)
   }
 
   @objc private func didBecomeActive() {
     // Anything still capturing keeps its own cover.
-    if UIScreen.main.isCaptured {
+    if UIScreen.main.isCaptured && !captureAllowed {
       showPrivacyCover(title: Copy.recordingTitle, subtitle: Copy.recordingTitleKm, style: .opaque)
     } else {
       hidePrivacyCover()

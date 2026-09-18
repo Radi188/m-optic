@@ -11,6 +11,8 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		18510C5EF7E8643A0EBD8FAE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		7A1B2C3D0001ABCDEF000002 /* ScreenGuardModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1B2C3D0001ABCDEF000001 /* ScreenGuardModule.swift */; };
+		7A1B2C3D0001ABCDEF000004 /* ScreenGuardModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A1B2C3D0001ABCDEF000003 /* ScreenGuardModule.m */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		B7EBF82F3B084DEF9CA68602 /* DMSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E2B21E8CCC1D4D87A5B2D70A /* DMSans-Bold.ttf */; };
 		CA6D64F488924A7F8192B4AC /* Hanuman-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B78B2660B8B8490BB67A4DD3 /* Hanuman-Regular.ttf */; };
@@ -29,6 +31,8 @@
 		69C08944D719A9ECACDBC298 /* Pods-MOptic.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MOptic.debug.xcconfig"; path = "Target Support Files/Pods-MOptic/Pods-MOptic.debug.xcconfig"; sourceTree = "<group>"; };
 		6D92686D7E505CBE8A182738 /* libPods-MOptic.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MOptic.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MOptic/AppDelegate.swift; sourceTree = "<group>"; };
+		7A1B2C3D0001ABCDEF000001 /* ScreenGuardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenGuardModule.swift; path = MOptic/ScreenGuardModule.swift; sourceTree = "<group>"; };
+		7A1B2C3D0001ABCDEF000003 /* ScreenGuardModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ScreenGuardModule.m; path = MOptic/ScreenGuardModule.m; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MOptic/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		931AAED1D7CE48FAABE64551 /* Hanuman-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Hanuman-Bold.ttf"; path = "../src/assets/fonts/Hanuman-Bold.ttf"; sourceTree = "<group>"; };
 		B78B2660B8B8490BB67A4DD3 /* Hanuman-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Hanuman-Regular.ttf"; path = "../src/assets/fonts/Hanuman-Regular.ttf"; sourceTree = "<group>"; };
@@ -55,6 +59,8 @@
 				11CE28F12F86219B00876F5D /* GoogleService-Info.plist */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
+				7A1B2C3D0001ABCDEF000001 /* ScreenGuardModule.swift */,
+				7A1B2C3D0001ABCDEF000003 /* ScreenGuardModule.m */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -300,6 +306,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				7A1B2C3D0001ABCDEF000002 /* ScreenGuardModule.swift in Sources */,
+				7A1B2C3D0001ABCDEF000004 /* ScreenGuardModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,7 +348,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -377,7 +385,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;

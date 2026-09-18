@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import type { DimensionValue, StyleProp, ViewStyle } from 'react-native';
 
@@ -14,34 +14,58 @@ const PULSE_FROM = '#CFCBC7';
 const PULSE_TO = '#E0DFDD';
 const PULSE_DURATION = 800;
 
+// One driver for the whole app, not one per block. A colour cannot be animated
+// on the native thread, so each running loop costs a JS frame callback of its
+// own — and a loading screen mounts dozens of blocks at once, which is enough
+// to make the skeletons themselves stutter. Shared, the cost is a single loop
+// no matter how many placeholders are on screen, and they all pulse in step.
+const pulse = new Animated.Value(0);
+const pulseColor = pulse.interpolate({
+  inputRange: [0, 1],
+  outputRange: [PULSE_FROM, PULSE_TO],
+});
+
+let pulseLoop: Animated.CompositeAnimation | null = null;
+/** How many placeholders are mounted; the loop runs only while this is > 0. */
+let pulseSubscribers = 0;
+
 /** Animated background colour driving every placeholder block. */
 export function useSkeletonPulse(): Animated.AnimatedInterpolation<string> {
-  const pulse = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: PULSE_DURATION,
-          // Colour cannot be driven on the native thread.
-          useNativeDriver: false,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: PULSE_DURATION,
-          useNativeDriver: false,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
+    pulseSubscribers += 1;
 
-  return pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [PULSE_FROM, PULSE_TO],
-  });
+    if (!pulseLoop) {
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: PULSE_DURATION,
+            // Colour cannot be driven on the native thread.
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: PULSE_DURATION,
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      pulseLoop.start();
+    }
+
+    return () => {
+      pulseSubscribers -= 1;
+      // The last skeleton off the screen stops the loop, so nothing animates
+      // behind a loaded screen.
+      if (pulseSubscribers === 0) {
+        pulseLoop?.stop();
+        pulseLoop = null;
+        pulse.setValue(0);
+      }
+    };
+  }, []);
+
+  return pulseColor;
 }
 
 type BlockProps = {

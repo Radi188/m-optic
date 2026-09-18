@@ -42,6 +42,7 @@ import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoading
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
+import { useAllowScreenCapture } from '../hook/useAllowScreenCapture';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -64,6 +65,13 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
   onClose,
 }) => {
   const insets = useSafeAreaInsets();
+
+  // The 3-D model and the AR try-on are the two capture-friendly features on
+  // this screen: people screenshot a frame on their own face to ask a friend.
+  // The permit covers the viewer only — the product page behind it, and the
+  // rest of the app, stay blocked.
+  useAllowScreenCapture(visible);
+
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent>
       <View style={viewer.root}>
