@@ -133,7 +133,7 @@ export const authService = {
    * and the remembered phone number so nothing is prefilled afterwards.
    */
   async deleteAccount(phone?: string): Promise<void> {
-    await api.delete('/user');
+    await api.delete('/profile');
     await AsyncStorage.removeItem(TOKEN_KEY);
     if (phone) {
       const target = normalisePhone(phone);

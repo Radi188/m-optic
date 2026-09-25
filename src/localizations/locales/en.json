@@ -392,5 +392,7 @@
   "DeleteAccountMessage": "Your account, profile, prescriptions, loyalty points and purchase history will be permanently deleted.",
   "DeleteAccountWarning": "This cannot be undone. Any unused points and rewards will be lost.",
   "DeletePermanently": "Delete",
-  "DeleteAccountFailed": "Could not delete your account. Please try again."
+  "DeleteAccountFailed": "Could not delete your account. Please try again.",
+  "ContactUs": "Contact us",
+  "PrivacyContactMessage": "Questions about your privacy or requests about your data? Email us and we will reply as soon as possible."
 }
