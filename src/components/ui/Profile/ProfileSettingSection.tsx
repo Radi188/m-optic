@@ -68,7 +68,8 @@ const ProfileSettingSection: React.FC<ProfileSettingSectionProps> = ({
 
       <View style={styles.card}>
         {settingItems.map((item, index) => {
-          const isLogout = item.id === 'logout';
+          // Sign-out and account deletion share the red destructive styling.
+          const isLogout = item.id === 'logout' || item.id === 'deleteAccount';
 
           return (
             <TouchableOpacity

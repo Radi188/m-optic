@@ -91,6 +91,18 @@ export const logoutThunk = createAsyncThunk(
   },
 );
 
+export const deleteAccountThunk = createAsyncThunk(
+  'auth/deleteAccount',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const phone = (getState() as RootState).auth.user?.phone;
+      await authService.deleteAccount(phone);
+    } catch (err: any) {
+      return rejectWithValue(err.message ?? 'Could not delete the account');
+    }
+  },
+);
+
 export const fetchProfileThunk = createAsyncThunk(
   'auth/fetchProfile',
   async (_, { rejectWithValue }) => {
@@ -189,6 +201,13 @@ const authSlice = createSlice({
 
     // ── Logout ───────────────────────────────────────────────────
     builder.addCase(logoutThunk.fulfilled, state => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+    });
+
+    // ── Delete account ───────────────────────────────────────────
+    builder.addCase(deleteAccountThunk.fulfilled, state => {
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;

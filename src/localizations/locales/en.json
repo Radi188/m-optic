@@ -385,5 +385,12 @@
   "LearnMore": "Learn more",
   "Receipt": "Receipt",
   "Deposit": "Deposit",
-  "Repay": "Repay"
+  "Repay": "Repay",
+  "DeleteAccount": "Delete Account",
+  "DeleteAccountSubtitle": "Permanently delete your account and data",
+  "DeleteAccountQuestion": "Delete account?",
+  "DeleteAccountMessage": "Your account, profile, prescriptions, loyalty points and purchase history will be permanently deleted.",
+  "DeleteAccountWarning": "This cannot be undone. Any unused points and rewards will be lost.",
+  "DeletePermanently": "Delete",
+  "DeleteAccountFailed": "Could not delete your account. Please try again."
 }

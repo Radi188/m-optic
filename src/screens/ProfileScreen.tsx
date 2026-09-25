@@ -22,6 +22,7 @@ import {
   selectUserInitials,
   updateUser,
   clearUser,
+  deleteAccountThunk,
 } from '../store/slices/authSlice';
 import {
   selectUnreadCount,
@@ -36,6 +37,7 @@ import MembershipCard from '../components/ui/Profile/MembershipCard';
 import NotLoginProfile from '../components/ui/Profile/NotLoginProfile';
 import LanguagePickerModal from '../components/ui/Modal/LanguagePickerModal';
 import LogoutModal from '../components/ui/Modal/LogoutModal';
+import DeleteAccountModal from '../components/ui/Modal/DeleteAccountModal';
 import { useUserProfile } from '../hook/useUserProfile';
 import { formatDate } from '../utils/dateHelper';
 import { formatEye, splitCombinedEye } from '../types/history';
@@ -125,6 +127,9 @@ const ProfileScreen: React.FC = () => {
   const languageLabel = selectedLanguage === 'km' ? 'ភាសាខ្មែរ' : 'English';
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
 
@@ -155,6 +160,21 @@ const ProfileScreen: React.FC = () => {
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
 
     console.log('Logout confirmed');
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await dispatch(deleteAccountThunk());
+    setDeleting(false);
+
+    if (deleteAccountThunk.rejected.match(result)) {
+      setDeleteError((result.payload as string) ?? t('DeleteAccountFailed'));
+      return;
+    }
+
+    setDeleteModalVisible(false);
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   const handleChangeLanguage = async (language: AppLanguage) => {
@@ -203,6 +223,16 @@ const ProfileScreen: React.FC = () => {
         icon: 'log-out-outline',
         onPress: () => {
           setLogoutModalVisible(true);
+        },
+      },
+      {
+        id: 'deleteAccount',
+        title: 'DeleteAccount',
+        subtitle: 'DeleteAccountSubtitle',
+        icon: 'trash-outline',
+        onPress: () => {
+          setDeleteError(null);
+          setDeleteModalVisible(true);
         },
       },
     ],
@@ -361,7 +391,9 @@ const ProfileScreen: React.FC = () => {
             items={
               user
                 ? settingItems
-                : settingItems.filter(item => item.id !== 'logout')
+                : settingItems.filter(
+                    item => item.id !== 'logout' && item.id !== 'deleteAccount',
+                  )
             }
           />
         </ScrollView>
@@ -379,6 +411,14 @@ const ProfileScreen: React.FC = () => {
           visible={logoutModalVisible}
           onClose={() => setLogoutModalVisible(false)}
           onConfirmLogout={handleConfirmLogout}
+        />
+
+        <DeleteAccountModal
+          visible={deleteModalVisible}
+          loading={deleting}
+          error={deleteError}
+          onClose={() => setDeleteModalVisible(false)}
+          onConfirmDelete={handleConfirmDelete}
         />
       </View>
     </GlassBackground>

@@ -34,15 +34,13 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>MOptic uses the camera so you can try on glasses in augmented reality.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need photo library access to choose your profile photo.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>We need permission to save edited photos.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>MOptic uses face tracking to place glasses on your face during AR try-on.</string>
+	<string>MOptic uses your camera to scan your face shape and recommend frames that suit you, to let you try on glasses virtually, and to take a profile photo when you choose to.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string/>
+	<string>MOptic uses your location to show where you are on the store map so you can find the nearest MOptic branch.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MOptic needs permission to save the profile photo you take with the camera to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MOptic accesses your photos only when you choose a picture to set as your profile photo.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>

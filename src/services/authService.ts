@@ -127,6 +127,24 @@ export const authService = {
     }
   },
 
+  /**
+   * Permanently deletes the signed-in customer's account and data on the
+   * server (App Store guideline 5.1.1(v)), then forgets this device's session
+   * and the remembered phone number so nothing is prefilled afterwards.
+   */
+  async deleteAccount(phone?: string): Promise<void> {
+    await api.delete('/user');
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    if (phone) {
+      const target = normalisePhone(phone);
+      const phones = await authService.knownPhones();
+      await AsyncStorage.setItem(
+        KNOWN_PHONES_KEY,
+        JSON.stringify(phones.filter(p => p !== target)),
+      );
+    }
+  },
+
   async getProfile(): Promise<CustomerData> {
     const { data } = await api.get('/user');
     return data;
