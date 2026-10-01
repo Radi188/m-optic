@@ -9,7 +9,7 @@ import type { AppLanguage } from '../localizations/i18n';
 
 // TODO: confirm these with the client before release.
 export const PRIVACY_CONTACT_EMAIL = 'info@crosscambodia.com';
-export const PRIVACY_LAST_UPDATED = '2026-09-25';
+export const PRIVACY_LAST_UPDATED = '2026-10-01';
 
 export type PolicySection = {
   id: string;
@@ -52,10 +52,22 @@ const en: PrivacyPolicyContent = {
       icon: 'phone-portrait-outline',
       title: 'Information that stays on your device',
       bullets: [
-        'Camera: the face-shape scan and virtual try-on process the camera image on your device. Photos from the scan are not uploaded or stored on our servers.',
+        'Camera: the face-shape scan and virtual try-on process the camera image on your device. Photos from the scan are not uploaded or stored on our servers. See "Face data" below for full details.',
         'Mobile eye test: results are calculated on your device and are for guidance only.',
         'Photos: we only access the photo you choose as your profile picture, and only upload that photo.',
         'Location: the app does not collect or store your location.',
+      ],
+    },
+    {
+      id: 'face',
+      icon: 'scan-outline',
+      title: 'Face data',
+      body: [
+        'What we collect: when you use the Face Shape Scan or Virtual Try-On, the app uses your front camera to detect your face. On your device it calculates facial landmark points (the positions of points such as your eyes, nose, cheekbones, jawline and forehead) and measurements derived from them (such as face width-to-length and jaw-to-cheekbone ratios). The Face Shape Scan also captures one still photo so it can show you the result. Together this is "face data".',
+        'How we use it: face data is used only to (1) estimate your face shape, such as Oval, Round or Square, and recommend frames that suit it, and (2) place and size virtual glasses on your face in the try-on. It is not used to identify or authenticate you, for advertising or marketing, to build a profile of you, or to train any model.',
+        'Where it is processed and stored: all face data is processed on your device. It is never uploaded to our servers, never saved to your device storage or photo library, and never added to your account. The face-detection software (Google MediaPipe Face Mesh) is downloaded from a public code library (jsDelivr) and runs locally in the app; no images or face data are sent to Google, jsDelivr or anyone else.',
+        'Sharing: we do not share, sell, transfer or disclose face data to any third party.',
+        'Retention and deletion: face data is kept only in the app\'s temporary memory while you use the feature. Try-on landmarks are replaced with every camera frame. The scan photo, landmarks and measurements are deleted automatically when you close the result, start a new scan, or close the app. Because we never store face data, nothing remains on our servers to delete. You can stop face data processing at any time by turning off camera access in Settings → MOptic.',
       ],
     },
     {
@@ -147,6 +159,18 @@ const km: PrivacyPolicyContent = {
         'ការពិនិត្យភ្នែកតាមទូរសព្ទ៖ លទ្ធផលត្រូវបានគណនានៅលើឧបករណ៍របស់អ្នក ហើយសម្រាប់ជាការណែនាំប៉ុណ្ណោះ។',
         'រូបភាព៖ យើងចូលប្រើតែរូបភាពដែលអ្នកជ្រើសរើសជារូបប្រវត្តិរូប ហើយផ្ញើតែរូបភាពនោះប៉ុណ្ណោះ។',
         'ទីតាំង៖ កម្មវិធីមិនប្រមូល ឬរក្សាទុកទីតាំងរបស់អ្នកទេ។',
+      ],
+    },
+    {
+      id: 'face',
+      icon: 'scan-outline',
+      title: 'ទិន្នន័យមុខ',
+      body: [
+        'អ្វីដែលយើងប្រមូល៖ នៅពេលអ្នកប្រើការស្កេនរាងមុខ ឬការសាកវ៉ែនតានិម្មិត កម្មវិធីប្រើកាមេរ៉ាខាងមុខដើម្បីរកមុខរបស់អ្នក។ នៅលើឧបករណ៍របស់អ្នក វាគណនាចំណុចសម្គាល់លើមុខ (ទីតាំងនៃចំណុចដូចជា ភ្នែក ច្រមុះ ថ្ពាល់ ថ្គាម និងថ្ងាស) និងការវាស់វែងដែលបានមកពីចំណុចទាំងនោះ (ដូចជាសមាមាត្រទទឹងនិងបណ្តោយមុខ)។ ការស្កេនរាងមុខក៏ថតរូបមួយសន្លឹក ដើម្បីបង្ហាញលទ្ធផលដល់អ្នក។ ទាំងអស់នេះហៅថា "ទិន្នន័យមុខ"។',
+        'របៀបដែលយើងប្រើ៖ ទិន្នន័យមុខត្រូវបានប្រើតែដើម្បី (១) ប៉ាន់ស្មានរាងមុខរបស់អ្នក ដូចជារាងពងក្រពើ មូល ឬការ៉េ ហើយណែនាំស៊ុមវ៉ែនតាដែលសមនឹងអ្នក និង (២) ដាក់ និងកំណត់ទំហំវ៉ែនតានិម្មិតលើមុខរបស់អ្នកក្នុងការសាកវ៉ែនតា។ វាមិនត្រូវបានប្រើដើម្បីកំណត់អត្តសញ្ញាណ ឬផ្ទៀងផ្ទាត់អ្នក សម្រាប់ការផ្សាយពាណិជ្ជកម្ម ឬទីផ្សារ ដើម្បីបង្កើតប្រវត្តិរូបអំពីអ្នក ឬដើម្បីបណ្តុះបណ្តាលម៉ូដែលណាមួយឡើយ។',
+        'កន្លែងដំណើរការ និងរក្សាទុក៖ ទិន្នន័យមុខទាំងអស់ត្រូវបានដំណើរការនៅលើឧបករណ៍របស់អ្នក។ វាមិនដែលត្រូវបានផ្ញើទៅម៉ាស៊ីនមេរបស់យើង មិនដែលរក្សាទុកក្នុងឧបករណ៍ ឬបណ្ណាល័យរូបភាពរបស់អ្នក ហើយមិនដែលបញ្ចូលក្នុងគណនីរបស់អ្នកឡើយ។ កម្មវិធីរកមុខ (Google MediaPipe Face Mesh) ត្រូវបានទាញយកពីបណ្ណាល័យកូដសាធារណៈ (jsDelivr) ហើយដំណើរការក្នុងកម្មវិធីលើឧបករណ៍។ គ្មានរូបភាព ឬទិន្នន័យមុខណាមួយត្រូវបានផ្ញើទៅ Google, jsDelivr ឬអ្នកផ្សេងទៀតឡើយ។',
+        'ការចែករំលែក៖ យើងមិនចែករំលែក លក់ ផ្ទេរ ឬបង្ហាញទិន្នន័យមុខទៅភាគីទីបីណាមួយឡើយ។',
+        'ការរក្សាទុក និងការលុប៖ ទិន្នន័យមុខត្រូវបានរក្សាទុកតែក្នុងអង្គចងចាំបណ្តោះអាសន្នរបស់កម្មវិធី ខណៈពេលអ្នកកំពុងប្រើមុខងារនេះប៉ុណ្ណោះ។ ចំណុចសម្គាល់ក្នុងការសាកវ៉ែនតាត្រូវបានជំនួសរាល់ស៊ុមកាមេរ៉ា។ រូបថត ចំណុចសម្គាល់ និងការវាស់វែងពីការស្កេនត្រូវបានលុបដោយស្វ័យប្រវត្តិ នៅពេលអ្នកបិទលទ្ធផល ចាប់ផ្តើមស្កេនថ្មី ឬបិទកម្មវិធី។ ដោយសារយើងមិនដែលរក្សាទុកទិន្នន័យមុខ គ្មានអ្វីនៅសល់លើម៉ាស៊ីនមេរបស់យើងដែលត្រូវលុបឡើយ។ អ្នកអាចបញ្ឈប់ការដំណើរការទិន្នន័យមុខបានគ្រប់ពេល ដោយបិទសិទ្ធិកាមេរ៉ានៅក្នុង ការកំណត់ → MOptic។',
       ],
     },
     {

@@ -2124,14 +2124,6 @@ const FaceScanCamera: React.FC<{
       try {
         const d = JSON.parse(e.nativeEvent.data);
         if (d.type === 'faceShape' && d.shape) {
-          // Temporary debugging aid — surfaces the raw ratios behind each result.
-          if (d.debug) {
-            console.log(
-              `[FaceScan DBG] shape=${d.shape} raw=${JSON.stringify(
-                d.debug.raw,
-              )} scores=${JSON.stringify(d.debug.scores)}`,
-            );
-          }
           onShapeDetected(
             d.shape as FaceShape,
             typeof d.confidence === 'number' ? d.confidence : 90,
@@ -4708,6 +4700,7 @@ const ScanScreen: React.FC = () => {
     setFaceShape(null);
     setConfidence(null);
     setMetrics(null);
+    setDebug(null);
     setScanPhoto(null);
     setFaceScanStage('idle');
   };

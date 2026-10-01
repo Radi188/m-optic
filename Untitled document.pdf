@@ -1,0 +1,32 @@
+Hello,
+Thank you for your resubmission, but we need additional information before we can continue our review.
+Please reply to this message in App Store Connect with detailed answers to the questions below.
+Review Environment
+Submission ID: 0b33bc67-f752-40ec-b18e-80e8b506e379
+Review date: September 30, 2026
+Review Device: iPad Air 11-inch (M3)
+Version reviewed: 1.2 (1)
+Guideline 2.1 - Information Needed
+We need additional information about how the app uses face data. Face data is sensitive user information
+that must be handled properly to help protect the user's security and privacy.
+Next Steps
+Provide complete and detailed responses to the following questions:
+- What face data does the app collect?
+- Provide a complete and clear explanation of all planned use, sharing, retention, deletion, and storage
+practices for the collected face data.
+- Will the face data be shared with any third parties? Where will this information be stored?
+- How long will face data be retained?
+- Where in the privacy policy is the app's collection, use, disclosure, sharing, and retention of face data
+explained? Identify the specific sections in the privacy policy where this information is located.
+- Quote the specific text from the privacy policy concerning face data.
+Resources
+- Learn more about requirements for data collection and storage in guideline 5.1.1, and Section 3.3.3(C),
+and Section 3.3.3(K) of the Apple Developer Program License Agreement, which describe expectations
+around accessing and using face data.
+Support
+- Reply to this message in your preferred language if you need assistance. If you need additional support,
+use the Contact Us module.
+- Consult with fellow developers and Apple engineers on the Apple Developer Forums.
+- Request an App Review Appointment at Meet with Apple to discuss your app's review. Appointments
+subject to availability during your local business hours on Tuesdays and Thursdays.
+- Provide feedback on this message and your review experience by completing a short survey.
