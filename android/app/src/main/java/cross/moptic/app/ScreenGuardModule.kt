@@ -1,4 +1,4 @@
-package com.moptic
+package cross.moptic.app
 
 import android.view.WindowManager
 import com.facebook.react.bridge.LifecycleEventListener

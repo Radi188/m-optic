@@ -1,4 +1,4 @@
-package com.moptic
+package cross.moptic.app
 
 import android.app.Application
 import com.facebook.react.PackageList

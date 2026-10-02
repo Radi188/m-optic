@@ -1,4 +1,4 @@
-package com.moptic
+package cross.moptic.app
 
 import com.facebook.react.BaseReactPackage
 import com.facebook.react.bridge.NativeModule

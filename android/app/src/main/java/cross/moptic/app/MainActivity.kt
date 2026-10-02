@@ -1,4 +1,4 @@
-package com.moptic
+package cross.moptic.app
 
 import android.os.Bundle
 import android.view.WindowManager

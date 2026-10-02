@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:422835272274:android:3ac44403904e3b5032fd8b",
+        "mobilesdk_app_id": "1:422835272274:android:25f511c6f1d8a2cb32fd8b",
         "android_client_info": {
-          "package_name": "app.moptic.cross"
+          "package_name": "cross.moptic.app"
         }
       },
       "oauth_client": [],
