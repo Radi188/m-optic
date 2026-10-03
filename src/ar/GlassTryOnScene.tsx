@@ -14,13 +14,15 @@
  * Temple_L/R_Locator_GRP, Extras_GRP), so the temple arms are the real authored
  * arms rather than a geometric guess at where the arms start.
  */
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
   Linking,
   ActivityIndicator,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
@@ -339,23 +341,20 @@ function applyFacePose(lm) {
 }
 
 // ── Camera stream ─────────────────────────────────────────────────────────────
-if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+// The stream is opened once, by MediaPipe's Camera helper in initFaceMesh.
+// Opening it here as well fails on Android, where a camera can only be held by
+// one stream at a time (NotReadableError: Could not start video source).
+function postCameraError(reason) {
   window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-    JSON.stringify({ type: 'cameraError', reason: 'unsupported' })
+    JSON.stringify({ type: 'cameraError', reason: reason })
   );
+}
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  postCameraError('unsupported');
   return;
 }
-navigator.mediaDevices.getUserMedia({
-  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-  audio: false,
-}).then(function (stream) {
-  video.srcObject = stream;
-  video.play().catch(function () {});
-}).catch(function (err) {
-  window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
-    JSON.stringify({ type: 'cameraError', reason: err.name || 'unknown' })
-  );
-});
+// camera_utils reports failures with a raw alert() — route them to RN instead.
+window.alert = function (msg) { postCameraError(String(msg)); };
 
 // ── MediaPipe FaceMesh ────────────────────────────────────────────────────────
 function onResults(results) {
@@ -395,11 +394,14 @@ function initFaceMesh() {
 
   var cam = new Camera(video, {
     onFrame: async function () { await fm.send({ image: video }); },
-    width: 640, height: 480,
+    width: 640, height: 480, facingMode: 'user',
   });
   cam.start()
     .then(function () { loading.style.display = 'none'; })
-    .catch(function (e) { loading.innerHTML = 'Camera error:<br>' + e.message; });
+    .catch(function (e) {
+      loading.innerHTML = 'Camera error:<br>' + ((e && (e.message || e.name)) || e);
+      postCameraError((e && e.name) || String(e));
+    });
 }
 
 if (document.readyState === 'complete') initFaceMesh();
@@ -427,27 +429,57 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     [glass.id, dataUri],
   );
 
+  // Android: the WebView can only grant getUserMedia when the app itself holds
+  // CAMERA, so ask before the page loads. iOS: WKWebView reuses the app-level
+  // grant via mediaCapturePermissionGrantType="grant".
+  const [cameraGranted, setCameraGranted] = useState(Platform.OS !== 'android');
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
+      .then(result => {
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          setCameraGranted(true);
+        } else {
+          showCameraAlert();
+        }
+      })
+      .catch(() => showCameraAlert());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openSettings = useCallback(() => {
     Linking.openSettings().catch(() => {});
   }, []);
+
+  // camera_utils can report one failure twice (alert + rejected start), so the
+  // alert is shown once per session.
+  const alertShown = useRef(false);
+  const showCameraAlert = useCallback(() => {
+    if (alertShown.current) return;
+    alertShown.current = true;
+    Alert.alert(
+      'Camera Access Required',
+      Platform.OS === 'android'
+        ? 'MOptic needs camera access for the glasses try-on.\n\nIf the camera is in use by another app, close it and try again. Otherwise allow Camera in Settings → Apps → MOptic → Permissions.'
+        : 'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: openSettings },
+      ],
+    );
+  }, [openSettings]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === 'cameraError') {
-          Alert.alert(
-            'Camera Access Required',
-            'MOptic needs camera access for the glasses try-on.\n\nGo to Settings → Privacy & Security → Camera.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: openSettings },
-            ],
-          );
+          console.warn('[TryOn] camera error:', msg.reason);
+          showCameraAlert();
         }
       } catch {}
     },
-    [openSettings],
+    [showCameraAlert],
   );
 
   if (error) {
@@ -463,7 +495,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     );
   }
 
-  if (!html) {
+  if (!html || !cameraGranted) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={Colors.primary} size="large" />
