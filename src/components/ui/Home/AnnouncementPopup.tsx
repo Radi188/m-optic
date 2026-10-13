@@ -9,7 +9,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 import { BorderRadius, Colors, FontSize, MaxWidth, Spacing } from '../../../theme';
@@ -20,12 +19,14 @@ import AppImage from '../../AppImage';
 
 /**
  * The home-screen pop-up. Its content is the latest announcement from the
- * backend — nothing in it is written into the app. Each announcement is shown
- * once per device, so publishing a newer one shows that one once too. With no
- * announcements, nothing pops up.
+ * backend — nothing in it is written into the app. It shows once per app
+ * launch: moving around the app or sending it to the background does not bring
+ * it back, but killing the app and opening it again does.
  */
 
-const SEEN_KEY = 'home.popup.seenAnnouncementId';
+// Lives as long as the JS runtime, i.e. until the app is killed. Module state
+// rather than component state, so leaving and re-entering Home does not reset it.
+let shownThisLaunch = false;
 // Let the home screen settle before the pop-up lands on top of it.
 const SHOW_DELAY_MS = 700;
 // Until the real image size is known, assume a portrait poster.
@@ -64,39 +65,24 @@ export const latestAnnouncement = (
     return diff > 0 || (diff === 0 && a.id > latest.id) ? a : latest;
   }, null);
 
-/** Picks the latest announcement and decides whether this device has seen it. */
+/** Shows the latest announcement once per app launch. */
 export function useAnnouncementPopup(announcements?: AnnouncementItem[]) {
   const [popup, setPopup] = useState<AnnouncementItem | null>(null);
   const latest = latestAnnouncement(announcements);
   const latestId = latest?.id ?? null;
 
   useEffect(() => {
-    if (!latest) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Nothing to show yet (still loading, or no announcements), or already
+    // shown since the app was opened.
+    if (!latest || shownThisLaunch) return;
 
-    (async () => {
-      let seenId: string | null = null;
-      try {
-        seenId = await AsyncStorage.getItem(SEEN_KEY);
-      } catch {
-        // Storage unavailable: show it rather than never.
-      }
-      if (cancelled || seenId === String(latest.id)) return;
+    const timer = setTimeout(() => {
+      shownThisLaunch = true;
+      setPopup(latest);
+    }, SHOW_DELAY_MS);
 
-      timer = setTimeout(() => {
-        if (cancelled) return;
-        setPopup(latest);
-        // Marked as seen once shown, so an app kill mid-pop-up still counts.
-        AsyncStorage.setItem(SEEN_KEY, String(latest.id)).catch(() => {});
-      }, SHOW_DELAY_MS);
-    })();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-    // Re-run only when a different announcement becomes the latest.
+    return () => clearTimeout(timer);
+    // Re-run only when the latest announcement changes (e.g. once it loads).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestId]);
 
