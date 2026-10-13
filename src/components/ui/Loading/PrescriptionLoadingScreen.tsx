@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors, Spacing, BorderRadius, Shadow } from '../../../theme';
+import { Colors, Spacing, BorderRadius, Shadow, Layout } from '../../../theme';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 import CurrentPrescriptionCardSkeleton from '../Profile/Loading/CurrentPrescriptionCardSkeleton';
 
@@ -30,7 +30,7 @@ const PrescriptionSkeleton: React.FC = () => (
 export default PrescriptionSkeleton;
 
 const styles = StyleSheet.create({
-  root: { padding: Spacing.md },
+  root: { ...Layout.readable, padding: Spacing.md },
   sectionTitle: { marginTop: Spacing.lg, marginBottom: Spacing.md },
   card: {
     backgroundColor: Colors.white,

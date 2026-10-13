@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors, Spacing, Shadow } from '../../../theme';
+import { Colors, Spacing, Shadow, Layout } from '../../../theme';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 
 /**
@@ -39,7 +39,7 @@ const HistorySkeleton: React.FC<{ count?: number }> = ({ count = 3 }) => (
 export default HistorySkeleton;
 
 const styles = StyleSheet.create({
-  list: { paddingHorizontal: Spacing.md },
+  list: { ...Layout.readable, paddingHorizontal: Spacing.md },
   // Matches the real refraction card's surface on this screen — white and
   // lifted, so the skeleton doesn't sit on a different ground than what
   // replaces it.

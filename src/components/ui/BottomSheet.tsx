@@ -8,6 +8,7 @@ import RNBottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { Colors, BorderRadius, FontSize, Spacing, Shadow } from '../../theme';
 import AppText from '../AppText';
+import { useResponsive } from '../../hook/useResponsive';
 
 export { BottomSheetModalProvider };
 
@@ -26,6 +27,7 @@ const BottomSheet = forwardRef<RNBottomSheet, BottomSheetProps>(
       () => snapPointsProp ?? ['40%', '75%'],
       [snapPointsProp],
     );
+    const { sheetInset } = useResponsive();
 
     const renderBackdrop = useCallback(
       (props: any) => (
@@ -49,6 +51,8 @@ const BottomSheet = forwardRef<RNBottomSheet, BottomSheetProps>(
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={styles.indicator}
         backgroundStyle={styles.background}
+        // Readable-width card centred on iPad.
+        style={{ marginHorizontal: sheetInset }}
       >
         <BottomSheetScrollView contentContainerStyle={styles.content}>
           {title && (
@@ -90,6 +94,7 @@ export const AppBottomSheetModal = forwardRef<
     () => snapPointsProp ?? ['50%', '85%'],
     [snapPointsProp],
   );
+  const { sheetInset } = useResponsive();
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -116,6 +121,7 @@ export const AppBottomSheetModal = forwardRef<
       backdropComponent={renderBackdrop}
       handleIndicatorStyle={styles.indicator}
       backgroundStyle={styles.background}
+      style={{ marginHorizontal: sheetInset }}
       enablePanDownToClose
     >
       <BottomSheetScrollView contentContainerStyle={styles.content}>

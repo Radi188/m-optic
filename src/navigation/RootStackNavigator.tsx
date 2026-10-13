@@ -15,6 +15,7 @@ import NotificationSettingsScreen from '../screens/NotificationSettingScreen';
 import SupportScreen from '../screens/SupportScreen';
 import NotificationListScreen from '../screens/NotificationScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsAndConditionsScreen from '../screens/TermsAndConditionsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import PointsMemberScreen from '../screens/PointsMemberScreen';
 import RewardScreen from '../screens/RewardScreen';
@@ -75,6 +76,15 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Privacy"
             component={PrivacyPolicyScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+
+          <Stack.Screen
+            name="Terms"
+            component={TermsAndConditionsScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_right',

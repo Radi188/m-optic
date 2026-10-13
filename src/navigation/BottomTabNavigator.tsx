@@ -19,7 +19,7 @@ import StoreScreen from '../screens/StoreScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import { selectIsAuthenticated } from '../store/slices/authSlice';
-import { Colors, FontSize } from '../theme';
+import { Colors, FontSize, Layout } from '../theme';
 import type { BottomTabParamList } from '../types/navigation';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
@@ -204,7 +204,9 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.divider,
   },
+  // Keeps the five tabs grouped in the middle on iPad instead of spread edge to edge.
   row: {
+    ...Layout.readable,
     flexDirection: 'row',
   },
 

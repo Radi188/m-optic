@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, BorderRadius, Shadow } from '../../../theme';
+import { Colors, Spacing, BorderRadius, Shadow, Layout } from '../../../theme';
 
 const SkeletonBox = ({ style }: { style?: any }) => (
   <View style={[styles.skeleton, style]} />
@@ -77,6 +77,7 @@ export default HomeSkeleton;
 
 const styles = StyleSheet.create({
   root: {
+    ...Layout.wide,
     flex: 1,
     backgroundColor: Colors.white,
   },

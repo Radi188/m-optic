@@ -121,19 +121,28 @@ export interface ProductResponse {
   telegram_inquiry_link?: string;
 }
 
+/**
+ * Filters as the screens use them. productController.getProducts translates
+ * these to the API's own parameter names (brand_id, frame_shape_id, per_page).
+ */
 export type ProductListFilters = {
   page?: number;
   category?: string | number;
+  /** Brand id. */
   brand_1?: string | number;
+  /** Frame shape by name (any case/punctuation); resolved to an id. */
+  frame_shape?: string;
+  /** Frame shape by id; takes precedence over `frame_shape`. */
+  frame_shape_id?: number;
   search?: string;
-  minPrice?: number;
-  maxPrice?: number;
+  min_price?: number;
+  max_price?: number;
   sortBy?: string;
   orderBy?: 'asc' | 'desc';
   is_active_mobile?: boolean;
   is_active_web?: boolean;
+  /** Page size. */
   limit?: number;
-  brand?: string;
 };
 
 

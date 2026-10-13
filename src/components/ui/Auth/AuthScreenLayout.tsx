@@ -8,18 +8,16 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { Colors, FontSize, Spacing, Shadow } from '../../../theme';
+import { Colors, FontSize, Spacing, Shadow, Layout } from '../../../theme';
 import AppText from '../../AppText';
-
-const { height: SCREEN_H } = Dimensions.get('window');
 
 interface Props {
   title: string;
@@ -37,6 +35,7 @@ const AuthScreenLayout: React.FC<Props> = ({
 }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
 
   const cardAnim = useRef(new Animated.Value(80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -105,8 +104,15 @@ const AuthScreenLayout: React.FC<Props> = ({
           <AppText style={styles.subtitle}>{subtitle}</AppText>
         </Animated.View>
 
-        <Animated.View style={{ transform: [{ translateY: cardAnim }] }}>
-          <View style={[styles.card, { paddingBottom: insets.bottom + 24 }]}>
+        <Animated.View
+          style={[Layout.form, { transform: [{ translateY: cardAnim }] }]}
+        >
+          <View
+            style={[
+              styles.card,
+              { minHeight: height * 0.58, paddingBottom: insets.bottom + 24 },
+            ]}
+          >
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -127,6 +133,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   top: {
+    ...Layout.form,
     flex: 1,
     paddingHorizontal: Spacing.xl,
     justifyContent: 'flex-end',
@@ -174,7 +181,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 36,
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.xl,
-    minHeight: SCREEN_H * 0.58,
     ...Shadow.lg,
   },
 });

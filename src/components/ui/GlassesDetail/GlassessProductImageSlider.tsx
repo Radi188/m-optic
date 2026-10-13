@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  Dimensions,
+  useWindowDimensions,
   FlatList,
   Image,
   NativeScrollEvent,
@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type GlassessProductImageSliderProps = {
   images: string[];
@@ -33,6 +32,11 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
 }) => {
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  // Pages are as wide as the slider itself, which is narrower than the
+  // window on iPad. Start from the window width and correct on layout.
+  const { width: windowWidth } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const slideWidth = measuredWidth || windowWidth;
   const { t } = useTranslation();
 
   const validImages = useMemo(
@@ -42,7 +46,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
-    const newIndex = Math.round(offsetX / SCREEN_WIDTH);
+    const newIndex = Math.round(offsetX / slideWidth);
     setActiveIndex(newIndex);
   };
 
@@ -57,7 +61,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   const renderItem = ({ item, index }: { item: string; index: number }) => {
     return (
       <TouchableOpacity
-        style={styles.slide}
+        style={[styles.slide, { width: slideWidth }]}
         onPress={() => onPressImage?.(index)}
       >
         <AppImage
@@ -73,7 +77,10 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   // photos — they open the shared default model, which does not depend on the
   // product's imagery. Returning early here used to hide both entry points.
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={e => setMeasuredWidth(e.nativeEvent.layout.width)}
+    >
       {validImages.length ? (
         <FlatList
           ref={flatListRef}
@@ -85,14 +92,18 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handleScrollEnd}
           bounces={false}
+          // Remount on width change so paging offsets line up again.
+          key={`slides-${slideWidth}`}
           getItemLayout={(_, index) => ({
-            length: SCREEN_WIDTH,
-            offset: SCREEN_WIDTH * index,
+            length: slideWidth,
+            offset: slideWidth * index,
             index,
           })}
         />
       ) : (
-        <View style={[styles.slide, styles.emptyContainer]}>
+        <View
+          style={[styles.slide, styles.emptyContainer, { width: slideWidth }]}
+        >
           <AppText style={styles.emptyText}>{t('NoImageAvailable')}</AppText>
         </View>
       )}
@@ -162,7 +173,6 @@ const styles = StyleSheet.create({
     color: '#777777',
   },
   slide: {
-    width: SCREEN_WIDTH,
     height: 320,
     justifyContent: 'center',
     alignItems: 'center',

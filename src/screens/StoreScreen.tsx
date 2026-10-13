@@ -36,7 +36,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  Shadow,
+  Layout,
+} from '../theme';
+import { useResponsive } from '../hook/useResponsive';
 import { fetchBranches, groupHours } from '../services/branchService';
 import StoreSkeleton from '../components/ui/Loading/StoreLoadingScreen';
 import type { StoreLocation } from '../services/branchService';
@@ -187,20 +195,19 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
   }));
 
   const openDirections = () => {
-    // A branch that has coordinates ships its own Google Maps link; it points at
-    // the exact spot, whereas the address strings are often just "Phnom Penh".
-    if (location.mapsLink) {
-      Linking.openURL(location.mapsLink);
+    // The API's own link: Google Maps navigation to the store's Google place.
+    if (location.directionsUrl) {
+      Linking.openURL(location.directionsUrl);
       return;
     }
 
+    // No link from the API: search Google Maps for the store by address.
     const q = encodeURIComponent(location.address || location.name);
-    const url =
-      Platform.OS === 'ios'
-        ? `maps://maps.apple.com/?q=${q}`
-        : `https://www.google.com/maps/search/?api=1&query=${q}`;
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
+  };
 
-    Linking.openURL(url);
+  const openOnGoogleMaps = () => {
+    if (location.mapsUrl) Linking.openURL(location.mapsUrl);
   };
 
   const callStore = () => {
@@ -218,13 +225,21 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <AppImage
-            source={
-              location.photoUri ? { uri: location.photoUri } : MARKER_LOGO
-            }
-            style={s.logoBadgeImg}
-            resizeMode="contain"
-          />
+          {/* A branch photo fills the badge edge to edge; only the app mark
+              fallback (transparent) keeps a little breathing room. */}
+          {location.photoUri ? (
+            <AppImage
+              source={{ uri: location.photoUri }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          ) : (
+            <AppImage
+              source={MARKER_LOGO}
+              style={s.logoBadgeImg}
+              resizeMode="contain"
+            />
+          )}
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -419,6 +434,22 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
           </TouchableOpacity>
         ) : null}
       </Animated.View>
+
+      {/* The store's Google place page: reviews, photos and hours. Only shown
+          once the API sends a link for it. */}
+      {location.mapsUrl ? (
+        <Animated.View style={ctaStyle}>
+          <TouchableOpacity
+            style={s.mapsLinkRow}
+            onPress={openOnGoogleMaps}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="map-outline" size={15} color={Colors.primary} />
+            <AppText style={s.mapsLinkText}>{t('ViewOnGoogleMaps')}</AppText>
+            <Ionicons name="open-outline" size={13} color={Colors.primary} />
+          </TouchableOpacity>
+        </Animated.View>
+      ) : null}
     </View>
   );
 };
@@ -434,10 +465,8 @@ const StoreMarker: React.FC<{
   // back to the app mark rather than showing nothing.
   const [logoFailed, setLogoFailed] = useState(false);
 
-  const markerLogo =
-    location.photoUri && !logoFailed
-      ? { uri: location.photoUri }
-      : MARKER_LOGO;
+  const showPhoto = !!location.photoUri && !logoFailed;
+  const markerLogo = showPhoto ? { uri: location.photoUri } : MARKER_LOGO;
 
   useEffect(() => {
     setSettled(false);
@@ -456,10 +485,11 @@ const StoreMarker: React.FC<{
     >
       <View style={mk.wrap}>
         <View style={[mk.head, active ? mk.headActive : mk.headInactive]}>
+          {/* Branch photos fill the circle; the app-mark fallback is inset. */}
           <Image
             source={markerLogo}
-            style={mk.logo}
-            resizeMode="contain"
+            style={showPhoto ? mk.photo : mk.logo}
+            resizeMode={showPhoto ? 'cover' : 'contain'}
             onLoad={() => setLoaded(true)}
             onError={() => {
               setLogoFailed(true);
@@ -528,6 +558,9 @@ const StoreScreen: React.FC = () => {
   });
 
   const snapPoints = useMemo(() => ['42%', '88%'], []);
+
+  // On iPad the map stays full screen but the sheet is a readable-width card.
+  const { sheetInset } = useResponsive();
 
   const activeLocation = locations.find(
     location => location.id === activeId,
@@ -658,7 +691,7 @@ const StoreScreen: React.FC = () => {
         style={[s.tabsArea, { paddingTop: insets.top }]}
         pointerEvents="box-none"
       >
-        <View style={s.tabsContainer}>
+        <View style={[Layout.readable, s.tabsContainer]}>
           <ScrollView
             ref={tabsScrollRef}
             horizontal
@@ -711,6 +744,7 @@ const StoreScreen: React.FC = () => {
           backdropComponent={renderBackdrop}
           handleIndicatorStyle={s.sheetIndicator}
           backgroundStyle={s.sheetBg}
+          style={{ marginHorizontal: sheetInset }}
         >
           <BottomSheetScrollView
             showsVerticalScrollIndicator={false}
@@ -743,9 +777,11 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    // Side spacing lives here (not as a margin on the pill) so the pill can
+    // take a centred max width on iPad without overflowing on phones.
+    paddingHorizontal: Spacing.md,
   },
   tabsContainer: {
-    marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
     borderRadius: BorderRadius.full,
     backgroundColor: 'rgba(26, 16, 10, 0.62)',
@@ -870,12 +906,12 @@ const s = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
     ...Shadow.glow,
   },
+  // Only used for the app-mark fallback; the inset keeps it off the edges.
   logoBadgeImg: {
-    width: '100%',
-    height: '100%',
+    width: '70%',
+    height: '70%',
   },
   locationName: {
     fontSize: FontSize.lg,
@@ -1091,6 +1127,19 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mapsLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  mapsLinkText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
   ctaFillText: {
     fontSize: FontSize.sm,
     fontWeight: '700',
@@ -1115,17 +1164,20 @@ const mk = StyleSheet.create({
     width: 36,
     height: 36,
     borderWidth: 2.5,
-    padding: 6,
   },
   headActive: {
     width: 50,
     height: 50,
     borderWidth: 3,
-    padding: 9,
   },
-  logo: {
+  photo: {
     width: '100%',
     height: '100%',
+  },
+  // App-mark fallback only; inset so the transparent icon clears the ring.
+  logo: {
+    width: '62%',
+    height: '62%',
   },
   tail: {
     width: 0,

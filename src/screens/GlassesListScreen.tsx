@@ -20,7 +20,9 @@ import type {
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { AppModal, Input, GlassBackground } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../theme';
+import { useResponsive } from '../hook/useResponsive';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import type { RootStackParamList, GlassItem } from '../types/navigation';
 
 import { useAppDispatch, useAppSelector } from '../store';
@@ -33,7 +35,10 @@ import { Product } from '../types/glasses';
 import { useProductList } from '../hook/useProductList';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
+import FilterBadge, { countActiveFilters } from '../components/ui/FilterBadge';
+import EmptyState from '../components/ui/EmptyState';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
+import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 
@@ -65,6 +70,10 @@ const normalize = (value?: string) => value?.toLowerCase().trim();
 
 const GlassesListScreen: React.FC = () => {
   const navigation = useNavigation<GlassesListNav>();
+  const { t } = useTranslation();
+  const { productColumns } = useResponsive();
+  // Shows prices: no screenshots or screen recording while focused.
+  useBlockScreenCapture();
   const route = useRoute<GlassesListRoute>();
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
@@ -169,11 +178,13 @@ const GlassesListScreen: React.FC = () => {
   const [tempMinPrice, setTempMinPrice] = useState('');
   const [tempMaxPrice, setTempMaxPrice] = useState('');
 
-  const hasActiveFilters =
-    activeBrandId !== 'all' ||
-    activeFrame !== 'all' ||
-    !!filters.min_price ||
-    !!filters.max_price;
+  const activeFilterCount = countActiveFilters({
+    brand: activeBrandId,
+    frame: activeFrame,
+    minPrice: filters.min_price,
+    maxPrice: filters.max_price,
+  });
+  const hasActiveFilters = activeFilterCount > 0;
 
   const openFilterModal = () => {
     setTempBrand(activeBrandId);
@@ -304,7 +315,7 @@ const GlassesListScreen: React.FC = () => {
 
   const renderCard = ({ item, index }: { item: Product; index: number }) => {
     if ((item as any).empty) {
-      return <View style={[styles.card, { opacity: 0 }]} />;
+      return <View style={styles.gridSpacer} />;
     }
 
     // formatData only pads the LAST row, so a real item's position in the
@@ -390,7 +401,7 @@ const GlassesListScreen: React.FC = () => {
               color={hasActiveFilters ? Colors.white : Colors.primary}
             />
 
-            {hasActiveFilters && <View style={styles.filterDot} />}
+            <FilterBadge count={activeFilterCount} />
           </TouchableOpacity>
         </View>
 
@@ -514,9 +525,10 @@ const GlassesListScreen: React.FC = () => {
           <GlassScreenSkeleton />
         ) : (
           <FlatList
-            data={formatData(products, 2)}
+            data={formatData(products, productColumns)}
             keyExtractor={item => String(item.id)}
-            numColumns={2}
+            key={`grid-${productColumns}`}
+            numColumns={productColumns}
             columnWrapperStyle={styles.row}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
@@ -539,19 +551,19 @@ const GlassesListScreen: React.FC = () => {
               ) : null
             }
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Ionicons
-                  name="glasses-outline"
-                  size={42}
-                  color={Colors.gray300}
+              hasActiveFilters ? (
+                <EmptyState
+                  title={t('NoFramesMatchFilters')}
+                  message={t('NoFramesMatchFiltersHint')}
+                  actionLabel={t('ClearFilters')}
+                  onAction={resetFilters}
                 />
-
-                <AppText style={styles.emptyTitle}>No frames found</AppText>
-
-                <AppText style={styles.emptyText}>
-                  Try another brand, frame shape, or filter.
-                </AppText>
-              </View>
+              ) : (
+                <EmptyState
+                  title={t('NoFramesFound')}
+                  message={t('NoFramesYetHint')}
+                />
+              )
             }
           />
         )}
@@ -642,6 +654,7 @@ const GlassesListScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   safe: {
+    ...Layout.wide,
     flex: 1,
   },
 
@@ -701,29 +714,24 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
 
-  filterDot: {
-    position: 'absolute',
-    top: 7,
-    right: 7,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF3B30',
-    borderWidth: 1.5,
-    borderColor: Colors.white,
-  },
-
   searchContainer: {
     marginBottom: Spacing.md,
   },
 
+  // ScrollViews default to flexGrow: 1, so with a short (filtered) product
+  // list this row soaked up the spare height and left a gap above the grid.
   tabs: {
-    marginBottom: Spacing.sm,
-    height: 60,
+    marginBottom: Spacing.xs,
+    height: 44,
+    flexGrow: 0,
+    flexShrink: 0,
   },
 
+  // Chips are 36pt; centring them in the 44pt row keeps the brands snug
+  // against the product count below.
   tabsContent: {
     paddingHorizontal: Spacing.lg,
+    alignItems: 'center',
   },
 
   // Sizes to its label. A fixed width left "All" swimming in empty space while
@@ -815,7 +823,7 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     fontWeight: '600',
     paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
 
   list: {
@@ -823,6 +831,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxl + 80,
   },
 
+  // Invisible filler for the last row; mirrors GlassCard's flex + margin.
+  gridSpacer: { flex: 1, margin: 6 },
   row: {
     gap: CARD_GAP,
     marginBottom: CARD_GAP,
@@ -851,26 +861,6 @@ const styles = StyleSheet.create({
 
   errorText: {
     marginTop: Spacing.xs,
-    fontSize: FontSize.sm,
-    color: Colors.gray400,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xxl,
-    gap: Spacing.sm,
-  },
-
-  emptyTitle: {
-    fontSize: FontSize.md,
-    fontWeight: '800',
-    color: Colors.black,
-  },
-
-  emptyText: {
     fontSize: FontSize.sm,
     color: Colors.gray400,
     fontWeight: '500',

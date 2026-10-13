@@ -13,7 +13,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { GlassBackground } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../theme';
 import type { RootStackParamList } from '../types/navigation';
 import AppText from '../components/AppText';
 import { useTranslation } from 'react-i18next';
@@ -106,6 +106,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
+    ...Layout.readable,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
@@ -147,6 +148,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
   },

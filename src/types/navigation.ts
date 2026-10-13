@@ -56,6 +56,7 @@ export type RootStackParamList = {
   Support: undefined;
   NotificationList: undefined;
   Privacy: undefined;
+  Terms: undefined;
   EditProfile: undefined;
   PointMember: undefined;
   Reward: undefined;

@@ -11,7 +11,7 @@ import {
 import ImagePicker from 'react-native-image-crop-picker';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import AppText from '../../AppText';
 
 export type SelectedProfileImage = {
@@ -222,6 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.38)',
   },
   modalCard: {
+    ...Layout.dialog,
     width: '100%',
     backgroundColor: Colors.white,
     borderRadius: 30,

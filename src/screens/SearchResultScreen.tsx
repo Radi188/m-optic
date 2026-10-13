@@ -19,10 +19,13 @@ import type {
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { GlassBackground } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../theme';
+import { useResponsive } from '../hook/useResponsive';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import type { RootStackParamList } from '../types/navigation';
 
 import GlassCard from '../components/ui/GlassesCard/GlassesCard';
+import EmptyState from '../components/ui/EmptyState';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import { useProductList } from '../hook/useProductList';
 import { Product } from '../types/glasses';
@@ -43,6 +46,9 @@ const popularSearches = ['Round', 'Square', 'Rimless', 'Boston', 'Oval'];
 
 const SearchResultScreen = () => {
   const navigation = useNavigation<Nav>();
+  const { productColumns } = useResponsive();
+  // Shows prices: no screenshots or screen recording while focused.
+  useBlockScreenCapture();
   const route = useRoute<Route>();
   const inputRef = useRef<TextInput>(null);
 
@@ -125,7 +131,7 @@ const SearchResultScreen = () => {
 
   const renderCard = ({ item }: { item: Product }) => {
     if ((item as any).empty) {
-      return <View style={[styles.card, { opacity: 0 }]} />;
+      return <View style={styles.gridSpacer} />;
     }
 
     return (
@@ -254,9 +260,10 @@ const SearchResultScreen = () => {
               </View>
             ) : (
               <FlatList
-                data={formatData(products, 2)}
+                data={formatData(products, productColumns)}
                 keyExtractor={item => String(item.id)}
-                numColumns={2}
+                key={`grid-${productColumns}`}
+                numColumns={productColumns}
                 columnWrapperStyle={styles.row}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.list}
@@ -270,26 +277,13 @@ const SearchResultScreen = () => {
                   />
                 }
                 ListEmptyComponent={
-                  <View style={styles.empty}>
-                    <Ionicons
-                      name="search-outline"
-                      size={42}
-                      color={Colors.gray300}
-                    />
-                    <AppText style={styles.emptyTitle}>
-                      {t('NoFramesFound')}
-                    </AppText>
-                    <AppText style={styles.emptyText}>{t('Retry')}</AppText>
-
-                    <TouchableOpacity
-                      style={styles.retryBtn}
-                      onPress={openSearchMode}
-                    >
-                      <AppText style={styles.retryText}>
-                        {t('TryAnotherKeyword')}
-                      </AppText>
-                    </TouchableOpacity>
-                  </View>
+                  <EmptyState
+                    icon="search-outline"
+                    title={t('NoFramesFound')}
+                    message={t('TryAnotherKeyword')}
+                    actionLabel={t('SearchAgain')}
+                    onAction={openSearchMode}
+                  />
                 }
               />
             )}
@@ -304,6 +298,7 @@ export default SearchResultScreen;
 
 const styles = StyleSheet.create({
   safe: {
+    ...Layout.wide,
     flex: 1,
   },
 
@@ -421,6 +416,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxl + 80,
   },
 
+  // Invisible filler for the last row; mirrors GlassCard's flex + margin.
+  gridSpacer: { flex: 1, margin: 6 },
   row: {
     gap: CARD_GAP,
     marginBottom: CARD_GAP,

@@ -15,6 +15,7 @@ import Header from '../components/ui/Header/HeaderComponent';
 import PointsSkeleton from '../components/ui/Loading/PointsLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import AppText from '../components/AppText';
+import { Layout } from '../theme';
 
 type PointsMemberScreenProps = {
   navigation?: any;
@@ -680,6 +681,7 @@ const styles = StyleSheet.create({
     color: '#7A6A60',
   },
   header: {
+    ...Layout.readable,
     height: 64,
     paddingHorizontal: 20,
     flexDirection: 'row',
@@ -711,6 +713,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   scrollContent: {
+    ...Layout.readable,
     paddingHorizontal: 20,
     paddingBottom: 40,
   },

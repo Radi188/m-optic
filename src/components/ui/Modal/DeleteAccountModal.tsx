@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import AppText from '../../AppText';
 
 type DeleteAccountModalProps = {
@@ -107,6 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20, 15, 12, 0.42)',
   },
   modalBox: {
+    ...Layout.dialog,
     backgroundColor: Colors.white,
     borderRadius: 30,
     padding: Spacing.lg,

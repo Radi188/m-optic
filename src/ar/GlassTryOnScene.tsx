@@ -5,10 +5,13 @@
  *  1. The GLB is fetched from Metro on the RN JS thread and handed to the
  *     WebView as a base64 `data:` URI (see ./glassesModel).
  *  2. Parsed by Three.js `GLTFLoader` and rendered on an alpha-transparent
- *     canvas overlaid on the mirrored front-camera video.
- *  3. MediaPipe FaceMesh drives position / rotation / scale every frame, with a
+ *     canvas overlaid on the mirrored camera frame FaceMesh just analysed, so
+ *     the glasses never lag behind the face.
+ *  3. MediaPipe FaceMesh face geometry (a metric head pose for a known camera)
+ *     drives position / rotation / scale every frame, One Euro smoothed, with a
  *     depth-only head-shaped occluder so the temple arms hide inside the head
- *     instead of being painted across the face.
+ *     instead of being painted across the face. The older 2-D landmark solver
+ *     is kept as a fallback.
  *
  * The GLB is authored with named groups (Frame_GRP, Lens_GRP,
  * Temple_L/R_Locator_GRP, Extras_GRP), so the temple arms are the real authored
@@ -30,7 +33,12 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { GlassItem } from '../types/navigation';
 import AppText from '../components/AppText';
 import { useGlassesGlb } from './glassesModel';
-import { GLB_SCRIPT_TAGS, GLB_HELPERS_JS, HEAD_POSE_JS } from './glassesModelWeb';
+import {
+  GLB_SCRIPT_TAGS,
+  GLB_HELPERS_JS,
+  HEAD_POSE_JS,
+  FACE_GEOMETRY_JS,
+} from './glassesModelWeb';
 
 interface Props {
   glass: GlassItem;
@@ -46,27 +54,33 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000}
-    /* mirrored camera feed */
+    /* live camera feed (mirrored). Shown until the first analysed frame is
+       drawn on #bg, and as a fallback should drawing that frame ever fail. */
     #video{
       position:absolute;top:0;left:0;width:100%;height:100%;
       object-fit:cover;transform:scaleX(-1);z-index:0;
     }
-    /* transparent Three.js canvas on top */
+    /* the exact frame FaceMesh analysed, so face and glasses never drift apart */
+    #bg{
+      position:absolute;top:0;left:0;width:100%;height:100%;
+      transform:scaleX(-1);z-index:1;
+    }
+    /* transparent Three.js canvas on top, mirrored together with the video */
     #ar-canvas{
       position:absolute;top:0;left:0;width:100%;height:100%;
-      pointer-events:none;z-index:1;
+      transform:scaleX(-1);pointer-events:none;z-index:2;
     }
     #status{
       position:absolute;top:18px;left:50%;transform:translateX(-50%);
       background:rgba(0,0,0,0.55);color:#fff;
       font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;
       padding:6px 16px;border-radius:20px;white-space:nowrap;
-      transition:background .4s;z-index:2;
+      transition:background .4s;z-index:3;
     }
     #loading{
       position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
       color:rgba(255,255,255,.7);font-family:-apple-system,sans-serif;
-      font-size:14px;text-align:center;line-height:1.9;pointer-events:none;z-index:2;
+      font-size:14px;text-align:center;line-height:1.9;pointer-events:none;z-index:3;
     }
     .spinner{
       width:36px;height:36px;
@@ -79,6 +93,7 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
+<canvas id="bg"></canvas>
 <canvas id="ar-canvas"></canvas>
 <div id="status">Point camera at your face</div>
 <div id="loading"><div class="spinner"></div>Initialising AR…</div>
@@ -93,6 +108,7 @@ ${GLB_SCRIPT_TAGS}
 
 ${GLB_HELPERS_JS}
 ${HEAD_POSE_JS}
+${FACE_GEOMETRY_JS}
 
 var GLB_DATA_URI = '${glbDataUri}';
 var ACCENT     = '${accentHex}';
@@ -111,7 +127,7 @@ var SIZE_MULT = 1.10;
 
 // ── Temple (arm) progressive reveal ───────────────────────────────────────────
 // The model's own Temple_L/R_Locator_GRP nodes are the arms, and each side is
-// now driven independently off the head basis rather than off |yaw|:
+// driven independently off the head basis rather than off |yaw|:
 //
 //   near arm (the one rotating TOWARDS the camera) — fades in as it clears the
 //     cheek, because that is the only arm whose silhouette we can get wrong;
@@ -119,42 +135,61 @@ var SIZE_MULT = 1.10;
 //     occluder, which hides it inside the head and lets it emerge naturally
 //     behind the jaw at a strong profile.
 //
-// The signal is pose.xAxis.z ≈ sin(yaw): 0 head-on, +1 when the wearer's LEFT
-// temple points at the camera, -1 when their right one does.
+// The signal is the head's X axis . camera Z ≈ sin(yaw): 0 head-on, +1 when the
+// wearer's LEFT temple points at the camera, -1 when their right one does.
 var TEMPLE_REVEAL_START = 0.03;   // ~2 degrees of turn — the arm starts to show
 var TEMPLE_REVEAL_FULL  = 0.20;   // ~12 degrees — fully opaque
 
-// ── Occlusion ────────────────────────────────────────────────────────────────
-// A depth-only ellipsoid standing in for the wearer's head, so a temple arm is
-// hidden while it is behind the face/skull and only drawn where it is really
-// visible. Semi-axes and centre offset are fractions of the measured
-// temple-to-temple face width, oriented by the head basis.
-//   width  → half the head across the ears (kept a touch narrower than the
-//            arms, so a near arm hugging the head is not swallowed by it)
-//   depth  → half the front-to-back skull depth
-//   back   → how far behind the nose bridge the skull centre sits
+// ── Face geometry (primary tracking) ─────────────────────────────────────────
+// FaceMesh solves a rigid head pose against its metric canonical face and
+// reports it for a perspective camera with this vertical FOV over the camera
+// frame. The Three.js camera uses the same FOV, so the glasses project exactly
+// onto the face at any head turn.
+var GEOMETRY_FOV = 63;
+
+// Where the glasses sit on the metric face mesh (fractions of face width, so
+// they hold for any face size). On MediaPipe's canonical face the nose bridge
+// (landmark 6) is ~23 mm in front of the eye corners, which is where a real lens
+// sits (~12 mm vertex distance in front of the cornea).
+//
+// LENS_FWD — how far the FRONT of the lenses stands in front of the nose
+//            bridge. Too high and the frame hovers off the face — that offset
+//            is what made the glasses slide sideways ("float") on a head turn.
+//            Raise it if the frame cuts into the face; lower it if it floats.
+// EYE_DROP — how far BELOW the eye line the lens CENTRE sits. 0 puts the pupil
+//            dead centre in the lens; 0.02 (~3 mm) matches real dispensing,
+//            where the pupil sits at about 57% of the lens height.
+//            ↑ Raise this to seat the glasses lower, lower it to lift them.
+var LENS_FWD = 0.015;
+var EYE_DROP = 0.02;
+
+// Head occluder in face space (fractions of face width): a depth-only
+// ellipsoid for the skull, centred behind the temple line, so a temple arm is
+// hidden while it is behind the head and only drawn where it is really visible.
+//   width  → half the head across the ears (kept narrower than the arms, so a
+//            near arm hugging the head is not swallowed by it)
+//   back   → how far behind the 234/454 temple line the skull centre sits
 var OCCLUSION_ENABLED = true;
-var HEAD_OCC = {
-  width:  0.52,
-  height: 0.80,
-  depth:  0.70,
-  back:   0.44,
-  down:   0.06
+var FACE_OCC = {
+  width:  0.47,
+  height: 0.72,
+  depth:  0.62,
+  back:   0.15,
+  up:     0.02
 };
 
-// ── Where the glasses sit on the face (fractions of face width) ─────────────
-// The frame's HEIGHT is anchored on the measured pupil line (see headPose), not
-// on an assumed offset down from the nose bridge — that assumption was ~6 mm
-// low, which is what put the lenses under the wearer's eyes.
-//
-// BRIDGE_FWD  — how far the lenses stand off the nose. Raise it if the frame
-//               cuts into the face; lower it if it floats.
-// EYE_DROP    — how far BELOW the pupils the lens CENTRE sits. 0 puts the pupil
-//               dead centre in the lens; 0.02 (~3 mm) matches real dispensing,
-//               where the pupil sits at about 57% of the lens height.
-//               ↑ Raise this to seat the glasses lower, lower it to lift them.
-var BRIDGE_FWD = 0.10;
-var EYE_DROP   = 0.02;
+// Smoothing. Position in cm, rotation in rad/s. Low cutoffs remove jitter
+// while still; beta lets the filter open up during a turn so it does not lag.
+var SMOOTHING = { posMinCutoff: 1.2, posBeta: 0.08, rotMinCutoff: 1.2, rotBeta: 0.8 };
+// Face-shape measurements barely change, so they are averaged hard.
+var FIT_SMOOTH = 0.15;
+
+// ── Landmark fallback ─────────────────────────────────────────────────────────
+// Used only when face geometry is unavailable: the older 2-D landmark solver
+// with its own (non-metric) tuning.
+var LEGACY_BRIDGE_FWD = 0.10;
+var LEGACY_HEAD_OCC = { width: 0.52, height: 0.80, depth: 0.70, back: 0.44, down: 0.06 };
+var LEGACY_SMOOTHING = { posMinCutoff: 1.2, posBeta: 0.3, rotMinCutoff: 1.2, rotBeta: 0.8 };
 
 // Minimum lens alpha on the AR overlay. Real KHR transmission cannot see the
 // <video> behind the canvas, so lenses fall back to plain alpha here. This GLB
@@ -162,31 +197,10 @@ var EYE_DROP   = 0.02;
 var LENS_OPACITY = 0.14;
 
 var video   = document.getElementById('video');
+var bg      = document.getElementById('bg');
+var bgCtx   = bg.getContext('2d');
 var loading = document.getElementById('loading');
 var status  = document.getElementById('status');
-
-// ── Video → screen mapping ───────────────────────────────────────────────────
-// MediaPipe returns landmarks normalised to the CAMERA FRAME, but #video is
-// styled object-fit:cover, which scales the frame up and centre-crops it to
-// fill the screen. On a portrait phone a 1280x720 stream renders ~1244 px wide
-// inside a ~390 px viewport, so treating a normalised x as a fraction of
-// innerWidth compressed every measurement by ~3x — which is why the glasses
-// came out far too small for the face.
-var dispW = 1, dispH = 1, offX = 0, offY = 0, mapW = 0, mapH = 0;
-
-function updateVideoMapping() {
-  var W = innerWidth, H = innerHeight;
-  var vw = video.videoWidth  || W;
-  var vh = video.videoHeight || H;
-  var s  = Math.max(W / vw, H / vh);   // object-fit: cover
-  dispW = vw * s; dispH = vh * s;
-  offX  = (W - dispW) / 2;             // negative == cropped horizontally
-  offY  = (H - dispH) / 2;
-  mapW  = vw; mapH = vh;
-}
-updateVideoMapping();
-video.addEventListener('loadedmetadata', updateVideoMapping);
-video.addEventListener('resize', updateVideoMapping);
 
 // ── Three.js — transparent overlay ───────────────────────────────────────────
 var canvas   = document.getElementById('ar-canvas');
@@ -198,9 +212,16 @@ renderer.outputEncoding   = THREE.sRGBEncoding;
 renderer.toneMapping      = THREE.ACESFilmicToneMapping;   // filmic PBR look
 renderer.toneMappingExposure = 1.05;
 
-var scene  = new THREE.Scene();
-var camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 200);
-camera.position.z = 10;
+var scene = new THREE.Scene();
+
+// Face-geometry camera: same intrinsics FaceMesh assumed, cropped with a view
+// offset exactly like the object-fit:cover video. Units are centimetres.
+var arCamera = new THREE.PerspectiveCamera(GEOMETRY_FOV, 1, 1, 10000);
+var fullProj = new THREE.Matrix4();   // the un-cropped projection, for calibration
+// Landmark-fallback camera.
+var legacyCamera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 200);
+legacyCamera.position.z = 10;
+var activeCamera = arCamera;
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 var key  = new THREE.DirectionalLight(0xfff8ee, 1.8); key.position.set(2, 4, 6);  scene.add(key);
@@ -214,12 +235,69 @@ try {
   console.warn('Environment map unavailable:', e.message);
 }
 
+// Everything that follows the head hangs off this anchor. With face geometry
+// its matrix IS the head pose and children are placed in face space (cm); in
+// the landmark fallback it stays identity and children are placed in world space.
+var faceAnchor = new THREE.Group();
+faceAnchor.matrixAutoUpdate = false;
+scene.add(faceAnchor);
+
+// ── Video → screen mapping ───────────────────────────────────────────────────
+// MediaPipe returns landmarks normalised to the CAMERA FRAME, but #video is
+// styled object-fit:cover, which scales the frame up and centre-crops it to
+// fill the screen. On a portrait phone a 1280x720 stream renders ~1244 px wide
+// inside a ~390 px viewport, so treating a normalised x as a fraction of
+// innerWidth compressed every measurement by ~3x — which is why the glasses
+// came out far too small for the face.
+var dispW = 1, dispH = 1, offX = 0, offY = 0, mapW = 0, mapH = 0;
+var bgDpr = Math.min(devicePixelRatio || 1, 2);
+
+function updateVideoMapping() {
+  var W = innerWidth, H = innerHeight;
+  var vw = video.videoWidth  || W;
+  var vh = video.videoHeight || H;
+  var s  = Math.max(W / vw, H / vh);   // object-fit: cover
+  dispW = vw * s; dispH = vh * s;
+  offX  = (W - dispW) / 2;             // negative == cropped horizontally
+  offY  = (H - dispH) / 2;
+  mapW  = vw; mapH = vh;
+
+  bg.width  = Math.round(W * bgDpr);
+  bg.height = Math.round(H * bgDpr);
+  bgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+
+  arCamera.aspect = vw / vh;
+  arCamera.clearViewOffset();          // also updates the projection
+  fullProj.copy(arCamera.projectionMatrix);
+  arCamera.setViewOffset(dispW, dispH, -offX, -offY, W, H);
+}
+updateVideoMapping();
+video.addEventListener('loadedmetadata', updateVideoMapping);
+video.addEventListener('resize', updateVideoMapping);
+
+window.addEventListener('resize', function () {
+  legacyCamera.aspect = innerWidth / innerHeight;
+  legacyCamera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  updateVideoMapping();   // the cover crop depends on the viewport
+  renderer.render(scene, activeCamera);
+});
+
+// Draws the analysed camera frame. The live <video> runs a few frames ahead of
+// FaceMesh, so showing it directly made the glasses trail the face on every
+// turn; drawing results.image keeps the picture and the pose in lock-step.
+function drawBackground(img) {
+  if (!img) { return; }
+  try { bgCtx.drawImage(img, offX, offY, dispW, dispH); } catch (e) {}
+}
+
 // ── Load + prepare the GLB ───────────────────────────────────────────────────
 var glassGroup  = null;   // pivot: origin at the front of the lenses
 var templeL = null, templeMatsL = [];   // wearer's LEFT arm  (model +X)
 var templeR = null, templeMatsR = [];   // wearer's RIGHT arm (model -X)
 var MODEL_WIDTH = 1.0;    // X-span in model units (metres), for AR scaling
 var faceFound   = false;
+var _baseQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), MODEL_BASE_ROT_Y);
 
 loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   hideFaceShadow(root);
@@ -238,9 +316,8 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   var centred = centreGlasses(root, 'lens');
   MODEL_WIDTH = centred.size.x;
   glassGroup  = centred.pivot;
-  glassGroup.rotation.y = MODEL_BASE_ROT_Y;
-  glassGroup.visible    = faceFound;   // the face may already be tracking
-  scene.add(glassGroup);
+  glassGroup.visible = faceFound;   // the face may already be tracking
+  faceAnchor.add(glassGroup);
 }).catch(function (err) {
   console.warn('GLB load error:', err && err.message);
   loading.innerHTML = 'Could not load model<br><span style="font-size:11px;opacity:.6">' +
@@ -248,37 +325,15 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
 });
 
 // ── Occluder: invisible head proxy that writes depth only ────────────────────
-// Built once the face is found; sized and oriented from the head pose every
-// frame (see updateHeadOccluder in glassesModelWeb).
 var occluder = null;   // THREE.Mesh
 
 function setupOccluder() {
   if (occluder || !OCCLUSION_ENABLED) { return; }
   occluder = makeHeadOccluder();
-  scene.add(occluder);
+  faceAnchor.add(occluder);
 }
 
-// ── Render loop ───────────────────────────────────────────────────────────────
-(function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, camera);
-})();
-
-window.addEventListener('resize', function () {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  updateVideoMapping();   // the cover crop depends on the viewport
-});
-
-// ── Face pose → Three.js transform ───────────────────────────────────────────
-// All of the position / orientation / scale maths lives in headPose() (see
-// glassesModelWeb). It builds an orthonormal head basis from the 3-D landmarks,
-// so the fit no longer depends on how far away the user sits or which way the
-// head is turned.
-var _view  = {};
-var _pose  = {};
-
+// ── Temple reveal ─────────────────────────────────────────────────────────────
 // Smoothstep the near arm in over the TEMPLE_REVEAL window; the far arm (side
 // <= 0) is left opaque for the occluder to deal with.
 function templeReveal(side) {
@@ -294,17 +349,110 @@ function setTempleOpacity(group, mats, o) {
   group.visible = o > 0.004;   // skip the draw call while fully transparent
 }
 
-function applyFacePose(lm) {
-  if (!glassGroup) return;
+// lNear ≈ sin(yaw): + when the wearer's left arm swings towards the camera.
+// That arm is about to appear in front of the cheek, so it fades in; an arm
+// going round the back of the head stays opaque and is depth-tested away.
+function revealTemples(lNear) {
+  setTempleOpacity(templeL, templeMatsL, templeReveal(lNear));
+  setTempleOpacity(templeR, templeMatsR, templeReveal(-lNear));
+}
 
-  var W = innerWidth, H = innerHeight;
-  // The stream can change resolution mid-session (or arrive after first paint).
-  if (video.videoWidth && (video.videoWidth !== mapW || video.videoHeight !== mapH)) {
-    updateVideoMapping();
+// ── Face geometry → transform (primary) ──────────────────────────────────────
+var geometryOn = true;
+var smoother   = new PoseSmoother(SMOOTHING);
+var calib      = new FlipCalibrator(20);
+var fit = { ready: false, fw: 0, place: new THREE.Vector3(), earMid: new THREE.Vector3() };
+
+var _poseM = new THREE.Matrix4(), _poseS = new THREE.Matrix4(), _flipM = new THREE.Matrix4();
+var _rawPos = new THREE.Vector3(), _rawQuat = new THREE.Quaternion(), _rawScl = new THREE.Vector3();
+var _sPos = new THREE.Vector3(), _sQuat = new THREE.Quaternion();
+var _earL = new THREE.Vector3(), _earR = new THREE.Vector3(), _bridge = new THREE.Vector3();
+var _eye = new THREE.Vector3(), _acc = new THREE.Vector3(), _place = new THREE.Vector3();
+var _mid = new THREE.Vector3(), _tmp = new THREE.Vector3();
+var EYE_CORNERS = [33, 133, 362, 263];
+
+function applyFaceGeometry(geo, lm, t) {
+  var md   = geo.getPoseTransformMatrix && geo.getPoseTransformMatrix();
+  var mesh = geo.getMesh && geo.getMesh();
+  if (!md || !mesh) { return false; }
+  var data = md.getPackedDataList();
+  var vb   = mesh.getVertexBufferList();
+  if (!data || data.length !== 16 || !vb || vb.length < 468 * 5) { return false; }
+
+  // Three wants column-major. A rigid pose keeps its translation (the head is
+  // ~30-60 cm away) in elements 12-14; if it shows up in 3/7/11 instead, the
+  // data is row-major.
+  _poseM.fromArray(data);
+  var e = _poseM.elements;
+  if (Math.abs(e[3]) + Math.abs(e[7]) + Math.abs(e[11]) >
+      Math.abs(e[12]) + Math.abs(e[13]) + Math.abs(e[14])) {
+    _poseM.transpose();
+  }
+  // The camera looks down -Z; a face at z >= 0 means the pose is not in the
+  // space we render with.
+  if (_poseM.elements[14] >= 0) { geometryOn = false; return false; }
+
+  calib.update(vb, _poseM, fullProj, lm);
+  if (calib.unreliable(0.15)) {
+    console.warn('[TryOn] face geometry does not match the landmarks — using landmark tracking');
+    geometryOn = false;
+    return false;
   }
 
-  var camZ   = camera.position.z;
-  var vFOV   = camera.fov * Math.PI / 180;
+  // Where the glasses sit, measured on this face's metric mesh.
+  meshVertex(vb, 454, _earL);
+  meshVertex(vb, 234, _earR);
+  meshVertex(vb, 6, _bridge);
+  var fw = _earL.distanceTo(_earR);
+  _eye.set(0, 0, 0);
+  for (var i = 0; i < EYE_CORNERS.length; i++) { _eye.add(meshVertex(vb, EYE_CORNERS[i], _acc)); }
+  _eye.multiplyScalar(1 / EYE_CORNERS.length);
+  _place.set(_eye.x, _eye.y - EYE_DROP * fw, _bridge.z + LENS_FWD * fw);
+  _mid.addVectors(_earL, _earR).multiplyScalar(0.5);
+
+  if (!fit.ready) {
+    fit.fw = fw; fit.place.copy(_place); fit.earMid.copy(_mid); fit.ready = true;
+  } else {
+    fit.fw += FIT_SMOOTH * (fw - fit.fw);
+    fit.place.lerp(_place, FIT_SMOOTH);
+    fit.earMid.lerp(_mid, FIT_SMOOTH);
+  }
+
+  // Smoothed head pose → anchor (with any axis flip found by the calibrator).
+  _poseM.decompose(_rawPos, _rawQuat, _rawScl);
+  smoother.update(_rawPos, _rawQuat, t, _sPos, _sQuat);
+  _poseS.compose(_sPos, _sQuat, _rawScl);
+  _flipM.makeScale(calib.sx, calib.sy, 1);
+  faceAnchor.matrix.multiplyMatrices(_flipM, _poseS);
+  faceAnchor.matrixWorldNeedsUpdate = true;
+
+  glassGroup.position.copy(fit.place);
+  glassGroup.quaternion.copy(_baseQ);
+  glassGroup.scale.setScalar((fit.fw * SIZE_MULT) / MODEL_WIDTH);
+
+  if (occluder) {
+    occluder.quaternion.identity();
+    occluder.scale.set(FACE_OCC.width * fit.fw, FACE_OCC.height * fit.fw, FACE_OCC.depth * fit.fw);
+    occluder.position.copy(fit.earMid)
+      .add(_tmp.set(0, FACE_OCC.up * fit.fw, -FACE_OCC.back * fit.fw));
+  }
+
+  revealTemples(_tmp.set(1, 0, 0).applyQuaternion(_sQuat).z);
+  activeCamera = arCamera;
+  return true;
+}
+
+// ── Landmarks → transform (fallback) ─────────────────────────────────────────
+// All of the position / orientation / scale maths lives in headPose() (see
+// glassesModelWeb). The canvas is mirrored by CSS, so the pose stays unmirrored.
+var legacySmoother = new PoseSmoother(LEGACY_SMOOTHING);
+var _view  = { mirror: false };
+var _pose  = {};
+
+function applyLandmarkPose(lm, t) {
+  var W = innerWidth, H = innerHeight;
+  var camZ   = legacyCamera.position.z;
+  var vFOV   = legacyCamera.fov * Math.PI / 180;
   var worldH = 2 * Math.tan(vFOV / 2) * camZ;
   var worldW = worldH * (W / H);
 
@@ -315,29 +463,30 @@ function applyFacePose(lm) {
   // World width spanned by the FULL camera frame (wider than the screen when
   // the video is cropped) — MediaPipe's x and z are in those units.
   _view.worldVideoW = worldW * (dispW / W);
-  _view.bridgeForward = BRIDGE_FWD;
+  _view.bridgeForward = LEGACY_BRIDGE_FWD;
   _view.eyeDrop       = EYE_DROP;
 
   var pose = headPose(lm, _view, _pose);
+  legacySmoother.update(pose.position, pose.quaternion, t, _sPos, _sQuat);
 
-  glassGroup.position.copy(pose.position);
-  glassGroup.quaternion.copy(pose.quaternion);
+  faceAnchor.matrix.identity();
+  faceAnchor.matrixWorldNeedsUpdate = true;
+  glassGroup.position.copy(_sPos);
+  glassGroup.quaternion.copy(_sQuat).multiply(_baseQ);
   // faceWidth is a true 3-D span, so the frame keeps its size as the head turns.
   glassGroup.scale.setScalar((pose.faceWidth * SIZE_MULT) / MODEL_WIDTH);
 
-  // ── Reveal each temple arm on its own ─────────────────────────────────────
-  // side > 0 means that arm is the one swinging TOWARDS the camera, so it is
-  // about to appear in front of the cheek — fade it in. side <= 0 means the arm
-  // has gone round the back of the head, where the occluder is responsible for
-  // hiding it, so it stays fully opaque and simply gets depth-tested away.
-  var lNear = pose.xAxis.z;              // ≈ sin(yaw), + when the left arm nears us
-  setTempleOpacity(templeL, templeMatsL, templeReveal(lNear));
-  setTempleOpacity(templeR, templeMatsR, templeReveal(-lNear));
-
-  // ── Keep the head occluder glued to the head ──────────────────────────────
   if (occluder) {
-    updateHeadOccluder(occluder, pose, HEAD_OCC);
+    updateHeadOccluder(occluder, pose, LEGACY_HEAD_OCC);
   }
+  revealTemples(_tmp.set(1, 0, 0).applyQuaternion(_sQuat).z);
+  activeCamera = legacyCamera;
+}
+
+function resetTracking() {
+  smoother.reset();
+  legacySmoother.reset();
+  fit.ready = false;
 }
 
 // ── Camera stream ─────────────────────────────────────────────────────────────
@@ -357,8 +506,19 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 window.alert = function (msg) { postCameraError(String(msg)); };
 
 // ── MediaPipe FaceMesh ────────────────────────────────────────────────────────
+var lastPath = null;
+
 function onResults(results) {
-  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length) {
+  // The stream can change resolution mid-session (or arrive after first paint).
+  if (video.videoWidth && (video.videoWidth !== mapW || video.videoHeight !== mapH)) {
+    updateVideoMapping();
+  }
+  drawBackground(results.image);
+
+  var lm = results.multiFaceLandmarks && results.multiFaceLandmarks.length
+    ? results.multiFaceLandmarks[0] : null;
+
+  if (lm) {
     if (!faceFound) {
       faceFound = true;
       loading.style.display = 'none';
@@ -367,15 +527,39 @@ function onResults(results) {
       status.textContent    = GLASS_NAME + ' — try on';
       status.style.background = ACCENT + 'CC';
     }
-    applyFacePose(results.multiFaceLandmarks[0]);
-  } else {
-    if (faceFound) {
-      faceFound = false;
-      if (glassGroup) glassGroup.visible = false;
-      status.textContent    = 'Point camera at your face';
-      status.style.background = 'rgba(0,0,0,0.55)';
+    if (glassGroup) {
+      var t   = performance.now();
+      var geo = geometryOn && results.multiFaceGeometry && results.multiFaceGeometry[0];
+      var path = geo && applyFaceGeometry(geo, lm, t) ? 'geometry' : 'landmarks';
+      if (path === 'landmarks') { applyLandmarkPose(lm, t); }
+      if (lastPath && path !== lastPath) { resetTracking(); }
+      lastPath = path;
     }
+  } else if (faceFound) {
+    faceFound = false;
+    if (glassGroup) glassGroup.visible = false;
+    resetTracking();
+    status.textContent    = 'Point camera at your face';
+    status.style.background = 'rgba(0,0,0,0.55)';
   }
+
+  // Render here rather than on requestAnimationFrame, so every drawn frame
+  // pairs the glasses with the camera image their pose was measured on.
+  renderer.render(scene, activeCamera);
+}
+
+function faceMeshOptions() {
+  return {
+    maxNumFaces: 1,
+    // The geometry pipeline is fitted to the 468-point canonical mesh; the
+    // refined iris points are only needed by the landmark fallback.
+    refineLandmarks: !geometryOn,
+    enableFaceGeometry: geometryOn,
+    cameraVerticalFovDegrees: GEOMETRY_FOV,
+    cameraNear: 1,
+    cameraFar: 10000,
+    minDetectionConfidence: 0.55, minTrackingConfidence: 0.55,
+  };
 }
 
 function initFaceMesh() {
@@ -386,14 +570,22 @@ function initFaceMesh() {
   var fm = new FaceMesh({
     locateFile: function (f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/' + f; },
   });
-  fm.setOptions({
-    maxNumFaces: 1, refineLandmarks: true,
-    minDetectionConfidence: 0.55, minTrackingConfidence: 0.55,
-  });
+  fm.setOptions(faceMeshOptions());
   fm.onResults(onResults);
 
   var cam = new Camera(video, {
-    onFrame: async function () { await fm.send({ image: video }); },
+    onFrame: async function () {
+      try {
+        await fm.send({ image: video });
+      } catch (e) {
+        // Face geometry failing must not take the try-on down with it.
+        if (geometryOn) {
+          console.warn('[TryOn] face geometry failed, using landmark tracking:', e && e.message);
+          geometryOn = false;
+          fm.setOptions(faceMeshOptions());
+        }
+      }
+    },
     width: 640, height: 480, facingMode: 'user',
   });
   cam.start()

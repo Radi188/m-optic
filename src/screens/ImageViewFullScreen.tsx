@@ -6,7 +6,7 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   StatusBar,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -23,7 +23,6 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { ImageViewColor } from '../types/navigation';
 import AppText from '../components/AppText';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const THUMB_SIZE = 70;
 const HEADER_CONTENT_HEIGHT = 72;
 // Was 110dp reserved for a thumbnail strip that is never rendered, which left a
@@ -57,29 +56,32 @@ const STUDIO = {
 
 // A radial sweep rather than a flat fill: light behind the product, falling off
 // towards the edges, so the frame sits in a pool of light instead of on a wall.
-const StudioBackdrop: React.FC = () => (
-  <Svg
-    style={StyleSheet.absoluteFill}
-    width={SCREEN_WIDTH}
-    height={SCREEN_HEIGHT}
-    pointerEvents="none"
-  >
-    <Defs>
-      <RadialGradient id="studioSweep" cx="50%" cy="42%" rx="82%" ry="64%">
-        <Stop offset="0" stopColor={STUDIO.centre} />
-        <Stop offset="0.58" stopColor={STUDIO.mid} />
-        <Stop offset="1" stopColor={STUDIO.edge} />
-      </RadialGradient>
-    </Defs>
-    <Rect
-      x="0"
-      y="0"
-      width={SCREEN_WIDTH}
-      height={SCREEN_HEIGHT}
-      fill="url(#studioSweep)"
-    />
-  </Svg>
-);
+const StudioBackdrop: React.FC = () => {
+  const { width, height } = useWindowDimensions();
+  return (
+    <Svg
+      style={StyleSheet.absoluteFill}
+      width={width}
+      height={height}
+      pointerEvents="none"
+    >
+      <Defs>
+        <RadialGradient id="studioSweep" cx="50%" cy="42%" rx="82%" ry="64%">
+          <Stop offset="0" stopColor={STUDIO.centre} />
+          <Stop offset="0.58" stopColor={STUDIO.mid} />
+          <Stop offset="1" stopColor={STUDIO.edge} />
+        </RadialGradient>
+      </Defs>
+      <Rect
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        fill="url(#studioSweep)"
+      />
+    </Svg>
+  );
+};
 
 type ProductImageViewScreenProps = {
   navigation: any;
@@ -99,6 +101,8 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
   route,
 }) => {
   const insets = useSafeAreaInsets();
+  // Live window size: iPad split view and rotation change it after launch.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const {
     images = [],
     initialIndex = 0,
@@ -137,11 +141,11 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
   const headerHeight = insets.top + HEADER_CONTENT_HEIGHT;
   const bottomBarHeight =
     BOTTOM_BAR_HEIGHT + (colors.length > 1 ? SWATCH_BAR_HEIGHT : 0);
-  const zoomAreaHeight = SCREEN_HEIGHT - headerHeight - bottomBarHeight;
+  const zoomAreaHeight = screenHeight - headerHeight - bottomBarHeight;
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = event.nativeEvent.contentOffset.x;
-    const index = Math.round(x / SCREEN_WIDTH);
+    const index = Math.round(x / screenWidth);
     setActiveIndex(index);
   };
 
@@ -168,7 +172,7 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
   };
 
   const renderImage = ({ item }: { item: string }) => (
-    <View style={styles.page}>
+    <View style={{ width: screenWidth, height: screenHeight }}>
       <View
         style={[
           styles.imageCenterArea,
@@ -188,8 +192,8 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
           isPinchEnabled
           resizeMode="contain"
           style={[
-            styles.zoomWrapper,
             {
+              width: screenWidth,
               height: zoomAreaHeight,
             },
           ]}
@@ -241,7 +245,11 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
                 activeOpacity={0.85}
                 onPress={handleShare}
               >
-                <Ionicons name="share-social-outline" size={20} color={STUDIO.ink} />
+                <Ionicons
+                  name="share-social-outline"
+                  size={20}
+                  color={STUDIO.ink}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -265,10 +273,13 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
           scrollEnabled={!isZoomed}
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScrollEnd}
-          initialScrollIndex={Math.min(initialIndex, Math.max(0, validImages.length - 1))}
+          initialScrollIndex={Math.min(
+            initialIndex,
+            Math.max(0, validImages.length - 1),
+          )}
           getItemLayout={(_, index) => ({
-            length: SCREEN_WIDTH,
-            offset: SCREEN_WIDTH * index,
+            length: screenWidth,
+            offset: screenWidth * index,
             index,
           })}
           style={styles.mainSlider}
@@ -459,19 +470,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  page: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
-
   imageCenterArea: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  zoomWrapper: {
-    width: SCREEN_WIDTH,
   },
 
   thumbSection: {

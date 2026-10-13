@@ -3,17 +3,22 @@ import {
   View,
   StyleSheet,
   Animated,
-  Dimensions,
   ScrollView,
 } from 'react-native';
 import { BorderRadius, Colors, Spacing } from '../../../theme';
+import { useResponsive } from '../../../hook/useResponsive';
 
-const { width } = Dimensions.get('window');
 const CARD_GAP = Spacing.xs;
-const CARD_WIDTH = (width - Spacing.lg * 2 - CARD_GAP) / 2;
 
 const GlassScreenSkeleton: React.FC = () => {
   const opacity = useRef(new Animated.Value(0.35)).current;
+
+  // Same column count as the real grid, sized to the screen's wide column.
+  const { wideWidth, productColumns } = useResponsive();
+  const cardWidth =
+    (wideWidth - Spacing.lg * 2 - CARD_GAP * (productColumns - 1)) /
+    productColumns;
+  const placeholders = Array.from({ length: productColumns * 3 }, (_, i) => i);
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -56,8 +61,8 @@ const GlassScreenSkeleton: React.FC = () => {
       <Animated.View style={[styles.countLine, animatedStyle]} />
 
       <View style={styles.grid}>
-        {[1, 2, 3, 4, 5, 6].map(item => (
-          <View key={item} style={styles.card}>
+        {placeholders.map(item => (
+          <View key={item} style={[styles.card, { width: cardWidth }]}>
             <Animated.View style={[styles.image, animatedStyle]} />
             <Animated.View style={[styles.lineSm, animatedStyle]} />
             <Animated.View style={[styles.lineXs, animatedStyle]} />
@@ -110,7 +115,6 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    width: CARD_WIDTH,
     marginBottom: CARD_GAP,
   },
 

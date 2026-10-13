@@ -4,7 +4,6 @@ import {
   StyleSheet,
   FlatList,
   Image,
-  Dimensions,
   Linking,
   TouchableOpacity,
 } from 'react-native';
@@ -16,8 +15,7 @@ import { BannerItem } from '../../../types/home';
 import { buildFileUrl } from '../../../utils/fileUrlHelper';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
+import { useResponsive } from '../../../hook/useResponsive';
 
 /**
  * Banner geometry.
@@ -28,15 +26,18 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
  * logo and Sign In button on top of it, and carry its own headline — anything
  * else left letterbox bands down the sides.
  *
- * A fixed 16:9 card fixes all three. `cover` means any uploaded photo fills it
- * cleanly, the crop is shallow because the ratio is a common one, and the
- * headline comes from the API rather than being baked into the image.
+ * A fixed-ratio card (16:9 on phones, 3:2 on iPad) fixes all three. `cover`
+ * means any uploaded photo fills it cleanly, the crop is shallow because the
+ * ratios are common ones, and the headline comes from the API rather than
+ * being baked into the image.
  */
 const GUTTER = Spacing.md;
 const GAP = 12;
-const CARD_WIDTH = SCREEN_WIDTH - GUTTER * 2;
-const CARD_HEIGHT = Math.round(CARD_WIDTH * (9 / 16));
-const SNAP = CARD_WIDTH + GAP;
+// iPad gets a taller 3:2 card across the full Home column: more presence on
+// the larger screen, and portrait uploads lose less of the picture. A 16:9
+// banner only loses a sliver at each side.
+const PHONE_RATIO = 9 / 16;
+const TABLET_RATIO = 2 / 3;
 
 const AUTOPLAY_MS = 4200;
 
@@ -52,6 +53,14 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const safeSlides = slides?.length ? slides : DEFAULT_SLIDES;
+
+  // Measured from the Home column, not the device, so split view works too.
+  const { wideWidth, isTablet } = useResponsive();
+  const cardWidth = wideWidth - GUTTER * 2;
+  const cardHeight = Math.round(
+    cardWidth * (isTablet ? TABLET_RATIO : PHONE_RATIO),
+  );
+  const snap = cardWidth + GAP;
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -98,7 +107,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
         keyExtractor={item => String(item.id)}
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={SNAP}
+        snapToInterval={snap}
         decelerationRate="fast"
         disableIntervalMomentum
         contentContainerStyle={styles.list}
@@ -106,8 +115,8 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({
-          length: SNAP,
-          offset: SNAP * index,
+          length: snap,
+          offset: snap * index,
           index,
         })}
         renderItem={({ item }) => {
@@ -117,7 +126,7 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
 
           return (
             <TouchableOpacity
-              style={styles.card}
+              style={[styles.card, { width: cardWidth, height: cardHeight }]}
               activeOpacity={item.cta_link ? 0.9 : 1}
               disabled={!item.cta_link}
               onPress={() => openBanner(item)}
@@ -209,8 +218,6 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: Colors.gray100,

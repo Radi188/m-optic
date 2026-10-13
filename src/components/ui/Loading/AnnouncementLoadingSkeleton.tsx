@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Animated, ScrollView } from 'react-native';
-import { Spacing } from '../../../theme';
+import { Spacing, Layout } from '../../../theme';
 
 const AnnouncementSkeleton: React.FC = () => {
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -28,7 +28,7 @@ const AnnouncementSkeleton: React.FC = () => {
   });
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20 }}>
+    <ScrollView contentContainerStyle={[Layout.readable, { padding: 20 }]}>
       {[...Array(4)].map((_, index) => (
         <Animated.View key={index} style={[styles.card, { backgroundColor }]}>
           <Animated.View style={[styles.bannerSkeleton, { backgroundColor }]} />

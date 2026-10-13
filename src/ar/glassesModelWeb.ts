@@ -487,9 +487,12 @@ function headPose(lm, view, out) {
   // Apply the mirror (the video is CSS-flipped) to the finished pose.
   // Reflecting a rotation across the plane x = 0 negates the y and z parts of
   // its quaternion, which flips yaw and roll but leaves pitch alone — exactly
-  // what a mirror does to a head.
-  q.set(q.x, -q.y, -q.z, q.w);
-  pos.x = -pos.x;
+  // what a mirror does to a head. Skipped when the canvas itself is CSS-flipped
+  // along with the video (view.mirror === false).
+  if (view.mirror !== false) {
+    q.set(q.x, -q.y, -q.z, q.w);
+    pos.x = -pos.x;
+  }
 
   r.position = pos;
   r.quaternion = q;
@@ -508,4 +511,115 @@ function headPose(lm, view, out) {
   r.yaw = Math.atan2(-z.x, z.z);
   return r;
 }
+`;
+
+/**
+ * Face-geometry helpers for the AR try-on.
+ *
+ * FaceMesh with `enableFaceGeometry` returns, per face, a rigid pose matrix and
+ * a METRIC face mesh (centimetres, canonical-face axes: +X wearer's left, +Y
+ * up, +Z out of the face). The pose maps that mesh into the space of a
+ * perspective camera with a known vertical FOV, so rendering with the same
+ * camera puts the glasses exactly where the face is — at any yaw — instead of
+ * reconstructing the head from a handful of 2-D landmarks.
+ *
+ *   OneEuro(minCutoff, beta)              scalar One Euro filter
+ *   PoseSmoother(cfg)                     position + rotation One Euro smoothing
+ *   meshVertex(vertexBuffer, index, out)  metric mesh vertex (VERTEX_PT layout)
+ *   FlipCalibrator(frames)                checks the pose against the landmarks
+ */
+export const FACE_GEOMETRY_JS = `
+function oneEuroAlpha(cutoff, dt) {
+  var tau = 1 / (2 * Math.PI * cutoff);
+  return 1 / (1 + tau / dt);
+}
+
+// One Euro filter: heavy smoothing while still (kills jitter), light smoothing
+// while moving (no lag on a head turn). t in milliseconds.
+function OneEuro(minCutoff, beta) {
+  this.minCutoff = minCutoff; this.beta = beta;
+  this.x = null; this.dx = 0; this.t = 0;
+}
+OneEuro.prototype.reset = function () { this.x = null; this.dx = 0; };
+OneEuro.prototype.filter = function (x, t) {
+  if (this.x === null) { this.x = x; this.t = t; this.dx = 0; return x; }
+  var dt = Math.max((t - this.t) / 1000, 1e-3);
+  this.t = t;
+  this.dx += oneEuroAlpha(1.0, dt) * ((x - this.x) / dt - this.dx);
+  this.x  += oneEuroAlpha(this.minCutoff + this.beta * Math.abs(this.dx), dt) * (x - this.x);
+  return this.x;
+};
+
+// cfg: { posMinCutoff, posBeta, rotMinCutoff, rotBeta } — the same One Euro
+// idea applied to a position (per axis) and a rotation (slerp, driven by the
+// angular speed in rad/s).
+function PoseSmoother(cfg) {
+  this.cfg = cfg;
+  this.px = new OneEuro(cfg.posMinCutoff, cfg.posBeta);
+  this.py = new OneEuro(cfg.posMinCutoff, cfg.posBeta);
+  this.pz = new OneEuro(cfg.posMinCutoff, cfg.posBeta);
+  this.q = new THREE.Quaternion();
+  this.hasQ = false; this.t = 0; this.speed = 0;
+}
+PoseSmoother.prototype.reset = function () {
+  this.px.reset(); this.py.reset(); this.pz.reset();
+  this.hasQ = false; this.speed = 0;
+};
+PoseSmoother.prototype.update = function (pos, quat, t, outPos, outQuat) {
+  outPos.set(this.px.filter(pos.x, t), this.py.filter(pos.y, t), this.pz.filter(pos.z, t));
+  if (!this.hasQ) {
+    this.q.copy(quat); this.hasQ = true; this.t = t; this.speed = 0;
+  } else {
+    var dt = Math.max((t - this.t) / 1000, 1e-3);
+    this.t = t;
+    var d = Math.min(1, Math.abs(this.q.dot(quat)));
+    this.speed += oneEuroAlpha(1.0, dt) * ((2 * Math.acos(d)) / dt - this.speed);
+    var cutoff = this.cfg.rotMinCutoff + this.cfg.rotBeta * this.speed;
+    this.q.slerp(quat, oneEuroAlpha(cutoff, dt));
+  }
+  return outQuat.copy(this.q);
+};
+
+// The geometry mesh uses the VERTEX_PT layout: x, y, z, u, v per vertex, in
+// landmark order.
+function meshVertex(vb, i, out) {
+  var k = i * 5;
+  return out.set(vb[k], vb[k + 1], vb[k + 2]);
+}
+
+// Projects a few mesh vertices through pose + camera and compares them with the
+// 2-D landmarks for the first frames. That settles any axis flip between the
+// pose's camera space and the image (sx / sy), and flags a pose that does not
+// line up with the face at all, so the caller can fall back to the landmarks.
+var FLIP_PROBES = [234, 454, 10, 152];
+function FlipCalibrator(lockAfter) {
+  this.lockAfter = lockAfter;
+  this.reset();
+}
+FlipCalibrator.prototype.reset = function () {
+  this.err = [0, 0, 0, 0];   // x as-is, x flipped, y as-is, y flipped
+  this.frames = 0; this.sx = 1; this.sy = 1;
+  this._v = this._v || new THREE.Vector3();
+};
+FlipCalibrator.prototype.update = function (vb, poseM, projM, lm) {
+  if (this.frames >= this.lockAfter) { return; }
+  for (var i = 0; i < FLIP_PROBES.length; i++) {
+    var idx = FLIP_PROBES[i];
+    var v = meshVertex(vb, idx, this._v).applyMatrix4(poseM).applyMatrix4(projM);
+    var ex = 2 * lm[idx].x - 1, ey = 1 - 2 * lm[idx].y;
+    this.err[0] += Math.abs(v.x - ex);  this.err[1] += Math.abs(-v.x - ex);
+    this.err[2] += Math.abs(v.y - ey);  this.err[3] += Math.abs(-v.y - ey);
+  }
+  this.frames++;
+  this.sx = this.err[0] <= this.err[1] ? 1 : -1;
+  this.sy = this.err[2] <= this.err[3] ? 1 : -1;
+};
+// Mean per-probe error (NDC units) of the best hypothesis once calibration is
+// done. A good pose reprojects within a couple of hundredths.
+FlipCalibrator.prototype.unreliable = function (maxErr) {
+  if (this.frames < this.lockAfter) { return false; }
+  var n = this.frames * FLIP_PROBES.length;
+  var e = (Math.min(this.err[0], this.err[1]) + Math.min(this.err[2], this.err[3])) / (2 * n);
+  return e > maxErr;
+};
 `;

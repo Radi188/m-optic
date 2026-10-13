@@ -11,7 +11,7 @@ import {
   Animated,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import type { AppLanguage } from '../../../localizations/i18n';
 import AppText from '../../AppText';
 
@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
     // paddingBottom: Spacing.lg,
   },
   modalBox: {
+    ...Layout.readable,
     backgroundColor: Colors.white,
     borderRadius: 28,
     paddingHorizontal: Spacing.lg,

@@ -45,6 +45,12 @@ export interface BranchResponse {
   is_manually_closed: boolean;
   /** 'Open' | 'Closed' | 'Unknown' — 'Unknown' when no hours are set. */
   current_status: string;
+  /** Google place id; null until an admin picks the place in Branch Edit. */
+  google_place_id?: string | null;
+  /** The store's Google place page (name, reviews, photos, hours). */
+  maps_url?: string | null;
+  /** Google Maps navigation to the store. */
+  directions_url?: string | null;
   gallery: BranchGalleryItem[] | null;
 }
 
@@ -77,7 +83,16 @@ export interface StoreLocation {
    */
   openTime: string | null;
   closeTime: string | null;
-  mapsLink: string | null;
+  /**
+   * Links come from the API, never built from lat/lng here: a coordinate link
+   * opens a bare pin, while the API's links open the real Google place once it
+   * has a place id. `directionsUrl` falls back to the older
+   * `google_maps_link` for backends that do not send `directions_url` yet.
+   */
+  directionsUrl: string | null;
+  /** The store's Google place page, or null when the API has none. */
+  mapsUrl: string | null;
+  placeId: string | null;
   /** The branch's own logo. */
   photoUri: string | null;
   /** Shopfront photos, ordered as the shop arranged them. Often empty. */
@@ -155,7 +170,9 @@ export function mapBranch(branch: BranchResponse): StoreLocation {
     hasCoords: lat !== null && lng !== null,
     openTime: branch.open_time || null,
     closeTime: branch.close_time || null,
-    mapsLink: branch.google_maps_link,
+    directionsUrl: branch.directions_url || branch.google_maps_link || null,
+    mapsUrl: branch.maps_url || null,
+    placeId: branch.google_place_id || null,
     photoUri: buildFileUrl(branch.logo),
     photos: toPhotos(branch.gallery),
   };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors, Spacing, BorderRadius, Shadow } from '../../../theme';
+import { Colors, Spacing, BorderRadius, Shadow, Layout } from '../../../theme';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 
 /** Points screen placeholder: the balance card, then the transaction rows. */
@@ -32,7 +32,11 @@ const PointsSkeleton: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
 export default PointsSkeleton;
 
 const styles = StyleSheet.create({
-  root: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  root: {
+    ...Layout.readable,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+  },
   balanceCard: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius.lg,

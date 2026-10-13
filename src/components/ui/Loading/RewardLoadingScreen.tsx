@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { Spacing } from '../../../theme';
+import { Spacing, Layout } from '../../../theme';
 
 const SkeletonRewardScreen: React.FC = () => {
   return (
-    <ScrollView contentContainerStyle={{ padding: 20 }}>
+    <ScrollView contentContainerStyle={[Layout.readable, { padding: 20 }]}>
       {/* Points Card */}
       <View style={[styles.skeletonBox, styles.pointsCard]} />
 

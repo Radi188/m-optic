@@ -1,7 +1,6 @@
 package cross.moptic.app
 
 import android.os.Bundle
-import android.view.WindowManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -23,19 +22,8 @@ class MainActivity : ReactActivity() {
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    // FLAG_SECURE blocks screenshots and screen recording outright, and blanks the
-    // window in the app switcher. Set before super.onCreate so the very first frame
-    // is already protected.
-    //
-    // The capture-friendly screens (face scan, eye test, 3-D model, AR try-on)
-    // clear this flag for as long as they are on screen through ScreenGuardModule;
-    // every other screen keeps the block.
-    //
-    // To keep screenshots working while developing, wrap this in `if (!BuildConfig.DEBUG)`.
-    window.setFlags(
-        WindowManager.LayoutParams.FLAG_SECURE,
-        WindowManager.LayoutParams.FLAG_SECURE,
-    )
+    // Screenshots and screen recording are allowed by default. Screens that show
+    // prices set FLAG_SECURE through ScreenGuardModule while they are focused.
     super.onCreate(savedInstanceState)
   }
 }

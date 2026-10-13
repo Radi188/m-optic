@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
-import { Colors } from '../theme';
+import { Colors, Layout } from '../theme';
 import { useReward } from '../hook/useReward';
 import {
   redeemStatusOf,
@@ -488,6 +488,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
+    ...Layout.readable,
     height: 64,
     paddingHorizontal: 20,
     flexDirection: 'row',
@@ -537,6 +538,7 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
+    ...Layout.readable,
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 44,

@@ -8,15 +8,15 @@ import {
   Modal,
   ScrollView,
   Animated,
-  useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import RenderHTML, { defaultSystemFonts } from 'react-native-render-html';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { Colors, FontSize, Spacing, Shadow } from '../../../theme';
+import { Colors, FontSize, Spacing, Shadow, Layout } from '../../../theme';
 import { AnnouncementItem } from '../../../types/home';
 import { buildFileUrl } from '../../../utils/fileUrlHelper';
 import AppText from '../../AppText';
+import { useResponsive } from '../../../hook/useResponsive';
 import AppImage from '../../AppImage';
 
 type AnnouncementSectionProps = {
@@ -105,10 +105,9 @@ const HTML_SYSTEM_FONTS = [
 
 const AnnouncementSection = ({ annoucements }: AnnouncementSectionProps) => {
   const { t, i18n } = useTranslation();
-  const { width } = useWindowDimensions();
-
-  // The sheet is inset by its own padding on both sides.
-  const contentWidth = width - Spacing.md * 2;
+  // The sheet is a readable-width column on iPad, inset by its own padding.
+  const { readableWidth } = useResponsive();
+  const contentWidth = readableWidth - Spacing.md * 2;
 
   const isKhmer = i18n.language === 'km';
   const bodyFont = isKhmer ? 'Hanuman-Regular' : 'DMSans-Regular';
@@ -496,6 +495,7 @@ const styles = StyleSheet.create({
   },
 
   modalCard: {
+    ...Layout.readable,
     maxHeight: '88%',
     backgroundColor: Colors.white,
     borderTopLeftRadius: 24,

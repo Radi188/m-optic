@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, Layout } from '../theme';
 import AppText from '../components/AppText';
 
 type SupportOption = {
@@ -148,6 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F5',
   },
   appHeader: {
+    ...Layout.readable,
     height: 58,
     flexDirection: 'row',
     alignItems: 'center',
@@ -176,6 +177,7 @@ const styles = StyleSheet.create({
     height: 42,
   },
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xxl,

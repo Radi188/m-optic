@@ -394,5 +394,17 @@
   "DeletePermanently": "Delete",
   "DeleteAccountFailed": "Could not delete your account. Please try again.",
   "ContactUs": "Contact us",
-  "PrivacyContactMessage": "Questions about your privacy or requests about your data? Email us and we will reply as soon as possible."
+  "PrivacyContactMessage": "Questions about your privacy or requests about your data? Email us and we will reply as soon as possible.",
+  "TermsAndConditions": "Terms & Conditions",
+  "TermsOfUse": "Terms of use",
+  "OperatedBy": "Owned and operated by",
+  "Registered": "Registered",
+  "TermsContactMessage": "Questions about these terms? Visit our website to get in touch with us.",
+  "NoFramesMatchFilters": "No frames match your filters",
+  "NoFramesMatchFiltersHint": "Try a different brand, frame shape or price range.",
+  "ClearFilters": "Clear filters",
+  "NoFramesYetHint": "New frames are on the way. Please check back soon.",
+  "PriceUnder": "Under {{amount}}",
+  "ViewOnGoogleMaps": "View on Google Maps",
+  "GotIt": "Got it"
 }

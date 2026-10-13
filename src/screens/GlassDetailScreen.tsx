@@ -22,7 +22,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
-import { Colors, Spacing, FontSize, BorderRadius, Shadow } from '../theme';
+import { Colors, Spacing, FontSize, BorderRadius, Shadow, Layout } from '../theme';
 import type { GlassItem, RootStackParamList } from '../types/navigation';
 import GlassModelScene from '../ar/GlassModelScene';
 import GlassTryOnScene from '../ar/GlassTryOnScene';
@@ -42,7 +42,7 @@ import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoading
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
-import { useAllowScreenCapture } from '../hook/useAllowScreenCapture';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -58,6 +58,9 @@ interface ViewerModalProps {
   onClose: () => void;
 }
 
+/** M-Optic's Telegram account for product enquiries. */
+const TELEGRAM_CONTACT_URL = 'https://t.me/Mopticstm';
+
 const ViewerModal: React.FC<ViewerModalProps> = ({
   visible,
   mode,
@@ -65,12 +68,6 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
   onClose,
 }) => {
   const insets = useSafeAreaInsets();
-
-  // The 3-D model and the AR try-on are the two capture-friendly features on
-  // this screen: people screenshot a frame on their own face to ask a friend.
-  // The permit covers the viewer only — the product page behind it, and the
-  // rest of the app, stay blocked.
-  useAllowScreenCapture(visible);
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent>
@@ -162,6 +159,10 @@ const GlassDetailScreen: React.FC = () => {
   const { id } = route.params;
 
   const [viewerMode, setViewerMode] = useState<ViewMode | null>(null);
+  // The page shows the price, so it blocks capture — but the AR try-on and
+  // 3-D viewer over it are meant to be screenshotted, so the block lifts
+  // while one is open.
+  useBlockScreenCapture(viewerMode === null);
 
   const accentColor = Colors.primary;
 
@@ -176,7 +177,6 @@ const GlassDetailScreen: React.FC = () => {
     error,
     refetch,
     refresh,
-    inquiryLink,
   } = useProductDetail(id);
 
   const { t } = useTranslation();
@@ -246,24 +246,50 @@ const GlassDetailScreen: React.FC = () => {
     };
   }, [product, images, price, productModelUrl]);
 
+  /**
+   * The enquiry the customer sends us on Telegram: which frame, which colour,
+   * and a photo of that colourway. A t.me link can only pre-fill text, so the
+   * photo goes in as its URL — Telegram shows it as a link preview once sent.
+   * The price is left out on purpose: staff quote it, and signed-out
+   * customers are not shown it in the app either.
+   */
+  const telegramMessage = useMemo(() => {
+    if (!product) return '';
+    const variation = selectedColor?.variation;
+    const name = product.name ?? product.item_name ?? '';
+    const colour = selectedColor?.label
+      ? variation?.color_code
+        ? `${selectedColor.label} (${variation.color_code})`
+        : selectedColor.label
+      : null;
+    const code = variation?.item_code || product.item_code;
+    const photo = images[0] ?? product.image;
+
+    return [
+      "Hi M-Optic, I'm interested in this frame:",
+      '',
+      `Product: ${name}`,
+      product.brand?.name ? `Brand: ${product.brand.name}` : null,
+      colour ? `Color: ${colour}` : null,
+      code ? `Code: ${code}` : null,
+      photo ? `\n${photo}` : null,
+    ]
+      .filter(line => line !== null)
+      .join('\n');
+  }, [product, selectedColor, images]);
+
   const handleOpenTelegram = async () => {
-    if (!inquiryLink) {
-      Alert.alert(t('Unavailable'), t('TelegramLinkUnavailable'));
-      return;
-    }
+    const url = telegramMessage
+      ? `${TELEGRAM_CONTACT_URL}?text=${encodeURIComponent(telegramMessage)}`
+      : TELEGRAM_CONTACT_URL;
 
     try {
-      const supported = await Linking.canOpenURL(inquiryLink);
-
-      if (supported) {
-        await Linking.openURL(inquiryLink);
-      } else {
-        Alert.alert(t('Error'), t('CannotOpenTelegramLink'));
-      }
+      await Linking.openURL(url);
     } catch (error) {
       Alert.alert(t('Error'), t('FailedToOpenTelegramLink'));
     }
   };
+
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -371,7 +397,10 @@ const GlassDetailScreen: React.FC = () => {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={[
+          Layout.readable,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -808,6 +837,7 @@ const styles = StyleSheet.create({
     ...Shadow.lg,
   },
   floatBarInner: {
+    ...Layout.readable,
     flexDirection: 'row',
     gap: Spacing.sm,
     overflow: 'hidden',

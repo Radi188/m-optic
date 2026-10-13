@@ -76,12 +76,12 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
  3. The app-switcher snapshot is covered on resign-active, matching what
     FLAG_SECURE gives us on Android.
 
- A few screens are allowed to be captured — face scan, eye test, 3-D model and
- AR try-on, all of which show the user their own face or a product they are
- shopping for, and nothing private. Those screens call `setCaptureAllowed(true)`
- through ScreenGuardModule while they are on screen (1 and 2 are lifted) and
- hand the block back when they leave. Blocked is always the fallback state: a
- fresh launch, a JS reload or a crash all come up protected.
+ Capture is ALLOWED by default. Only screens that show prices (home best
+ sellers, product lists and detail, invoices) call `setCaptureAllowed(false)`
+ through ScreenGuardModule while they are focused, which applies the secure
+ layer and the covers above, and allow it again when they are left. Face scan,
+ eye test, AR try-on and the rest are never blocked. The JS side re-syncs on
+ every launch and reload, so a block cannot outlive the screen that set it.
  */
 final class ScreenGuard {
   static let shared = ScreenGuard()
@@ -92,10 +92,10 @@ final class ScreenGuard {
     static let screenshotTitle = "Screenshots are not allowed"
     static let screenshotTitleKm = "មិនអនុញ្ញាតឱ្យថតរូបអេក្រង់ទេ"
     static let screenshotBody =
-      "Prescriptions, lens data and customer records in M-Optic are private. "
+      "Prices shown in M-Optic are confidential. "
       + "Capturing or sharing this screen is against our policy."
     static let screenshotBodyKm =
-      "វេជ្ជបញ្ជា ទិន្នន័យកញ្ចក់ភ្នែក និងកំណត់ត្រាអតិថិជនក្នុង M-Optic គឺជាព័ត៌មានឯកជន។ "
+      "តម្លៃដែលបង្ហាញក្នុង M-Optic គឺជាព័ត៌មានសម្ងាត់។ "
       + "ការថត ឬចែករំលែកអេក្រង់នេះ គឺផ្ទុយនឹងគោលការណ៍របស់យើង។"
     static let dismiss = "I understand · ខ្ញុំយល់ព្រម"
   }
@@ -106,9 +106,9 @@ final class ScreenGuard {
 
   private let secureField = UITextField()
   private var secureLayerApplied = false
-  /// Set by the capture-friendly screens through ScreenGuardModule. Never
-  /// persisted — every launch starts blocked.
-  private(set) var captureAllowed = false
+  /// Capture is allowed by default; screens that show prices block it through
+  /// ScreenGuardModule while they are focused. Never persisted.
+  private(set) var captureAllowed = true
   /// How strong the app-switcher blur is, 0...1.
   private static let blurIntensity: CGFloat = 0.5
 
@@ -352,7 +352,11 @@ final class ScreenGuard {
   private func showScreenshotNotice() {
     guard let window = window, screenshotNotice == nil else { return }
 
-    let notice = blackCover(in: window)
+    // The screenshot itself has already come out black (secure layer); this is
+    // what the user sees afterwards, so it can show the app frosted behind the
+    // message instead of a blank wall.
+    let notice = frostedCover(in: window)
+    let host = notice.contentView
     let stack = messageStack(
       title: Copy.screenshotTitle,
       titleKm: Copy.screenshotTitleKm,
@@ -371,8 +375,8 @@ final class ScreenGuard {
     stack.addArrangedSubview(button)
     stack.setCustomSpacing(28, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
-    notice.addSubview(stack)
-    centerStack(stack, in: notice)
+    host.addSubview(stack)
+    centerStack(stack, in: host)
 
     notice.alpha = 0
     window.addSubview(notice)
@@ -400,6 +404,25 @@ final class ScreenGuard {
     // Swallow every touch so nothing underneath can be interacted with.
     cover.isUserInteractionEnabled = true
     return cover
+  }
+
+  /// Full-strength dark blur with a dim on top: the app reads as "still there"
+  /// but nothing on it is legible, and white text stays readable over any
+  /// screen. Used only for the screenshot notice — the recording cover stays
+  /// opaque, since it is itself part of the recording.
+  private func frostedCover(in window: UIWindow) -> UIVisualEffectView {
+    let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterialDark))
+    blur.frame = window.bounds
+    blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    // Swallow every touch so nothing underneath can be interacted with.
+    blur.isUserInteractionEnabled = true
+
+    let dim = UIView(frame: blur.bounds)
+    dim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    dim.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+    blur.contentView.addSubview(dim)
+
+    return blur
   }
 
   private func blurCover(in window: UIWindow) -> UIView {

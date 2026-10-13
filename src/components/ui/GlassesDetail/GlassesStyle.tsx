@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -17,6 +16,7 @@ import {
   BorderRadius,
   Shadow,
 } from '../../../theme';
+import { useResponsive } from '../../../hook/useResponsive';
 import AppText from '../../AppText';
 
 export interface ColorSwatch {
@@ -56,7 +56,8 @@ const GlassesStyleSection: React.FC<Props> = ({
   selectedColorId = null,
   onSelectColor,
 }) => {
-  const { width } = useWindowDimensions();
+  // Lives in the product page's readable column on iPad.
+  const { readableWidth } = useResponsive();
   const { t } = useTranslation();
 
   return (
@@ -186,7 +187,7 @@ const GlassesStyleSection: React.FC<Props> = ({
           <AppText style={styles.blockTitle}>{t('commonDescription')}</AppText>
 
           <RenderHTML
-            contentWidth={width - Spacing.md * 2}
+            contentWidth={readableWidth - Spacing.md * 2}
             source={{ html: descriptionHtml }}
             baseStyle={styles.htmlBase}
             tagsStyles={{

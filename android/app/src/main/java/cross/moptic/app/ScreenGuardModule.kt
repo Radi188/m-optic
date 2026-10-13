@@ -10,19 +10,15 @@ import com.facebook.react.bridge.ReactMethod
 /**
  * Screen-capture policy switch for the JS side.
  *
- * The app is protected by FLAG_SECURE from the very first frame (see
- * [MainActivity]); this module is how the handful of screens that are allowed to
- * be captured — face scan, eye test, 3-D model, AR try-on — lift that protection
- * while they are on screen and put it back when they leave.
- *
- * Blocked is always the fallback: anything that goes wrong here (no activity, a
- * JS crash, an activity recreation, a fresh launch) leaves the window secure.
+ * Capture is allowed by default. Screens that show prices set FLAG_SECURE
+ * through this module while they are focused and clear it when they leave.
+ * The JS side re-syncs on every launch and reload.
  */
 class ScreenGuardModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
   /** Mirrors the window flag so a recreated activity can be put back in sync. */
-  private var captureAllowed = false
+  private var captureAllowed = true
 
   init {
     reactContext.addLifecycleEventListener(this)
@@ -71,17 +67,16 @@ class ScreenGuardModule(reactContext: ReactApplicationContext) :
   }
 
   // The window flags are lost when the activity is recreated (rotation, process
-  // restart), and MainActivity always comes back secure — re-apply the intent.
+  // restart), and MainActivity comes back unsecured — re-apply a block if a
+  // priced screen still holds one.
   override fun onHostResume() {
-    if (captureAllowed) apply(allowed = true, promise = null)
+    if (!captureAllowed) apply(allowed = false, promise = null)
   }
 
   override fun onHostPause() = Unit
 
-  override fun onHostDestroy() {
-    // A new activity starts secure, so the flag no longer stands.
-    captureAllowed = false
-  }
+  // Keep the intent across a recreation; onHostResume re-applies it.
+  override fun onHostDestroy() = Unit
 
   override fun invalidate() {
     reactApplicationContext.removeLifecycleEventListener(this)

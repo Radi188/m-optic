@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Spacing, BorderRadius } from '../../../theme';
+import { Colors, Spacing, BorderRadius, Layout } from '../../../theme';
+import { useResponsive } from '../../../hook/useResponsive';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 
 /**
@@ -11,6 +12,8 @@ import { SkeletonBlock, SkeletonCircle } from './Skeleton';
  */
 const StoreSkeleton: React.FC = () => {
   const insets = useSafeAreaInsets();
+  // Matches the real sheet, which is inset to a readable width on iPad.
+  const { sheetInset } = useResponsive();
 
   return (
     <View style={styles.root}>
@@ -30,7 +33,16 @@ const StoreSkeleton: React.FC = () => {
         </View>
       </View>
 
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            left: sheetInset,
+            right: sheetInset,
+            paddingBottom: insets.bottom + Spacing.lg,
+          },
+        ]}
+      >
         <View style={styles.handle} />
 
         <View style={styles.sheetHeader}>
@@ -66,7 +78,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Spacing.md,
   },
-  tabsRow: { flexDirection: 'row' },
+  tabsRow: { ...Layout.readable, flexDirection: 'row' },
   tab: { marginRight: Spacing.sm },
 
   sheet: {

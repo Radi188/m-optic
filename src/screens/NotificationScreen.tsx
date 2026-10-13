@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  // 1. Import useWindowDimensions for width tracking,
   Image,
   RefreshControl,
   ScrollView,
@@ -8,13 +7,13 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import RenderHTML from 'react-native-render-html'; // 2. Bring back your HTML render library
-import { Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, Layout } from '../theme';
+import { useResponsive } from '../hook/useResponsive';
 import { useAnnouncements, AnnouncementItem } from '../hook/useAnnouncement';
 import AnnouncementSkeleton from '../components/ui/Loading/AnnouncementLoadingSkeleton';
 import Header from '../components/ui/Header/HeaderComponent';
@@ -32,7 +31,8 @@ const getNotificationIcon = (title: string) => {
 
 const NotificationListScreen = () => {
   const navigation = useNavigation();
-  const { width } = useWindowDimensions(); // 3. Dynamically read width for your dynamic padding calculations
+  // The list sits in a readable column on iPad, so size HTML to that column.
+  const { readableWidth } = useResponsive();
   const { data, loading, isRefreshing, error, refetch, refresh } =
     useAnnouncements();
   // helpers/htmlTruncate.ts
@@ -194,7 +194,7 @@ const NotificationListScreen = () => {
 
                         <RenderHTML
                           contentWidth={
-                            width - Spacing.lg * 2 - Spacing.md * 2 - 50
+                            readableWidth - Spacing.lg * 2 - Spacing.md * 2 - 50
                           }
                           // Pass the cleaned HTML string here
                           source={{ html: truncateHtml(item.content) }}
@@ -233,6 +233,7 @@ const styles = StyleSheet.create({
   },
 
   appHeader: {
+    ...Layout.readable,
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
@@ -268,6 +269,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xxl,

@@ -13,7 +13,14 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppModal, Input, GlassView, GlassBackground } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  Shadow,
+  Layout,
+} from '../theme';
 import type { RootStackParamList } from '../types/navigation';
 
 import { useAppDispatch, useAppSelector } from '../store';
@@ -214,6 +221,15 @@ const ProfileScreen: React.FC = () => {
         icon: 'shield-checkmark-outline',
         onPress: () => {
           navigation.navigate('Privacy');
+        },
+      },
+      {
+        id: 'terms',
+        title: 'TermsAndConditions',
+        subtitle: 'TermsOfUse',
+        icon: 'document-text-outline',
+        onPress: () => {
+          navigation.navigate('Terms');
         },
       },
       {
@@ -430,7 +446,11 @@ const ProfileScreen: React.FC = () => {
 // ─── Guest styles ─────────────────────────────────────────────────────────────
 
 const guestStyles = StyleSheet.create({
-  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl + 16 },
+  scroll: {
+    ...Layout.readable,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxl + 16,
+  },
   hero: {
     alignItems: 'center',
     paddingTop: Spacing.xl,

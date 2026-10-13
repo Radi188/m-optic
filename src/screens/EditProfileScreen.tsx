@@ -16,7 +16,7 @@ import EditProfileSkeleton from '../components/ui/Loading/EditProfileLoadingScre
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, Layout } from '../theme';
 import ChangePhotoModal, {
   SelectedProfileImage,
 } from '../components/ui/Modal/ChangePhotoModal';
@@ -369,6 +369,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   appHeader: {
+    ...Layout.readable,
     minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
@@ -405,6 +406,7 @@ const styles = StyleSheet.create({
     height: 44,
   },
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: 40,

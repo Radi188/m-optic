@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import AppText from '../../AppText';
 
 type LogoutModalProps = {
@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   modalBox: {
+    ...Layout.dialog,
     backgroundColor: Colors.white,
     borderRadius: 30,
     paddingHorizontal: Spacing.lg,

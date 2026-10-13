@@ -35,7 +35,16 @@ import LinearGradient from 'react-native-linear-gradient';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  Shadow,
+  Layout,
+} from '../theme';
+import { useResponsive } from '../hook/useResponsive';
+import { useFrameShapeCounts } from '../hook/useFrameShapeCounts';
 import { useProductList } from '../hook/useProductList';
 import FrameShapeIcon from '../components/ui/Frame/FrameShapeIcon';
 import { fetchBranches } from '../services/branchService';
@@ -43,7 +52,6 @@ import type { StoreLocation } from '../services/branchService';
 import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
-import { useAllowScreenCapture } from '../hook/useAllowScreenCapture';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -177,6 +185,19 @@ const FACE_SHAPE_INFO: Record<
     tip: 'Light, rounded frames that sit narrow at the top keep the focus away from a wider forehead.',
   },
 };
+
+// The advice above uses stylists' terms, but the catalogue has a fixed list of
+// shapes (GET /filters?include=frame_shapes). Each recommendation browses the
+// closest catalogue shape; names not listed here already exist in it.
+const CATALOGUE_FRAME_SHAPE: Record<string, string> = {
+  'Soft-Square': 'Square',
+  'Narrow-Rectangle': 'Rectangle',
+  Oversized: 'Square',
+  Decorative: 'Irregular',
+};
+
+const catalogueShapeFor = (frame: string) =>
+  CATALOGUE_FRAME_SHAPE[frame] ?? frame;
 
 // ─── Refraction Test Data ─────────────────────────────────────────────────────
 
@@ -2805,6 +2826,14 @@ const GlassesBottomSheet: React.FC<{
   const [photoPreview, setPhotoPreview] = useState(false);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
+  // Centred readable-width card on iPad; live height for split view.
+  const { sheetInset, height: windowHeight } = useResponsive();
+  // In-store frame counts per recommended shape, so a shape with nothing to
+  // show is marked instead of opening an empty list.
+  const shapeCounts = useFrameShapeCounts(
+    info.frames.map(catalogueShapeFor),
+    visible,
+  );
 
   useEffect(() => {
     if (visible) {
@@ -2863,7 +2892,15 @@ const GlassesBottomSheet: React.FC<{
 
       {/* Sheet */}
       <Animated.View
-        style={[gsStyles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        style={[
+          gsStyles.sheet,
+          {
+            left: sheetInset,
+            right: sheetInset,
+            maxHeight: windowHeight * 0.88,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
         {/* Handle */}
         <View style={gsStyles.handle} />
@@ -2948,16 +2985,26 @@ const GlassesBottomSheet: React.FC<{
                 FRAME_INFO[frame]?.reason ??
                 fallbackReason;
               const best = idx === 0;
+              const catalogueShape = catalogueShapeFor(frame);
+              // undefined while loading or if the count failed; only a known
+              // zero disables the card.
+              const count: number | undefined = shapeCounts[catalogueShape];
+              const unavailable = count === 0;
               return (
                 <TouchableOpacity
                   key={frame}
-                  style={[gsStyles.recCard, best && gsStyles.recCardBest]}
+                  style={[
+                    gsStyles.recCard,
+                    best && gsStyles.recCardBest,
+                    unavailable && gsStyles.recCardUnavailable,
+                  ]}
                   activeOpacity={0.85}
+                  disabled={unavailable}
                   onPress={() => {
                     onClose();
                     navigation.navigate('GlassesList', {
                       from: 'frame',
-                      frameShape: frame,
+                      frameShape: catalogueShape,
                     });
                   }}
                 >
@@ -2983,12 +3030,24 @@ const GlassesBottomSheet: React.FC<{
                     </View>
                   </View>
                   <View style={gsStyles.recCta}>
-                    <AppText style={gsStyles.recCtaText}>View frames</AppText>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={14}
-                      color={Colors.primary}
-                    />
+                    {unavailable ? (
+                      <AppText style={gsStyles.recCtaTextMuted}>
+                        Not in store yet
+                      </AppText>
+                    ) : (
+                      <>
+                        <AppText style={gsStyles.recCtaText}>
+                          {count === undefined
+                            ? 'View frames'
+                            : `View ${count} frame${count === 1 ? '' : 's'}`}
+                        </AppText>
+                        <Ionicons
+                          name="arrow-forward"
+                          size={14}
+                          color={Colors.primary}
+                        />
+                      </>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -3920,6 +3979,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
   visible,
   onClose,
 }) => {
+  const { sheetInset } = useResponsive();
   const [branchId, setBranchId] = useState<string | null>(null);
   const [date, setDate] = useState<Date | null>(null);
   const [timeSlot, setTimeSlot] = useState<string | null>(null);
@@ -3979,7 +4039,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
         onPress={handleClose}
       />
 
-      <View style={bkStyles.sheet}>
+      <View
+        style={[bkStyles.sheet, { left: sheetInset, right: sheetInset }]}
+      >
         {/* Handle */}
         <View style={bkStyles.handle} />
 
@@ -4629,11 +4691,6 @@ const ScanScreen: React.FC = () => {
   // no picker here — the mode is fixed for the life of the screen.
   const mode: Tab = route.params?.mode ?? 'face';
 
-  // Face scan and the eye test are both the user's own result to keep, so this
-  // screen lifts the app-wide screenshot / screen-recording block while it is
-  // focused. Everything outside these features stays blocked.
-  useAllowScreenCapture();
-
   // The eye test is a self-screening tool, not a medical exam, so it stays
   // behind an explicit consent gate. Re-asked on every entry rather than
   // remembered — consent to a health disclaimer shouldn't be sticky.
@@ -5115,7 +5172,6 @@ const gsStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    maxHeight: SCREEN_HEIGHT * 0.88,
     backgroundColor: Colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -5337,6 +5393,9 @@ const gsStyles = StyleSheet.create({
     borderWidth: 1.5,
     backgroundColor: Colors.primaryLight,
   },
+  recCardUnavailable: {
+    opacity: 0.55,
+  },
   bestTag: {
     position: 'absolute',
     top: -9,
@@ -5397,6 +5456,12 @@ const gsStyles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: '800',
     color: Colors.primary,
+    letterSpacing: 0.2,
+  },
+  recCtaTextMuted: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray500,
     letterSpacing: 0.2,
   },
 
@@ -5631,6 +5696,7 @@ const styles = StyleSheet.create({
 
   // Shared layout
   contentPad: {
+    ...Layout.readable,
     padding: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xxl,

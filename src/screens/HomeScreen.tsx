@@ -1,12 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
   FlatList,
   Image,
   Linking,
-  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,7 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import WebView from 'react-native-webview';
 import { Badge, GlassView } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import {
+  Colors,
+  FontSize,
+  Spacing,
+  BorderRadius,
+  Shadow,
+  Layout,
+} from '../theme';
 import { useSelector } from 'react-redux';
 import { selectUser } from '../store/slices/authSlice';
 import {
@@ -41,7 +46,11 @@ import LensTechSection from '../components/ui/Lens/LensTechSection';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
 import { useHome } from '../hook/useHome';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import HeroSlider from '../components/ui/Home/HeroSlider';
+import AnnouncementPopup, {
+  useAnnouncementPopup,
+} from '../components/ui/Home/AnnouncementPopup';
 import HomeHeader from '../components/ui/Home/HomeHeader';
 import HomeSkeleton from '../components/ui/Loading/HomeLoadingScreen';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -49,296 +58,6 @@ import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
-
-// ─── Promo Modal ─────────────────────────────────────────────────────────────
-const PromoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 60,
-        friction: 9,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 0.88,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(onClose);
-  };
-
-  return (
-    <Modal transparent animationType="none" statusBarTranslucent>
-      {/* Backdrop */}
-      <TouchableOpacity
-        style={promoStyles.backdrop}
-        activeOpacity={1}
-        onPress={handleClose}
-      />
-
-      {/* Card */}
-      <Animated.View
-        style={[
-          promoStyles.cardWrap,
-          { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-        ]}
-        pointerEvents="box-none"
-      >
-        {/* Header — real image base + gradient overlay */}
-        <View style={promoStyles.header}>
-          {/* Real product image — base layer */}
-          <AppImage
-            source={{
-              uri: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=800&q=85',
-            }}
-            style={promoStyles.headerImage}
-            resizeMode="cover"
-          />
-          {/* Gradient overlay so text is readable */}
-          <LinearGradient
-            colors={['transparent', 'rgba(100, 55, 40, 0.72)']}
-            style={promoStyles.headerOverlay}
-          />
-
-          {/* Close button */}
-          <TouchableOpacity
-            style={promoStyles.closeBtn}
-            onPress={handleClose}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close" size={18} color={Colors.white} />
-          </TouchableOpacity>
-
-          {/* Discount pill */}
-          <View style={promoStyles.discountPill}>
-            <AppText style={promoStyles.discountValue}>30%</AppText>
-            <AppText style={promoStyles.discountLabel}>OFF</AppText>
-          </View>
-        </View>
-
-        {/* Body */}
-        <View style={promoStyles.body}>
-          <AppText style={promoStyles.tag}>🌸 Spring Sale</AppText>
-          <AppText style={promoStyles.title}>
-            Exclusive offer{'\n'}just for you
-          </AppText>
-          <AppText style={promoStyles.desc}>
-            Get 30% off all prescription frames this season. Limited time only.
-          </AppText>
-
-          {/* Promo code row */}
-          <View style={promoStyles.codeRow}>
-            <View style={promoStyles.codeChip}>
-              <Ionicons
-                name="pricetag-outline"
-                size={13}
-                color={Colors.primary}
-              />
-              <AppText style={promoStyles.codeText}>SPRING30</AppText>
-            </View>
-            <AppText style={promoStyles.codeHint}>Valid until Apr 30</AppText>
-          </View>
-
-          {/* CTA */}
-          <TouchableOpacity
-            style={promoStyles.ctaBtn}
-            onPress={handleClose}
-            activeOpacity={0.85}
-          >
-            <AppText style={promoStyles.ctaText}>Shop Now</AppText>
-            <Ionicons name="arrow-forward" size={16} color={Colors.white} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleClose}
-            activeOpacity={0.7}
-            style={promoStyles.skipBtn}
-          >
-            <AppText style={promoStyles.skipText}>Maybe later</AppText>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    </Modal>
-  );
-};
-
-const promoStyles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(20, 12, 8, 0.62)',
-  },
-  cardWrap: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '18%',
-    width: Dimensions.get('window').width - 48,
-    borderRadius: 28,
-    overflow: 'hidden',
-    backgroundColor: Colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.28,
-    shadowRadius: 40,
-    elevation: 20,
-  },
-  header: {
-    height: 190,
-    overflow: 'hidden',
-  },
-  headerImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  discountPill: {
-    position: 'absolute',
-    bottom: 18,
-    left: 20,
-    backgroundColor: Colors.primary,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 4,
-  },
-  discountValue: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: Colors.white,
-    letterSpacing: -0.5,
-  },
-  discountLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.80)',
-    letterSpacing: 1,
-    marginTop: 4,
-  },
-  body: {
-    padding: 24,
-  },
-  tag: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.black,
-    letterSpacing: -0.5,
-    lineHeight: 28,
-    marginBottom: 8,
-  },
-  desc: {
-    fontSize: 13,
-    color: Colors.gray500,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  codeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primaryLight,
-    borderWidth: 1.5,
-    borderColor: Colors.primary + '40',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  codeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: 0.8,
-  },
-  codeHint: {
-    fontSize: 12,
-    color: Colors.gray400,
-    fontWeight: '500',
-  },
-  ctaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.primary,
-    borderRadius: 999,
-    paddingVertical: 15,
-    marginBottom: 12,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.white,
-    letterSpacing: 0.2,
-  },
-  skipBtn: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  skipText: {
-    fontSize: 13,
-    color: Colors.gray400,
-    fontWeight: '500',
-  },
-});
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -441,13 +160,16 @@ const ScanTile: React.FC<{
 
 const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  // Best sellers show prices: no screenshots or recording while focused.
+  useBlockScreenCapture();
   const [locations, setLocations] = useState<PlaceLocation[]>([]);
   const [locLoading, setLocLoading] = useState(true);
-  const [showPromo, setShowPromo] = useState(true);
   const navigation = useNavigation<GlassScreenNav>();
   const { t } = useTranslation();
 
   const { data, loading, refreshing, error, onRefresh } = useHome();
+  // The latest announcement, shown once per device (see AnnouncementPopup).
+  const { popup, closePopup } = useAnnouncementPopup(data?.announcements);
 
   useEffect(() => {
     searchMOpticLocations()
@@ -473,16 +195,17 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      {/* {showPromo && <PromoModal onClose={() => setShowPromo(false)} />} */}
+      <AnnouncementPopup announcement={popup} onClose={closePopup} />
 
       <HomeHeader signinLabel={t('SignIn')} />
 
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: insets.bottom + Spacing.xxl + 80,
-        }}
+        contentContainerStyle={[
+          Layout.wide,
+          { paddingBottom: insets.bottom + Spacing.xxl + 80 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

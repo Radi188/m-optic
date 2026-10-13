@@ -6,7 +6,8 @@ import { useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { Colors, FontSize, Spacing, BorderRadius } from '../../../theme';
+import { Colors, FontSize, Spacing, BorderRadius, MaxWidth } from '../../../theme';
+import { useResponsive } from '../../../hook/useResponsive';
 import { selectUser } from '../../../store/slices/authSlice';
 import type { RootStackParamList } from '../../../types/navigation';
 import AppText from '../../AppText';
@@ -26,12 +27,23 @@ type HomeHeaderProps = {
  */
 const HomeHeader: React.FC<HomeHeaderProps> = ({ signinLabel }) => {
   const insets = useSafeAreaInsets();
+  // The bar stays full width; its contents line up with the Home column.
+  const { width } = useResponsive();
+  const sidePadding = Math.max(
+    Spacing.md,
+    (width - MaxWidth.wide) / 2 + Spacing.md,
+  );
   const user = useSelector(selectUser);
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View
+      style={[
+        styles.header,
+        { paddingTop: insets.top + 8, paddingHorizontal: sidePadding },
+      ]}
+    >
       <View style={styles.headerLeft}>
         <View style={styles.logoWrap}>
           <Image

@@ -123,3 +123,42 @@ export const OrbColors = {
   orb2: 'rgba(255, 200, 175, 0.32)',
   orb3: 'rgba(220, 180, 165, 0.25)',
 };
+
+// ─── Responsive layout (iPad / tablets) ──────────────────────────────────────
+// Screens keep their background full-bleed and centre their content in a
+// column. On phones the max widths are wider than the screen, so these are
+// no-ops there.
+
+export const Breakpoints = {
+  tablet: 600,
+};
+
+export const MaxWidth = {
+  dialog: 480, // centred alert-style modals
+  form: 560, // sign-in and other single-form screens
+  readable: 720, // text, settings, detail pages
+  wide: 1024, // grids and dashboards
+};
+
+export const Layout = {
+  dialog: {
+    width: '100%' as const,
+    maxWidth: MaxWidth.dialog,
+    alignSelf: 'center' as const,
+  },
+  form: {
+    width: '100%' as const,
+    maxWidth: MaxWidth.form,
+    alignSelf: 'center' as const,
+  },
+  readable: {
+    width: '100%' as const,
+    maxWidth: MaxWidth.readable,
+    alignSelf: 'center' as const,
+  },
+  wide: {
+    width: '100%' as const,
+    maxWidth: MaxWidth.wide,
+    alignSelf: 'center' as const,
+  },
+};

@@ -20,7 +20,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { AppModal, Input, GlassBackground } from '../components/ui';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../theme';
+import { useResponsive } from '../hook/useResponsive';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import type {
   BottomTabParamList,
   RootStackParamList,
@@ -41,6 +43,8 @@ import { Product } from '../types/glasses';
 import { useProductList } from '../hook/useProductList';
 import GlassScreenSkeleton from '../components/ui/Loading/loadingGlassesScreen';
 import FilterModal from '../components/ui/Modal/FilterModal';
+import FilterBadge, { countActiveFilters } from '../components/ui/FilterBadge';
+import EmptyState from '../components/ui/EmptyState';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
@@ -82,6 +86,9 @@ const EMPTY_FORM: AddFrameForm = { name: '', brand: '', price: '', stock: '' };
 
 const GlassScreen: React.FC = () => {
   const navigation = useNavigation<GlassScreenNav>();
+  const { productColumns } = useResponsive();
+  // Shows prices: no screenshots or screen recording while focused.
+  useBlockScreenCapture();
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -92,6 +99,7 @@ const GlassScreen: React.FC = () => {
   const {
     products,
     brands,
+    frameShapes,
     meta,
     loading,
     isRefreshing,
@@ -119,16 +127,21 @@ const GlassScreen: React.FC = () => {
   const [tempMinPrice, setTempMinPrice] = useState('');
   const [tempMaxPrice, setTempMaxPrice] = useState('');
 
-  const frameOptions = [
-    { label: 'All', value: 'all' },
-    { label: 'Round', value: 'round' },
-    { label: 'Rectangle', value: 'rectangle' },
-    { label: 'Square', value: 'square' },
-    { label: 'Soft Square', value: 'soft-square' },
-    { label: 'Narrow Rectangle', value: 'narrow-rectangle' },
-    { label: 'Cat Eye', value: 'cat-eye' },
-    { label: 'Aviator', value: 'aviator' },
-  ];
+  // The catalogue's own shapes, so every option can actually match products.
+  const frameOptions = useMemo(
+    () => [
+      { label: 'All', value: 'all' },
+      ...frameShapes.map(shape => ({ label: shape.name, value: shape.name })),
+    ],
+    [frameShapes],
+  );
+
+  const activeFilterCount = countActiveFilters({
+    brand: filters.brand_1,
+    frame: filters.frame_shape,
+    minPrice: filters.min_price,
+    maxPrice: filters.max_price,
+  });
 
   const openFilterModal = () => {
     setTempBrand(filters.brand_1 ? Number(filters.brand_1) : 'all');
@@ -243,7 +256,7 @@ const GlassScreen: React.FC = () => {
 
   const renderCard = ({ item }: { item: Product }) => {
     if (item.empty) {
-      return <View style={[styles.card, { opacity: 0 }]} />;
+      return <View style={styles.gridSpacer} />;
     }
     return (
       <GlassCard
@@ -263,12 +276,27 @@ const GlassScreen: React.FC = () => {
             <AppText style={styles.title}>{t('glassFramesTitle')}</AppText>
           </View>
           <TouchableOpacity
-            style={styles.filterBtn}
+            style={[
+              styles.filterBtn,
+              activeFilterCount > 0 && styles.filterBtnActive,
+            ]}
             activeOpacity={0.8}
             onPress={openFilterModal}
           >
-            <Ionicons name="options-outline" size={20} color={Colors.primary} />
-            <AppText style={styles.filterBtnText}>{t('commonFilter')}</AppText>
+            <Ionicons
+              name="options-outline"
+              size={20}
+              color={activeFilterCount > 0 ? Colors.white : Colors.primary}
+            />
+            <AppText
+              style={[
+                styles.filterBtnText,
+                activeFilterCount > 0 && styles.filterBtnTextActive,
+              ]}
+            >
+              {t('commonFilter')}
+            </AppText>
+            <FilterBadge count={activeFilterCount} />
           </TouchableOpacity>
         </View>
         {/* Search */}
@@ -363,15 +391,14 @@ const GlassScreen: React.FC = () => {
         {/* Grid */}
         {loading && products.length === 0 ? (
           <GlassScreenSkeleton />
-        ) : !error && products.length === 0 ? (
-          <View style={styles.empty}>
-            <ErrorComponent onRetry={refetch} />
-          </View>
+        ) : error && products.length === 0 ? (
+          <ErrorComponent onRetry={refetch} />
         ) : (
           <FlatList
-            data={formatData(products, 2)}
+            data={formatData(products, productColumns)}
             keyExtractor={item => String(item.id)}
-            numColumns={2}
+            key={`grid-${productColumns}`}
+            numColumns={productColumns}
             columnWrapperStyle={styles.row}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
@@ -394,14 +421,19 @@ const GlassScreen: React.FC = () => {
               ) : null
             }
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Ionicons
-                  name="glasses-outline"
-                  size={40}
-                  color={Colors.gray300}
+              activeFilterCount > 0 ? (
+                <EmptyState
+                  title={t('NoFramesMatchFilters')}
+                  message={t('NoFramesMatchFiltersHint')}
+                  actionLabel={t('ClearFilters')}
+                  onAction={resetFilters}
                 />
-                <AppText style={styles.emptyText}>No frames found</AppText>
-              </View>
+              ) : (
+                <EmptyState
+                  title={t('NoFramesFound')}
+                  message={t('NoFramesYetHint')}
+                />
+              )
             }
           />
         )}
@@ -484,7 +516,10 @@ const GlassScreen: React.FC = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe: {
+    ...Layout.wide,
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -511,8 +546,12 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
   searchContainer: { marginBottom: Spacing.md },
 
-  tabs: { marginBottom: Spacing.md, height: 60 },
-  tabsContent: { paddingHorizontal: Spacing.lg },
+  // ScrollViews default to flexGrow: 1, so with a short (filtered) product
+  // list this row soaked up the spare height and left a gap above the grid.
+  tabs: { marginBottom: Spacing.xs, height: 44, flexGrow: 0, flexShrink: 0 },
+  // Chips are 36pt; centring them in the 44pt row keeps the brands snug
+  // against the product count below.
+  tabsContent: { paddingHorizontal: Spacing.lg, alignItems: 'center' },
   tabText: {
     fontSize: FontSize.md,
     fontWeight: '600',
@@ -572,10 +611,12 @@ const styles = StyleSheet.create({
     color: Colors.gray400,
     fontWeight: '600',
     paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
 
   list: { paddingHorizontal: Spacing.sm, paddingBottom: Spacing.xxl + 80 },
+  // Invisible filler for the last row; mirrors GlassCard's flex + margin.
+  gridSpacer: { flex: 1, margin: 6 },
   row: { gap: CARD_GAP, marginBottom: CARD_GAP },
 
   card: { width: CARD_WIDTH, borderRadius: BorderRadius.xl, ...Shadow.md },
@@ -668,12 +709,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
 
-  empty: { alignItems: 'center', paddingTop: Spacing.xxl, gap: Spacing.sm },
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.gray400,
-    fontWeight: '500',
-  },
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -691,6 +726,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  filterBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterBtnTextActive: {
+    color: Colors.white,
   },
 
   retryBtn: {

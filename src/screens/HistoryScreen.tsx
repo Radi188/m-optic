@@ -14,7 +14,8 @@ import { useTranslation } from 'react-i18next';
 
 import { selectIsAuthenticated } from '../store/slices/authSlice';
 import { useHistory } from '../hook/useHistory';
-import { Colors, FontSize, Spacing, BorderRadius, Shadow } from '../theme';
+import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../theme';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import { formatEye } from '../types/history';
 import { eventColors } from '../utils/invoiceEvent';
 import type { Invoice, Refraction } from '../types/history';
@@ -178,6 +179,8 @@ const HistoryScreen: React.FC = () => {
   const isAuthenticated = useSelector(selectIsAuthenticated);
 
   const [segment, setSegment] = useState<Segment>('refractions');
+  // Invoice totals are priced; the Refractions tab is not.
+  useBlockScreenCapture(isAuthenticated && segment === 'invoices');
   const { history, isLoading, isRefreshing, error, refetch } =
     useHistory(isAuthenticated);
 
@@ -361,6 +364,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
 
   headerBlock: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.md,
@@ -399,6 +403,7 @@ const styles = StyleSheet.create({
   segmentTextInactive: { color: Colors.gray500 },
 
   listContent: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.md,
     paddingBottom: TAB_BAR_HEIGHT + Spacing.xl,
   },

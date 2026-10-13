@@ -7,7 +7,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { Colors, FontSize, Spacing } from '../../../theme';
+import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import AppText from '../../AppText';
 
 type HeaderProps = {
@@ -56,6 +56,7 @@ export default Header;
 
 const styles = StyleSheet.create({
   container: {
+    ...Layout.readable,
     height: 64,
     flexDirection: 'row',
     alignItems: 'center',

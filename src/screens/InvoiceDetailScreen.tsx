@@ -10,7 +10,8 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import { BorderRadius, Colors, FontSize, Shadow, Spacing } from '../theme';
+import { BorderRadius, Colors, FontSize, Shadow, Spacing, Layout } from '../theme';
+import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import type { Invoice, InvoiceItem } from '../types/history';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
@@ -27,6 +28,8 @@ const InvoiceDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { t, i18n } = useTranslation();
+  // Shows prices: no screenshots or screen recording while focused.
+  useBlockScreenCapture();
 
   const invoice: Invoice | undefined = route.params?.invoice;
   const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
@@ -316,6 +319,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
 
   header: {
+    ...Layout.readable,
     minHeight: 60,
     paddingHorizontal: Spacing.md,
     flexDirection: 'row',
@@ -338,6 +342,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.xxl,
   },

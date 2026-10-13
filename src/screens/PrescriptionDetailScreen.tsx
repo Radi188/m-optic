@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import LinearGradient from 'react-native-linear-gradient';
 
-import { Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, Layout } from '../theme';
 import { splitCombinedEye } from '../types/history';
 import { useUserProfile } from '../hook/useUserProfile';
 import PrescriptionSkeleton from '../components/ui/Loading/PrescriptionLoadingScreen';
@@ -360,6 +360,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
+    ...Layout.readable,
     minHeight: 74,
     paddingHorizontal: Spacing.lg,
     flexDirection: 'row',
@@ -391,6 +392,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingBottom: 120,
   },

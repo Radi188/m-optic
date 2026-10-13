@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Colors, FontSize, Spacing } from '../theme';
+import { Colors, FontSize, Spacing, Layout } from '../theme';
 import AppText from '../components/AppText';
 import { formatDate } from '../utils/dateHelper';
 import {
@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
   },
 
   appHeader: {
+    ...Layout.readable,
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
@@ -160,6 +161,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    ...Layout.readable,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xxl,
