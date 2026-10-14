@@ -43,6 +43,7 @@ import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
+import { useFavorite } from '../hook/useFavorite';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -60,6 +61,17 @@ interface ViewerModalProps {
 
 /** M-Optic's Telegram account for product enquiries. */
 const TELEGRAM_CONTACT_URL = 'https://t.me/Mopticstm';
+
+/**
+ * A photo link Telegram can turn into an image preview. Product photos are
+ * stored as AVIF, which Telegram does not preview, so those go through wsrv.nl
+ * (a free public image proxy) as a JPEG. Other formats are linked as they are.
+ * Drop this once the server can hand out a JPEG/WebP copy itself.
+ */
+const telegramPreviewImage = (url: string) =>
+  /\.avif($|\?)/i.test(url)
+    ? `https://wsrv.nl/?url=${url.replace(/^https?:\/\//i, '')}&output=jpg`
+    : url;
 
 const ViewerModal: React.FC<ViewerModalProps> = ({
   visible,
@@ -209,6 +221,12 @@ const GlassDetailScreen: React.FC = () => {
     [product, selectedColor],
   );
 
+  // Saved with the photo of the colourway on screen.
+  const { isFavorite, toggle: toggleFavorite } = useFavorite(
+    product,
+    images[0],
+  );
+
   // Measurements live on the parent and are shared by every colourway.
   const measurements = product?.measurements ?? null;
 
@@ -272,7 +290,8 @@ const GlassDetailScreen: React.FC = () => {
       product.brand?.name ? `Brand: ${product.brand.name}` : null,
       colour ? `Color: ${colour}` : null,
       code ? `Code: ${code}` : null,
-      photo ? `\n${photo}` : null,
+      // Last, on its own line: Telegram shows the picture under the message.
+      photo ? `\n${telegramPreviewImage(photo)}` : null,
     ]
       .filter(line => line !== null)
       .join('\n');
@@ -430,6 +449,7 @@ const GlassDetailScreen: React.FC = () => {
                   images: galleryImages(c.variation),
                 })),
                 selectedColorId: selectedColor?.id,
+                product: product ?? undefined,
               })
             }
           />
@@ -542,16 +562,22 @@ const GlassDetailScreen: React.FC = () => {
             </AppText>
           </TouchableOpacity>
 
-          {/* Try On button */}
+          {/* Favourite — saves to My Favorites in Profile */}
           <TouchableOpacity
             style={styles.floatBtnTryon}
-            onPress={() => openViewer('tryon')}
+            onPress={toggleFavorite}
             activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isFavorite }}
           >
             <View style={styles.floatBtnTryonHighlight} pointerEvents="none" />
-            <Ionicons name="heart-outline" size={18} color={Colors.primary} />
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={18}
+              color={isFavorite ? '#E5484D' : Colors.primary}
+            />
             <AppText style={styles.floatBtnTryonLabel}>
-              {t('AddToFavorite')}
+              {isFavorite ? t('SavedToFavorites') : t('AddToFavorite')}
             </AppText>
           </TouchableOpacity>
         </View>

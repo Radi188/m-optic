@@ -7,14 +7,13 @@ import BottomTabNavigator from './BottomTabNavigator';
 import GlassDetailScreen from '../screens/GlassDetailScreen';
 import SplashScreen from '../screens/SplashScreen';
 import LoginScreen from '../screens/LoginScreen';
-import VerifyOtpScreen from '../screens/VerifyOtpScreen';
-import SetPinScreen from '../screens/SetPinScreen';
 import type { RootStackParamList } from '../types/navigation';
 import ProductImageViewScreen from '../screens/ImageViewFullScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingScreen';
 import SupportScreen from '../screens/SupportScreen';
 import NotificationListScreen from '../screens/NotificationScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import FavoritesScreen from '../screens/FavoritesScreen';
 import TermsAndConditionsScreen from '../screens/TermsAndConditionsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import PointsMemberScreen from '../screens/PointsMemberScreen';
@@ -41,6 +40,11 @@ const RootStackNavigator: React.FC = () => {
             name="GlassDetail"
             component={GlassDetailScreen}
             options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="Favorites"
+            component={FavoritesScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
           />
           <Stack.Screen
             name="ProductImageView"
@@ -178,6 +182,11 @@ const RootStackNavigator: React.FC = () => {
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
+            name="Favorites"
+            component={FavoritesScreen}
+            options={{ headerShown: false, animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
             name="ProductImageView"
             component={ProductImageViewScreen}
             options={{ animation: 'fade_from_bottom' }}
@@ -185,16 +194,6 @@ const RootStackNavigator: React.FC = () => {
           <Stack.Screen
             name="Login"
             component={LoginScreen}
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="VerifyOtp"
-            component={VerifyOtpScreen}
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="SetPin"
-            component={SetPinScreen}
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen

@@ -20,6 +20,7 @@ import AppText from '../components/AppText';
 import AuthScreenLayout from '../components/ui/Auth/AuthScreenLayout';
 import CodeInput from '../components/ui/Auth/CodeInput';
 import { AuthButton, AuthError } from '../components/ui/Auth/AuthParts';
+import PinSetupSheet from '../components/ui/Auth/PinSetupSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -113,13 +114,22 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     dispatch(loginThunk({ phone_number: digits, pin }));
   }, [digits, dispatch, pin]);
 
+  // The code and PIN set-up happen in a sheet over this screen; this holds the
+  // number the code was sent to while it is open.
+  const [setupPhone, setSetupPhone] = useState<string | null>(null);
+
   const handleRequestOtp = useCallback(async () => {
     if (!digits) return;
     const result = await dispatch(requestOtpThunk({ phone_number: digits }));
     if (requestOtpThunk.fulfilled.match(result)) {
-      navigation.navigate('VerifyOtp', { phone_number: digits });
+      setSetupPhone(digits);
     }
-  }, [digits, dispatch, navigation]);
+  }, [digits, dispatch]);
+
+  const closeSetup = useCallback(() => {
+    setSetupPhone(null);
+    dispatch(setError(null));
+  }, [dispatch]);
 
   // The API answers a PIN-less account with "Account not setup", which on its
   // own reads like a dead end. Point those customers at the code flow instead.
@@ -186,6 +196,12 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       </TouchableOpacity>
 
       <AppText style={styles.hint}>{t('OtpHint')}</AppText>
+
+      <PinSetupSheet
+        visible={!!setupPhone}
+        phone={setupPhone ?? ''}
+        onClose={closeSetup}
+      />
     </AuthScreenLayout>
   );
 };

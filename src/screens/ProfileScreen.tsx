@@ -37,6 +37,7 @@ import {
   markAsRead,
   markAllRead,
 } from '../store/slices/notificationsSlice';
+import { selectFavoriteCount } from '../store/slices/favoritesSlice';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import ProfileHeader from '../components/ui/Profile/ProfileHeader';
 import ProfileSettingSection from '../components/ui/Profile/ProfileSettingSection';
@@ -189,8 +190,19 @@ const ProfileScreen: React.FC = () => {
     setSelectedLanguage(language);
   };
 
+  const favoriteCount = useAppSelector(selectFavoriteCount);
+
   const settingItems = useMemo(
     () => [
+      {
+        id: 'favorites',
+        title: 'MyFavorites',
+        subtitle: favoriteCount
+          ? t('SavedFramesCount', { count: favoriteCount })
+          : 'FavoritesMenuSubtitle',
+        icon: 'heart-outline',
+        onPress: () => navigation.navigate('Favorites'),
+      },
       {
         id: 'language',
         title: 'Language',
@@ -252,7 +264,7 @@ const ProfileScreen: React.FC = () => {
         },
       },
     ],
-    [languageLabel],
+    [languageLabel, favoriteCount, t, navigation],
   );
 
   // ── Guest view ────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import glassReducer from './slices/glassSlice';
 import authReducer from './slices/authSlice';
 import notificationsReducer from './slices/notificationsSlice';
+import favoritesReducer from './slices/favoritesSlice';
 
 // ─── Persist config ───────────────────────────────────────────────────────────
 
@@ -33,12 +34,20 @@ const glassPersistConfig = {
     state ? { ...state, items: [] } : state,
 };
 
+// Saved frames survive restarts; they are device-only (no API for them yet).
+const favoritesPersistConfig = {
+  key: 'favorites',
+  storage: AsyncStorage,
+  whitelist: ['items'],
+};
+
 // ─── Root reducer ─────────────────────────────────────────────────────────────
 
 const rootReducer = combineReducers({
   auth:          persistReducer(authPersistConfig, authReducer),
   glass:         persistReducer(glassPersistConfig, glassReducer),
   notifications: notificationsReducer,
+  favorites:     persistReducer(favoritesPersistConfig, favoritesReducer),
 });
 
 // ─── Store ────────────────────────────────────────────────────────────────────

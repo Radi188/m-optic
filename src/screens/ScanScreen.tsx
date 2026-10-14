@@ -43,6 +43,7 @@ import {
   Shadow,
   Layout,
 } from '../theme';
+import { useTranslation } from 'react-i18next';
 import { useResponsive } from '../hook/useResponsive';
 import { useFrameShapeCounts } from '../hook/useFrameShapeCounts';
 import { useProductList } from '../hook/useProductList';
@@ -591,30 +592,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 /* Only the front camera is mirrored — the back camera shows the scene as-is. */
 #video.mirrored{transform:scaleX(-1)}
 
-/* Skin-smoothing (soft focus). A blurred copy of the preview is laid back over
-   the sharp one at partial opacity — the classic soft-focus portrait trick, so
-   skin texture and blemishes soften while the eyes stay readable.
-   backdrop-filter gets the blurred copy for free on the GPU, with no second
-   <video> to decode; where it is unsupported the layer is simply invisible and
-   the preview stays sharp.
-   The layer covers only the tracked face: it keeps this fixed size and is moved
-   and scaled onto the face box every frame with a transform (compositor-only,
-   so it stays cheap), and a feathered elliptical mask keeps the effect from
-   ending on a visible edge. Everything else in shot — the room, hands, anyone
-   standing behind — is left exactly as the camera saw it.
-   Detection is untouched: MediaPipe reads frames straight off the <video>
-   element, which no CSS filter can reach, so the measurements come from the
-   raw image either way. */
-#softLayer{
-  position:absolute;left:0;top:0;width:200px;height:260px;transform-origin:0 0;
-  z-index:1;pointer-events:none;opacity:0;transition:opacity .25s ease;
-  -webkit-backdrop-filter:blur(6px) brightness(1.04) saturate(1.06);
-  backdrop-filter:blur(6px) brightness(1.04) saturate(1.06);
-  -webkit-mask-image:radial-gradient(ellipse closest-side at 50% 50%,#000 55%,rgba(0,0,0,0.55) 78%,transparent 100%);
-  mask-image:radial-gradient(ellipse closest-side at 50% 50%,#000 55%,rgba(0,0,0,0.55) 78%,transparent 100%);
-  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat
-}
-body.smooth #softLayer.on{opacity:.5}
 #snapCanvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:2}
 #overlay{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
 
@@ -638,20 +615,8 @@ body.smooth #softLayer.on{opacity:.5}
 #flipBtn svg{width:20px;height:20px;fill:none;stroke:rgba(255,255,255,0.92);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #flipBtn.busy{opacity:.5}
 #flipBtn.spin{transform:rotate(180deg)}
-#overlay.analyzing #flipBtn,#overlay.analyzing #smoothBtn{opacity:0;pointer-events:none}
+#overlay.analyzing #flipBtn{opacity:0;pointer-events:none}
 
-/* Smoothing toggle — same chip as the flip button, sitting to its left. */
-#smoothBtn{
-  position:absolute;top:max(30px,calc(env(safe-area-inset-top) + 16px));right:70px;z-index:9;
-  pointer-events:auto;width:42px;height:42px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(12,16,20,0.5);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
-  border:1px solid rgba(95,233,255,0.22);box-shadow:0 6px 22px rgba(0,0,0,0.28);
-  transition:opacity .25s ease,border-color .25s ease
-}
-#smoothBtn svg{width:19px;height:19px;fill:rgba(255,255,255,0.94);stroke:none}
-#smoothBtn.off{border-color:rgba(255,255,255,0.14)}
-#smoothBtn.off svg{fill:rgba(255,255,255,0.42)}
 
 /* Corner HUD readouts — clearly below the chip */
 .hud{position:absolute;z-index:7;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:9.5px;letter-spacing:1.4px;color:rgba(95,233,255,0.72);text-transform:uppercase;text-shadow:0 0 8px rgba(95,233,255,0.35)}
@@ -775,13 +740,9 @@ body.smooth #softLayer.on{opacity:.5}
 </head>
 <body>
 <video id="video" autoplay playsinline muted></video>
-<div id="softLayer"></div>
 <canvas id="snapCanvas"></canvas>
 <div id="overlay">
   <div class="topbar"><div class="topchip"><span class="pulse"></span><span id="topchipText">Biometric Face Scan</span></div></div>
-  <button id="smoothBtn" aria-label="Toggle skin smoothing">
-    <svg viewBox="0 0 24 24"><path d="M11 2.5l1.7 4.6 4.6 1.7-4.6 1.7L11 15.1 9.3 10.5 4.7 8.8l4.6-1.7z"/><path d="M18 14l.85 2.35L21.2 17.2l-2.35.85L18 20.4l-.85-2.35-2.35-.85 2.35-.85z"/></svg>
-  </button>
   <button id="flipBtn" aria-label="Switch camera">
     <svg viewBox="0 0 24 24"><path d="M3 8.5V7a3 3 0 0 1 3-3h9"/><path d="m12.5 1.5 3 2.5-3 2.5"/><path d="M21 15.5V17a3 3 0 0 1-3 3H9"/><path d="m11.5 22.5-3-2.5 3-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>
   </button>
@@ -836,7 +797,6 @@ var reviewRow=document.getElementById('reviewRow'),retakeBtn=document.getElement
 var resultRow=document.getElementById('resultRow'),rescanBtn=document.getElementById('rescanBtn'),continueBtn=document.getElementById('continueBtn');
 var snapCanvas=document.getElementById('snapCanvas');
 var flipBtn=document.getElementById('flipBtn'),topchipText=document.getElementById('topchipText');
-var smoothBtn=document.getElementById('smoothBtn'),softLayer=document.getElementById('softLayer');
 var shapeBadge=document.getElementById('shapeBadge'),shapeBadgeText=document.getElementById('shapeBadgeText');
 var analyzeBar=document.getElementById('analyzeBar'),analyzeBarFill=document.getElementById('analyzeBarFill');
 
@@ -1354,108 +1314,6 @@ function setCaptureEnabled(v){
   if(v)captureBtn.classList.add('enabled');else captureBtn.classList.remove('enabled');
 }
 
-// ── Skin smoothing ───────────────────────────────────────────────────────────
-// On by default. The live preview is smoothed in CSS; the captured still has
-// to be smoothed in canvas to match, because CSS filters do not apply to
-// drawImage — without this the frozen photo would snap back to raw camera
-// texture the moment the user taps Capture.
-var SMOOTH=true;
-document.body.classList.add('smooth');
-
-smoothBtn.addEventListener('click',function(){
-  if(done)return;
-  SMOOTH=!SMOOTH;
-  document.body.classList.toggle('smooth',SMOOTH);
-  smoothBtn.classList.toggle('off',!SMOOTH);
-  if(!SMOOTH){softLayer.classList.remove('on');softBox=null;}
-});
-
-// The face box, padded out to cover the whole head: wider for the cheeks and
-// ears, and a lot taller upward, since the mesh stops partway up the forehead
-// and the hairline has to be inside the mask too. Shared by the live preview
-// and the captured still so both smooth exactly the same region.
-var FACE_PAD_X=0.16,FACE_PAD_TOP=0.30,FACE_PAD_W=1.32,FACE_PAD_H=1.46;
-function faceBox(lm,w,h,mirrored){
-  var x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,i,X,Y;
-  for(i=0;i<lm.length;i++){
-    X=(mirrored?(1-lm[i].x):lm[i].x)*w;
-    Y=lm[i].y*h;
-    if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;
-  }
-  var bw=x1-x0,bh=y1-y0;
-  if(!(bw>0&&bh>0))return null;
-  return {x:x0-bw*FACE_PAD_X,y:y0-bh*FACE_PAD_TOP,w:bw*FACE_PAD_W,h:bh*FACE_PAD_H};
-}
-
-// ── Live preview: park the soft layer on the tracked face ───────────────────
-var SOFT_W=200,SOFT_H=260;
-var softBox=null;
-function updateSoftMask(lm){
-  if(!lm||!SMOOTH){softLayer.classList.remove('on');softBox=null;return;}
-  // The preview is object-fit:cover, so the video is scaled up and centre
-  // cropped; the same mapping has to be applied to the landmarks.
-  var vw=video.videoWidth||640,vh=video.videoHeight||480;
-  var dw=window.innerWidth,dh=window.innerHeight;
-  var sc=Math.max(dw/vw,dh/vh);
-  var b=faceBox(lm,vw*sc,vh*sc,MIRROR);
-  if(!b){softLayer.classList.remove('on');return;}
-  b.x+=(dw-vw*sc)/2;b.y+=(dh-vh*sc)/2;
-  // Ease toward the target, or tracker jitter makes the mask edge shimmer.
-  if(!softBox)softBox=b;
-  else{
-    var k=0.35;
-    softBox.x+=(b.x-softBox.x)*k;softBox.y+=(b.y-softBox.y)*k;
-    softBox.w+=(b.w-softBox.w)*k;softBox.h+=(b.h-softBox.h)*k;
-  }
-  softLayer.style.transform=
-    'translate('+softBox.x.toFixed(1)+'px,'+softBox.y.toFixed(1)+'px) scale('+
-    (softBox.w/SOFT_W).toFixed(4)+','+(softBox.h/SOFT_H).toFixed(4)+')';
-  softLayer.classList.add('on');
-}
-
-// Soft focus in canvas: a heavily downscaled copy drawn back up over the sharp
-// frame with 'screen', which is what the preview's blurred backdrop does. The
-// downscale is the blur — cheap, and it needs no ctx.filter support. The copy
-// is then masked to the same feathered face ellipse as the preview, so the
-// background of the captured photo keeps its original detail.
-function applySoftFocus(ctx,src,w,h,lm,mirrored){
-  try{
-    var dw=Math.max(1,Math.round(w/10)),dh=Math.max(1,Math.round(h/10));
-    var tmp=document.createElement('canvas');
-    tmp.width=dw;tmp.height=dh;
-    var tctx=tmp.getContext('2d');
-    tctx.imageSmoothingEnabled=true;
-    tctx.drawImage(src,0,0,dw,dh);
-
-    var soft=document.createElement('canvas');
-    soft.width=w;soft.height=h;
-    var sctx=soft.getContext('2d');
-    sctx.imageSmoothingEnabled=true;
-    sctx.drawImage(tmp,0,0,w,h);
-
-    var b=lm?faceBox(lm,w,h,mirrored):null;
-    if(!b)return;
-    var cx=b.x+b.w/2,cy=b.y+b.h/2,rx=b.w/2,ry=b.h/2;
-    sctx.globalCompositeOperation='destination-in';
-    sctx.save();
-    sctx.translate(cx,cy);
-    sctx.scale(1,ry/rx);
-    var g=sctx.createRadialGradient(0,0,0,0,0,rx);
-    g.addColorStop(0,'rgba(0,0,0,1)');
-    g.addColorStop(0.55,'rgba(0,0,0,1)');
-    g.addColorStop(0.78,'rgba(0,0,0,0.55)');
-    g.addColorStop(1,'rgba(0,0,0,0)');
-    sctx.fillStyle=g;
-    sctx.fillRect(-rx,-rx,rx*2,rx*2);
-    sctx.restore();
-
-    ctx.save();
-    ctx.globalAlpha=0.5;
-    ctx.globalCompositeOperation='screen';
-    ctx.drawImage(soft,0,0);
-    ctx.restore();
-  }catch(e){}
-}
 
 // ── Captured-face reveal animation ───────────────────────────────────────────
 // A staged "biometric analysis" reveal over the frozen photo:
@@ -1716,7 +1574,6 @@ function freezeFrame(lm){
   var pctx=photo.getContext('2d');
   if(MIRROR){pctx.save();pctx.translate(w,0);pctx.scale(-1,1);pctx.drawImage(video,0,0,w,h);pctx.restore();}
   else{pctx.drawImage(video,0,0,w,h);}
-  if(SMOOTH)applySoftFocus(pctx,photo,w,h,lm,MIRROR);
   capturedPhoto=photo;
   capturedLm=lm;
   capturedMirror=MIRROR;
@@ -1724,9 +1581,6 @@ function freezeFrame(lm){
   snapCanvas.width=w;snapCanvas.height=h;
   snapCanvas.getContext('2d').drawImage(photo,0,0);
   video.style.display='none';
-  softLayer.classList.remove('on');
-  softBox=null;
-  softLayer.style.display='none';
   snapCanvas.style.display='block';
 }
 
@@ -1737,7 +1591,6 @@ captureBtn.addEventListener('click',function(){
   captureBtn.style.display='none';
   captureHint.style.display='none';
   flipBtn.style.display='none';
-  smoothBtn.style.display='none';
   oval.className='guide-oval locked';
   hint.className='success';
   hint.textContent='Nice! Retake or analyze this photo';
@@ -1755,14 +1608,12 @@ function resetScan(){
   lastLm=null;
   snapCanvas.style.display='none';
   video.style.display='block';
-  softLayer.style.display='';
   if(video.play) video.play();
   captureBtn.style.display='';
   captureBtn.disabled=true;
   captureBtn.classList.remove('enabled');
   captureHint.style.display='';
   flipBtn.style.display='';
-  smoothBtn.style.display='';
   overlay.classList.remove('analyzing');
   shapeBadge.classList.remove('show');
   analyzeBar.classList.remove('show');
@@ -1840,7 +1691,6 @@ faceMesh.onResults(function(results){
 
   if(!lms||!lms[0]){
     lastLm=null;
-    updateSoftMask(null);
     setCaptureEnabled(false);
     oval.className='guide-oval';
     hint.className='';
@@ -1852,7 +1702,6 @@ faceMesh.onResults(function(results){
 
   var lm=lms[0];
   lastLm=lm;
-  updateSoftMask(lm);
   var sz=faceSize(lm);
 
   if(sz<0.16){
@@ -1963,7 +1812,6 @@ flipBtn.addEventListener('click',function(){
   facing=(facing==='user')?'environment':'user';
 
   recentMetrics=[];recentShapes=[];lastLm=null;
-  softLayer.classList.remove('on');softBox=null;
   setCaptureEnabled(false);
   oval.className='guide-oval';
   hint.className='';
@@ -4690,6 +4538,7 @@ const ScanScreen: React.FC = () => {
   // The home screen sends the user straight into one experience, so there is
   // no picker here — the mode is fixed for the life of the screen.
   const mode: Tab = route.params?.mode ?? 'face';
+  const { t } = useTranslation();
 
   // The eye test is a self-screening tool, not a medical exam, so it stays
   // behind an explicit consent gate. Re-asked on every entry rather than
@@ -4762,8 +4611,32 @@ const ScanScreen: React.FC = () => {
     setFaceScanStage('idle');
   };
 
+  // The way out of this screen. Hidden while the camera is up (it has its own
+  // close) and on the manual shape picker (its back returns to the intro), so
+  // there is never a second back button pointing somewhere else.
+  const showHeader =
+    mode === 'refraction' || (mode === 'face' && faceScanStage === 'idle');
+
   return (
     <View style={[styles.root, { paddingTop: isScanning ? 0 : insets.top }]}>
+      {showHeader && (
+        <View style={styles.scanHeader}>
+          <TouchableOpacity
+            style={styles.scanBackBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={t('Back')}
+          >
+            <Ionicons name="chevron-back" size={23} color={Colors.black} />
+          </TouchableOpacity>
+          <AppText style={styles.scanHeaderTitle} numberOfLines={1}>
+            {mode === 'face' ? t('FaceDetection') : t('EyeTestExam')}
+          </AppText>
+          <View style={styles.scanHeaderSpacer} />
+        </View>
+      )}
+
       {mode === 'face' ? (
         <>
           {/* Idle — always shown unless camera is active or manual selector is open */}
@@ -5693,6 +5566,35 @@ const scanStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
+  scanHeader: {
+    ...Layout.readable,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xs,
+  },
+  scanBackBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#EFE5E0',
+  },
+  scanHeaderTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.black,
+    paddingHorizontal: Spacing.sm,
+  },
+  scanHeaderSpacer: {
+    width: 42,
+  },
 
   // Shared layout
   contentPad: {

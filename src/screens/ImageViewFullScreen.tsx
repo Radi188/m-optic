@@ -21,6 +21,8 @@ import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { ImageViewColor } from '../types/navigation';
+import type { Product } from '../types/glasses';
+import { useFavorite } from '../hook/useFavorite';
 import AppText from '../components/AppText';
 
 const THUMB_SIZE = 70;
@@ -92,6 +94,7 @@ type ProductImageViewScreenProps = {
       productName?: string;
       colors?: ImageViewColor[];
       selectedColorId?: string;
+      product?: Product;
     };
   };
 };
@@ -109,6 +112,7 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
     productName = 'Product Images',
     colors = [],
     selectedColorId,
+    product,
   } = route.params || {};
 
   const flatListRef = useRef<FlatList<string>>(null);
@@ -129,6 +133,12 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
     const source = activeColor?.images?.length ? activeColor.images : images;
     return source.filter(item => typeof item === 'string' && item.trim());
   }, [activeColor, images]);
+
+  // Saved with the photo of the colourway being viewed.
+  const { isFavorite, toggle: toggleFavorite } = useFavorite(
+    product,
+    validImages[0],
+  );
 
   const selectColor = useCallback((id: string) => {
     setActiveColorId(id);
@@ -252,13 +262,21 @@ const ProductImageViewScreen: React.FC<ProductImageViewScreenProps> = ({
                 />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.iconBtn}
-                activeOpacity={0.85}
-                onPress={() => console.log('wishlist')}
-              >
-                <Ionicons name="heart-outline" size={20} color={STUDIO.ink} />
-              </TouchableOpacity>
+              {product ? (
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  activeOpacity={0.85}
+                  onPress={toggleFavorite}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isFavorite }}
+                >
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFavorite ? '#E5484D' : STUDIO.ink}
+                  />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </View>

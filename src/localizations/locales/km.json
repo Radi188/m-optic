@@ -406,5 +406,17 @@
   "NoFramesYetHint": "ស៊ុមវ៉ែនតាថ្មីៗនឹងមកដល់ឆាប់ៗនេះ។ សូមត្រឡប់មកមើលម្ដងទៀត។",
   "PriceUnder": "ក្រោម {{amount}}",
   "ViewOnGoogleMaps": "មើលនៅលើ Google Maps",
-  "GotIt": "យល់ហើយ"
+  "GotIt": "យល់ហើយ",
+  "StepOf": "ជំហានទី {{current}} នៃ {{total}}",
+  "ConfirmPinHint": "វាយលេខ 6 ខ្ទង់ដដែលម្ដងទៀត ដើម្បីបញ្ជាក់",
+  "StartOver": "ជ្រើសរើសលេខ PIN ផ្សេង",
+  "MyFavorites": "ចំណូលចិត្តរបស់ខ្ញុំ",
+  "FavoritesMenuSubtitle": "ស៊ុមវ៉ែនតាដែលអ្នកបានរក្សាទុក",
+  "SavedFramesCount": "បានរក្សាទុក {{count}} ស៊ុម",
+  "NoFavoritesYet": "មិនទាន់មានចំណូលចិត្តនៅឡើយទេ",
+  "NoFavoritesHint": "ចុចរូបបេះដូងលើស៊ុមវ៉ែនតាណាមួយ ដើម្បីរក្សាទុកនៅទីនេះ។",
+  "BrowseFrames": "មើលស៊ុមវ៉ែនតា",
+  "RemoveFromFavorites": "ដកចេញពីចំណូលចិត្ត",
+  "SavedToFavorites": "បានរក្សាទុកក្នុងចំណូលចិត្ត",
+  "LoginToSeePrice": "ចូលគណនីដើម្បីមើលតម្លៃ"
 }

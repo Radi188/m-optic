@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import FaceIdIcon from '../../../assets/svg/face-id.svg';
@@ -6,6 +6,9 @@ import { Colors } from '../../../theme';
 import { Product } from '../../../types/glasses';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
+import { useFavorite } from '../../../hook/useFavorite';
+
+const FAVORITE_RED = '#E5484D';
 
 type Props = {
   item: Product;
@@ -24,19 +27,14 @@ const GlassCard: React.FC<Props> = ({
   priceLocked = false,
   onRequestLogin,
 }) => {
-  // State to track whether the heart is filled or not
-  const [isLiked, setIsLiked] = useState(false);
+  // Saved to My Favorites (persisted on the device).
+  const { isFavorite, toggle: toggleFavorite } = useFavorite(item);
 
   // The list endpoint (GET /products) returns lighter field names than the
   // detail endpoint, so fall back across both shapes.
   const name = item.item_name || item.name;
   const price = item.item_price ?? item.price;
   const brand = item.category_name || item.brand?.name || '';
-
-  // Toggle the heart state when the icon is clicked
-  const toggleHeart = () => {
-    setIsLiked(!isLiked);
-  };
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
@@ -49,11 +47,17 @@ const GlassCard: React.FC<Props> = ({
         />
 
         {/* Heart Icon */}
-        <TouchableOpacity style={styles.heartIcon} onPress={toggleHeart}>
+        <TouchableOpacity
+          style={styles.heartIcon}
+          onPress={toggleFavorite}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isFavorite }}
+        >
           <Ionicons
-            name={isLiked ? 'heart' : 'heart-outline'}
+            name={isFavorite ? 'heart' : 'heart-outline'}
             size={20}
-            color={Colors.gray700}
+            color={isFavorite ? FAVORITE_RED : Colors.gray700}
           />
         </TouchableOpacity>
 

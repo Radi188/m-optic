@@ -406,5 +406,19 @@
   "NoFramesYetHint": "New frames are on the way. Please check back soon.",
   "PriceUnder": "Under {{amount}}",
   "ViewOnGoogleMaps": "View on Google Maps",
-  "GotIt": "Got it"
+  "GotIt": "Got it",
+  "StepOf": "Step {{current}} of {{total}}",
+  "ConfirmPinHint": "Type the same 6 digits again to confirm",
+  "StartOver": "Choose a different PIN",
+  "MyFavorites": "My Favorites",
+  "FavoritesMenuSubtitle": "Frames you have saved",
+  "SavedFramesCount_one": "{{count}} saved frame",
+  "SavedFramesCount_other": "{{count}} saved frames",
+  "SavedFramesCount": "{{count}} saved frames",
+  "NoFavoritesYet": "No favorites yet",
+  "NoFavoritesHint": "Tap the heart on any frame to save it here.",
+  "BrowseFrames": "Browse frames",
+  "RemoveFromFavorites": "Remove from favorites",
+  "SavedToFavorites": "Saved to Favorites",
+  "LoginToSeePrice": "Log in to see price"
 }

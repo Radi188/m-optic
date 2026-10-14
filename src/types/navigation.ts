@@ -1,4 +1,6 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Invoice } from './history';
+import type { Product } from './glasses';
 
 export type FrameShape =
   | 'round'
@@ -39,9 +41,9 @@ export type ImageViewColor = {
 export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
-  VerifyOtp: { phone_number: string };
-  SetPin: { phone_number: string };
-  Main: undefined;
+  /** Pass `{ screen: 'Glass' }` etc. to land on a specific tab. */
+  Main: NavigatorScreenParams<BottomTabParamList> | undefined;
+  Favorites: undefined;
   GlassDetail: { id: string };
   ProductImageView: {
     /** Gallery for the colourway open when the viewer was launched. */
@@ -51,6 +53,8 @@ export type RootStackParamList = {
     /** Every colourway, each with its own gallery, so the viewer can switch. */
     colors?: ImageViewColor[];
     selectedColorId?: string;
+    /** The product on show, so the viewer's heart can save it. */
+    product?: Product;
   };
   NotificationSetting: undefined;
   Support: undefined;
