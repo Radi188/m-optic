@@ -43,6 +43,7 @@ import {
   type PlaceLocation,
 } from '../services/placesService';
 import LensTechSection from '../components/ui/Lens/LensTechSection';
+import { BRAND_LENS_CATEGORIES } from '../types/lens';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
 import BrandSection from '../components/ui/Home/BrandSection';
 import { useHome } from '../hook/useHome';
@@ -336,7 +337,7 @@ const HomeScreen: React.FC = () => {
           }}
         />
 
-        <LensTechSection />
+        <LensTechSection categories={BRAND_LENS_CATEGORIES} detailed />
 
         <AnnouncementSection annoucements={data?.announcements || []} />
       </ScrollView>

@@ -29,6 +29,8 @@ import GlassTryOnScene from '../ar/GlassTryOnScene';
 import GlassesSpecSection from '../components/ui/GlassesDetail/GlassessSpecSection';
 import GlassesStyleSection from '../components/ui/GlassesDetail/GlassesStyle';
 import GlassessProductImageSlider from '../components/ui/GlassesDetail/GlassessProductImageSlider';
+import LensTechSection from '../components/ui/Lens/LensTechSection';
+import { BRAND_LENS_CATEGORIES } from '../types/lens';
 import { useProductDetail } from '../hook/useProductDetail';
 import {
   colorOptions,
@@ -191,7 +193,7 @@ const GlassDetailScreen: React.FC = () => {
     refresh,
   } = useProductDetail(id);
 
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Colourways. The parent product carries no colour and an empty gallery — the
   // media a shopper sees comes from whichever variation is selected.
@@ -270,9 +272,14 @@ const GlassDetailScreen: React.FC = () => {
    * photo goes in as its URL — Telegram shows it as a link preview once sent.
    * The price is left out on purpose: staff quote it, and signed-out
    * customers are not shown it in the app either.
+   *
+   * Always written in Khmer, whatever language the app is in: it is read by
+   * the shop's staff, not by the customer. Product and colour names are
+   * inserted as the catalogue has them.
    */
   const telegramMessage = useMemo(() => {
     if (!product) return '';
+    const tKm = i18n.getFixedT('km');
     const variation = selectedColor?.variation;
     const name = product.name ?? product.item_name ?? '';
     const colour = selectedColor?.label
@@ -284,18 +291,20 @@ const GlassDetailScreen: React.FC = () => {
     const photo = images[0] ?? product.image;
 
     return [
-      "Hi M-Optic, I'm interested in this frame:",
+      tKm('TelegramEnquiryIntro'),
       '',
-      `Product: ${name}`,
-      product.brand?.name ? `Brand: ${product.brand.name}` : null,
-      colour ? `Color: ${colour}` : null,
-      code ? `Code: ${code}` : null,
+      tKm('TelegramEnquiryProduct', { value: name }),
+      product.brand?.name
+        ? tKm('TelegramEnquiryBrand', { value: product.brand.name })
+        : null,
+      colour ? tKm('TelegramEnquiryColor', { value: colour }) : null,
+      code ? tKm('TelegramEnquiryCode', { value: code }) : null,
       // Last, on its own line: Telegram shows the picture under the message.
       photo ? `\n${telegramPreviewImage(photo)}` : null,
     ]
       .filter(line => line !== null)
       .join('\n');
-  }, [product, selectedColor, images]);
+  }, [product, selectedColor, images, i18n]);
 
   const handleOpenTelegram = async () => {
     const url = telegramMessage
@@ -536,6 +545,12 @@ const GlassDetailScreen: React.FC = () => {
           selectedColorId={selectedColor?.id ?? null}
           onSelectColor={setSelectedColorId}
         />
+
+        {/* ── Lenses ───────────────────────────────────────────────────────── */}
+        {/* Lenses are not tied to a frame, so every product shows the same
+            branded lens guide — a shopper can weigh lens options and prices
+            while looking at the frame. */}
+        <LensTechSection categories={BRAND_LENS_CATEGORIES} detailed />
       </ScrollView>
 
       {/* ── Floating Action Bar ──────────────────────────────────────────────── */}

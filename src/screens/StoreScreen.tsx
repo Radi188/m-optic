@@ -194,20 +194,23 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
     transform: [{ translateY: ctaOffset.value }],
   }));
 
-  const openDirections = () => {
-    // The API's own link: Google Maps navigation to the store's Google place.
-    if (location.directionsUrl) {
-      Linking.openURL(location.directionsUrl);
+  /**
+   * The store's own Google Maps page — location, reviews, photos and hours,
+   * with Google's Directions button there for anyone who wants a route.
+   */
+  const openOnGoogleMaps = () => {
+    if (location.mapsUrl) {
+      Linking.openURL(location.mapsUrl);
       return;
     }
 
-    // No link from the API: search Google Maps for the store by address.
+    // No link from the API: search for the store, pinned to its Google place
+    // when the API at least sends the place id.
     const q = encodeURIComponent(location.address || location.name);
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
-  };
-
-  const openOnGoogleMaps = () => {
-    if (location.mapsUrl) Linking.openURL(location.mapsUrl);
+    const place = location.placeId ? `&query_place_id=${location.placeId}` : '';
+    Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${q}${place}`,
+    );
   };
 
   const callStore = () => {
@@ -406,13 +409,22 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
       <Animated.View style={[s.ctaRow, ctaStyle]}>
         <TouchableOpacity
           style={s.ctaOutline}
-          onPress={openDirections}
+          onPress={openOnGoogleMaps}
           activeOpacity={0.72}
         >
           <View style={s.ctaIconCircle}>
-            <Ionicons name="navigate" size={15} color={Colors.primary} />
+            <Ionicons name="map" size={15} color={Colors.primary} />
           </View>
-          <AppText style={s.ctaOutlineText}>{t('Directions')}</AppText>
+          {/* Longer than the old "Directions": on the narrowest phones it
+              shrinks a little rather than wrapping inside a 50pt button. */}
+          <AppText
+            style={s.ctaOutlineText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {t('ViewOnGoogleMaps')}
+          </AppText>
         </TouchableOpacity>
 
         {location.phone ? (
@@ -434,22 +446,6 @@ const LocationSheet: React.FC<{ location: StoreLocation }> = ({ location }) => {
           </TouchableOpacity>
         ) : null}
       </Animated.View>
-
-      {/* The store's Google place page: reviews, photos and hours. Only shown
-          once the API sends a link for it. */}
-      {location.mapsUrl ? (
-        <Animated.View style={ctaStyle}>
-          <TouchableOpacity
-            style={s.mapsLinkRow}
-            onPress={openOnGoogleMaps}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="map-outline" size={15} color={Colors.primary} />
-            <AppText style={s.mapsLinkText}>{t('ViewOnGoogleMaps')}</AppText>
-            <Ionicons name="open-outline" size={13} color={Colors.primary} />
-          </TouchableOpacity>
-        </Animated.View>
-      ) : null}
     </View>
   );
 };
@@ -1089,6 +1085,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
     borderColor: Colors.primaryGlow,
@@ -1104,6 +1101,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   ctaOutlineText: {
+    flexShrink: 1,
     fontSize: FontSize.sm,
     fontWeight: '700',
     color: Colors.primary,
@@ -1126,19 +1124,6 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  mapsLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  mapsLinkText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.primary,
   },
   ctaFillText: {
     fontSize: FontSize.sm,

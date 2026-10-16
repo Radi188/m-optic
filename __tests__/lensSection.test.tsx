@@ -5,7 +5,11 @@ import { initReactI18next } from 'react-i18next';
 
 import en from '../src/localizations/locales/en.json';
 import km from '../src/localizations/locales/km.json';
-import { LENS_CATEGORIES, localize } from '../src/types/lens';
+import {
+  BRAND_LENS_CATEGORIES,
+  LENS_CATEGORIES,
+  localize,
+} from '../src/types/lens';
 
 jest.mock('@react-native-vector-icons/ionicons', () => 'Ionicons');
 // The demo runs a looping animation that would keep the test runner alive.
@@ -121,4 +125,20 @@ it('resets to the new category\'s first lens when the category changes', () => {
   expect(found).toContain(localize(photochromic.recommendedFor, 'en'));
   expect(featureCount(tree, second)).toBe(0);
   expect(featureCount(tree, photochromic.products[0])).toBeGreaterThan(0);
+});
+
+it('shows each branded tab\'s "Good for" chips under its recommendation', () => {
+  let tree: any;
+  act(() => {
+    tree = renderer.create(
+      <LensTechSection categories={BRAND_LENS_CATEGORIES} detailed />,
+    );
+  });
+
+  for (const tab of BRAND_LENS_CATEGORIES) {
+    act(() => pressableLabelled(tree, localize(tab.name, 'en')).props.onPress());
+    const found = texts(tree.toJSON());
+    expect(found).toContain(en.LensGoodFor);
+    for (const g of tab.goodFor!) expect(found).toContain(localize(g.label, 'en'));
+  }
 });

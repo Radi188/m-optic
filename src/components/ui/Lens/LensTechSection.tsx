@@ -11,16 +11,24 @@ import {
   Shadow,
 } from '../../../theme';
 import { LENS_CATEGORIES, localize } from '../../../types/lens';
-import type { LensProduct, LensTier } from '../../../types/lens';
+import type {
+  LensCategory,
+  LensProduct,
+  LensTier,
+} from '../../../types/lens';
 import AppText from '../../AppText';
 import BlueBlockDemo from './BlueBlockDemo';
 import ThicknessDemo from './ThicknessDemo';
 import PhotochromicDemo from './PhotochromicDemo';
+import ImpactDemo from './ImpactDemo';
 import ZoneMapDemo from './ZoneMapDemo';
 
 const money = (v: number) => `$${v.toFixed(2)}`;
 
-/** One price band: its SPH/CYL range on the left, the price on the right. */
+/**
+ * One prescription band: its SPH/CYL range on the left and, when the lens is
+ * priced per range, that range's price on the right.
+ */
 const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
   <View style={styles.tierRow}>
     <View style={styles.tierRange}>
@@ -38,16 +46,24 @@ const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
             {`ADD: ${tier.add}`}
           </>
         )}
+        {!!tier.maxComp && (
+          <>
+            <AppText style={styles.rangeDivider}>{'   |   '}</AppText>
+            {`Max comp.: ${tier.maxComp}`}
+          </>
+        )}
       </AppText>
       {!!tier.note && <AppText style={styles.rangeNote}>{tier.note}</AppText>}
     </View>
 
-    <View style={styles.tierPrice}>
-      <AppText style={styles.price}>{money(tier.price)}</AppText>
-      {tier.originalPrice !== undefined && (
-        <AppText style={styles.priceWas}>{money(tier.originalPrice)}</AppText>
-      )}
-    </View>
+    {tier.price !== undefined && (
+      <View style={styles.tierPrice}>
+        <AppText style={styles.price}>{money(tier.price)}</AppText>
+        {tier.originalPrice !== undefined && (
+          <AppText style={styles.priceWas}>{money(tier.originalPrice)}</AppText>
+        )}
+      </View>
+    )}
   </View>
 );
 
@@ -61,7 +77,12 @@ const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
 
   return (
     <View style={styles.lensCard}>
-      <AppText style={styles.lensName}>{product.name}</AppText>
+      <View style={styles.lensNameRow}>
+        <AppText style={styles.lensName}>{product.name}</AppText>
+        {product.price !== undefined && (
+          <AppText style={styles.price}>{money(product.price)}</AppText>
+        )}
+      </View>
 
       <View style={styles.coatingRow}>
         <View
@@ -97,20 +118,33 @@ const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
   );
 };
 
+type LensTechSectionProps = {
+  /** The tabs to show; the home screen's lens families by default. */
+  categories?: LensCategory[];
+  /**
+   * Also show each tab's subtitle and recommendation tips. Worth it for the
+   * branded tabs, whose subtitle says more than the brand name in the tab.
+   */
+  detailed?: boolean;
+};
+
 /**
  * Lens technology guide — the home screen's replacement for the frame-type
  * grid. One tab per lens family, each with its lens options and, where it
  * helps, an interactive demo of the technology.
  */
-const LensTechSection: React.FC = () => {
+const LensTechSection: React.FC<LensTechSectionProps> = ({
+  categories = LENS_CATEGORIES,
+  detailed = false,
+}) => {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const [activeId, setActiveId] = useState(LENS_CATEGORIES[0].id);
+  const [activeId, setActiveId] = useState(categories[0].id);
   const [productId, setProductId] = useState<string | null>(null);
 
   const active = useMemo(
-    () => LENS_CATEGORIES.find(c => c.id === activeId) ?? LENS_CATEGORIES[0],
-    [activeId],
+    () => categories.find(c => c.id === activeId) ?? categories[0],
+    [categories, activeId],
   );
 
   // Falling back to the first product means switching category resets the
@@ -131,7 +165,7 @@ const LensTechSection: React.FC = () => {
         contentContainerStyle={styles.tabsContent}
         style={styles.tabs}
       >
-        {LENS_CATEGORIES.map(category => {
+        {categories.map(category => {
           const isActive = category.id === active.id;
           return (
             <TouchableOpacity
@@ -162,6 +196,12 @@ const LensTechSection: React.FC = () => {
             the selected tab's own label, and the description below it said the
             same thing again in longer form. The recommendation box is the
             first thing the tab has to add. */}
+        {detailed && !!localize(active.subtitle, lang) && (
+          <AppText style={styles.subtitle}>
+            {localize(active.subtitle, lang)}
+          </AppText>
+        )}
+
         {!!localize(active.recommendedFor, lang) && (
           <View style={styles.recommendBox}>
             <View style={styles.recommendIcon}>
@@ -178,9 +218,35 @@ const LensTechSection: React.FC = () => {
           </View>
         )}
 
+        {!!active.goodFor?.length && (
+          <View style={styles.goodFor}>
+            <AppText style={styles.goodForTitle}>{t('LensGoodFor')}</AppText>
+            <View style={styles.goodForRow}>
+              {active.goodFor.map(item => {
+                const label = localize(item.label, lang);
+                return (
+                  <View key={label} style={styles.goodForChip}>
+                    <Ionicons
+                      name={item.icon as any}
+                      size={15}
+                      color="#5B3A26"
+                    />
+                    <AppText style={styles.goodForText}>{label}</AppText>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {active.demo === 'blueBlock' && <BlueBlockDemo />}
-        {active.demo === 'thickness' && <ThicknessDemo />}
+        {/* Keyed by tab: two tabs can both show this demo with different
+            indices, and the selection must not carry across. */}
+        {active.demo === 'thickness' && (
+          <ThicknessDemo key={active.id} indices={active.demoIndices} />
+        )}
         {active.demo === 'photochromic' && <PhotochromicDemo />}
+        {active.demo === 'impact' && <ImpactDemo />}
         {active.demo === 'zonesBifocal' && (
           <ZoneMapDemo zones={['far', 'near']} />
         )}
@@ -243,6 +309,18 @@ const LensTechSection: React.FC = () => {
             </AppText>
           </View>
         )}
+
+        {detailed && active.tips.length > 0 && (
+          <View style={styles.tipsBox}>
+            <AppText style={styles.tipsTitle}>{t('LensTips')}</AppText>
+            {active.tips.map((tip, i) => (
+              <View key={`${active.id}-tip${i}`} style={styles.tipRow}>
+                <View style={styles.tipBullet} />
+                <AppText style={styles.tipText}>{localize(tip, lang)}</AppText>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -274,6 +352,12 @@ const styles = StyleSheet.create({
   tabUnderlineActive: { backgroundColor: Colors.primary },
 
   body: { paddingHorizontal: Spacing.md },
+  subtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.gray500,
+    lineHeight: 19,
+    marginBottom: Spacing.md,
+  },
 
   recommendBox: {
     flexDirection: 'row',
@@ -304,6 +388,31 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     lineHeight: 19,
     marginTop: 2,
+  },
+
+  goodFor: { marginBottom: Spacing.md },
+  goodForTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.gray400,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: Spacing.sm,
+  },
+  goodForRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  goodForChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#EBE0D7',
+  },
+  goodForText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: '#5B3A26',
   },
 
   optionsHeading: {
@@ -354,7 +463,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     ...Shadow.sm,
   },
+  lensNameRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
   lensName: {
+    flex: 1,
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,

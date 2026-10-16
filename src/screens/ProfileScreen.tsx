@@ -328,8 +328,13 @@ const ProfileScreen: React.FC = () => {
           <ProfileTitleHeader
             notificationCount={unreadCount}
             hasUnreadNotification={unreadCount > 0}
-            notificationPress={() => navigation.navigate('NotificationList')}
-            rewardPress={() => navigation.navigate('Reward')}
+            // Notifications and rewards belong to an account, and neither
+            // screen exists for a guest: the bell asks them to sign in and the
+            // reward button is left out.
+            notificationPress={() =>
+              navigation.navigate(user ? 'NotificationList' : 'Login')
+            }
+            rewardPress={user ? () => navigation.navigate('Reward') : undefined}
             label={t('MyProfile')}
           />
 

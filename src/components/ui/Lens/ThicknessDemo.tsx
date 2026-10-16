@@ -6,11 +6,10 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../../../theme';
 import AppText from '../../AppText';
 import RealisticLensIcon from './RealisticLensIcon';
 
-/** Indices the shop stocks, cheapest/thickest first. */
-const INDICES = [1.56, 1.61, 1.67, 1.74] as const;
-type Index = (typeof INDICES)[number];
+/** Indices offered when a tab names none, cheapest/thickest first. */
+const DEFAULT_INDICES = [1.56, 1.61, 1.67, 1.74];
 
-const BASELINE: Index = 1.56;
+const BASELINE = 1.56;
 /** Thickness the baseline lens is drawn at; every other index scales off it. */
 const BASELINE_THICKNESS = 100;
 
@@ -26,18 +25,40 @@ const LENS_HEIGHT = 121;
  * curves and smaller minimum centre thickness the high-index lenses are
  * actually cut with, and so understates the difference the customer sees.
  */
-const THINNER_BY: Record<Index, number> = {
-  1.56: 0,
-  1.61: 26,
-  1.67: 48,
-  1.74: 66,
-};
+const MEASURED: ReadonlyArray<readonly [index: number, thinner: number]> = [
+  [1.56, 0],
+  [1.61, 26],
+  [1.67, 48],
+  [1.74, 66],
+];
+
+/**
+ * Percent thinner than 1.56, read off the measured figures — linearly between
+ * the two nearest, so a HOYA 1.60 sits just under the shop's own 1.61 rather
+ * than at the far smaller optical figure. Anything at or below 1.56 counts as
+ * the 1.56 thickness; null above the measured range.
+ */
+function measuredThinning(index: number): number | null {
+  if (index <= MEASURED[0][0]) return 0;
+  for (let i = 1; i < MEASURED.length; i++) {
+    const [hiIndex, hiThin] = MEASURED[i];
+    if (index <= hiIndex) {
+      const [loIndex, loThin] = MEASURED[i - 1];
+      const t = (index - loIndex) / (hiIndex - loIndex);
+      return loThin + t * (hiThin - loThin);
+    }
+  }
+  return null;
+}
 
 export function thinnerBy(index: number, baseline: number = BASELINE): number {
   if (index <= baseline) return 0;
-  const published = THINNER_BY[index as Index];
-  if (published !== undefined) return published;
-  // An index we don't stock: fall back to the optical derivation.
+  const lens = measuredThinning(index);
+  const base = measuredThinning(baseline);
+  if (lens !== null && base !== null) {
+    return Math.round((1 - (100 - lens) / (100 - base)) * 100);
+  }
+  // Beyond the measured range: fall back to the optical derivation.
   return Math.round((1 - (baseline - 1) / (index - 1)) * 100);
 }
 
@@ -52,12 +73,15 @@ export function visualThickness(reduction: number): number {
   return Math.max(MIN_THICKNESS, BASELINE_THICKNESS - reduction);
 }
 
-const PROFILE_KEY: Record<Index, string> = {
-  1.56: 'LensProfileStandard',
-  1.61: 'LensProfileThin',
-  1.67: 'LensProfileExtraThin',
-  1.74: 'LensProfileUltraThin',
-};
+/** Banded so any brand's index gets a label, e.g. HOYA 1.60 reads as Thin. */
+const profileKey = (index: number): string =>
+  index < 1.58
+    ? 'LensProfileStandard'
+    : index < 1.64
+    ? 'LensProfileThin'
+    : index < 1.7
+    ? 'LensProfileExtraThin'
+    : 'LensProfileUltraThin';
 
 /** One lens, drawn as glass with its edge depth showing behind the face. */
 const LensProfile: React.FC<{ thickness: number; isActive: boolean }> = ({
@@ -77,14 +101,18 @@ const LensProfile: React.FC<{ thickness: number; isActive: boolean }> = ({
 /**
  * Lens index thickness comparison.
  *
- * Shows the 1.56 baseline beside the chosen index so the difference is visible
+ * Shows the baseline beside the chosen index so the difference is visible
  * rather than described — the reason someone pays more for a high-index lens.
  */
-const ThicknessDemo: React.FC = () => {
+const ThicknessDemo: React.FC<{
+  /** The indices to offer, in button order. The first is the baseline. */
+  indices?: number[];
+}> = ({ indices = DEFAULT_INDICES }) => {
   const { t } = useTranslation();
-  const [index, setIndex] = useState<Index>(BASELINE);
+  const baseline = indices[0];
+  const [index, setIndex] = useState(baseline);
 
-  const reduction = thinnerBy(index);
+  const reduction = thinnerBy(index, baseline);
   const target = visualThickness(reduction);
 
   const edge = useRef(new Animated.Value(BASELINE_THICKNESS)).current;
@@ -112,7 +140,7 @@ const ThicknessDemo: React.FC = () => {
       <View style={styles.compareRow}>
         <View style={styles.side}>
           <AppText style={styles.sideLabel}>
-            {t('LensThicknessBaseline')}
+            {t('LensThicknessBaseline', { index: baseline.toFixed(2) })}
           </AppText>
           <LensProfile thickness={BASELINE_THICKNESS} isActive={false} />
         </View>
@@ -130,10 +158,10 @@ const ThicknessDemo: React.FC = () => {
       <AppText style={styles.result}>
         {t('LensThicknessResult', { percent: reduction })}
       </AppText>
-      <AppText style={styles.profile}>{t(PROFILE_KEY[index])}</AppText>
+      <AppText style={styles.profile}>{t(profileKey(index))}</AppText>
 
       <View style={styles.segment}>
-        {INDICES.map(value => {
+        {indices.map(value => {
           const active = value === index;
           return (
             <TouchableOpacity

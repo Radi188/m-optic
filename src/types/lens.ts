@@ -32,7 +32,10 @@ export type LensTier = {
   cyl?: string;
   /** Reading addition, e.g. "+1.00 to +3.00" — multifocals quote ADD, not CYL. */
   add?: string;
-  price: number;
+  /** Maximum compensation the lab will grind to, e.g. "BLOCK" or "N.A.". */
+  maxComp?: string;
+  /** Omitted when the lens has one price for every range (LensProduct.price). */
+  price?: number;
   /** Pre-discount price; renders struck through when present. */
   originalPrice?: number;
   /** Qualifier shown beside the range, e.g. "No Discount". */
@@ -46,6 +49,11 @@ export type LensProduct = {
   /** The coating badge — label plus its dot colour. */
   coating: { label: Localized; color: string };
   features: Localized[];
+  /**
+   * One price covering every range below. Branded lenses are sold this way;
+   * the shop's own lenses price each range separately on the tier instead.
+   */
+  price?: number;
   tiers: LensTier[];
 };
 
@@ -57,10 +65,26 @@ export type LensCategory = {
   subtitle: Localized;
   /** Empty string when the shop has not supplied copy for this category yet. */
   recommendedFor: Localized;
+  /**
+   * `recommendedFor` at a glance: who or what the lens suits, as icon chips.
+   * Each entry is drawn from that sentence — nothing it doesn't say.
+   */
+  goodFor?: { label: Localized; icon: string }[];
   products: LensProduct[];
   tips: Localized[];
   /** Which interactive demo to show, if any. */
-  demo?: 'blueBlock' | 'thickness' | 'photochromic' | 'zonesBifocal' | 'zonesProgressive';
+  demo?:
+    | 'blueBlock'
+    | 'thickness'
+    | 'photochromic'
+    | 'impact'
+    | 'zonesBifocal'
+    | 'zonesProgressive';
+  /**
+   * The indices the thickness demo offers, in button order; the first is what
+   * the others are compared against. Defaults to 1.56 / 1.61 / 1.67 / 1.74.
+   */
+  demoIndices?: number[];
 };
 
 const COATING = {
@@ -421,6 +445,247 @@ export const LENS_CATEGORIES: LensCategory[] = [
     tips: [
       'Highly recommended for individuals aged 40 and above facing presbyopia.',
       "Offers a natural visual flow without the image 'jump' associated with lined bifocals.",
+    ],
+  },
+];
+
+/** Features every HOYA Full Control lens shares, after its own index line. */
+const HOYA_FULL_CONTROL = [
+  'Hi-Vision LongLife anti-reflective coating',
+  'BlueControl blue light filter',
+  'UV Control full UV protection',
+  'Hi-Vision Anti-bacterial surface',
+];
+
+/**
+ * Branded lenses (HOYA, Essilor) — the lens guide on the product detail
+ * screen. Prices are per lens, covering every range listed under it.
+ */
+export const BRAND_LENS_CATEGORIES: LensCategory[] = [
+  {
+    id: 'hoya-nulux-full-control',
+    name: 'HOYA Nulux Full Control',
+    title: 'HOYA Nulux Full Control',
+    subtitle:
+      'Best-selling HOYA single vision lenses, supplied with the complete Full Control coating package.',
+    recommendedFor:
+      'Ideal for everyday single vision wearers who want premium Japanese coating quality.',
+    goodFor: [
+      { label: 'Everyday wear', icon: 'glasses-outline' },
+      { label: 'Single vision', icon: 'eye-outline' },
+      { label: 'Premium coating', icon: 'sparkles-outline' },
+    ],
+    demo: 'thickness',
+    // The Nulux range's own indices, in the order the lenses are listed. 1.55
+    // is its standard thickness, so the others are compared against it.
+    demoIndices: [1.55, 1.53, 1.6, 1.67],
+    products: [
+      {
+        id: 'nulux-fc-155',
+        name: 'Nulux Classic Full Control 1.55',
+        coating: { label: 'Full Control Coating', color: COATING.blue },
+        features: ['1.55 index — standard thickness', ...HOYA_FULL_CONTROL],
+        price: 80,
+        tiers: [{ sph: '+4.00 to -6.00', cyl: '-2.00', maxComp: 'BLOCK' }],
+      },
+      {
+        id: 'nulux-fc-153',
+        name: 'Nulux Classic Full Control 1.53',
+        coating: { label: 'Full Control Coating', color: COATING.blue },
+        features: ['1.53 index — impact-resistant material', ...HOYA_FULL_CONTROL],
+        price: 125,
+        tiers: [
+          { sph: 'Plano to -3.50', cyl: '-2.00', maxComp: 'BLOCK' },
+          { sph: '-3.75 to -4.00', cyl: 'N.A.', maxComp: 'N.A.' },
+        ],
+      },
+      {
+        id: 'nulux-fc-160',
+        name: 'Nulux Classic Full Control 1.60',
+        coating: { label: 'Full Control Coating', color: COATING.blue },
+        features: ['1.60 index — thinner and lighter', ...HOYA_FULL_CONTROL],
+        price: 125,
+        tiers: [{ sph: 'Plano to -6.00', cyl: '-2.00', maxComp: 'BLOCK' }],
+      },
+      {
+        id: 'nulux-fc-167',
+        name: 'Nulux Classic Full Control 1.67',
+        coating: { label: 'Full Control Coating', color: COATING.blue },
+        features: [
+          '1.67 index — extra thin for strong prescriptions',
+          ...HOYA_FULL_CONTROL,
+        ],
+        price: 200,
+        tiers: [
+          { sph: '-3.00 to -8.00', cyl: '-2.00', maxComp: 'BLOCK' },
+          { sph: '-8.25 to -10.00', cyl: 'N.A.', maxComp: 'N.A.' },
+        ],
+      },
+    ],
+    tips: [
+      'Full Control bundles four HOYA coatings into one lens: Hi-Vision LongLife, BlueControl, UV Control and Hi-Vision Anti-bacterial.',
+      'Pick a higher index (1.60 or 1.67) for stronger prescriptions to keep the lens thin and light.',
+    ],
+  },
+  {
+    id: 'essilor-crizal-156-as',
+    name: 'Essilor Crizal 1.56 AS',
+    title: 'Essilor Crizal 1.56 AS',
+    subtitle:
+      'Everyday clear lenses with UV protection and the Blue UV Capture finish.',
+    recommendedFor:
+      'Ideal for digital device users, office workers, and general everyday wear.',
+    goodFor: [
+      { label: 'Screen time', icon: 'laptop-outline' },
+      { label: 'Office work', icon: 'briefcase-outline' },
+      { label: 'Everyday wear', icon: 'glasses-outline' },
+    ],
+    demo: 'blueBlock',
+    products: [
+      {
+        id: 'eyezen-start-156',
+        name: 'Eyezen Start Stock 1.56',
+        coating: { label: 'Blue UV Capture', color: COATING.blue },
+        features: [
+          'Designed for digital device users',
+          'Blocks at least 50% of harmful blue light',
+          'Anti-reflective protection 360°',
+          'UV protection front and back (E-SPF 35, UVB)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+          'Free Crizal and Essilor authenticity cards',
+        ],
+        price: 100,
+        tiers: [{ sph: '+0.00 to -4.00', cyl: '-0.25 to -1.50' }],
+      },
+      {
+        id: 'crizal-sapphire-hr-blue-156',
+        name: 'Crizal Sapphire HR Blue Capture 1.56',
+        coating: { label: 'Blue UV Capture', color: COATING.blue },
+        features: [
+          'Anti-reflective protection 360°',
+          'UV protection (E-SPF 35)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+          'Free Crizal authenticity card',
+        ],
+        price: 80,
+        tiers: [
+          { sph: '+3.00 to -4.00', cyl: '-0.25 to -2.00' },
+          { sph: '-4.25 to -6.00', cyl: '-0.25 to -1.00' },
+        ],
+      },
+      {
+        id: 'crizal-156',
+        name: 'Crizal 1.56',
+        coating: { label: 'Blue UV Capture', color: COATING.green },
+        features: [
+          'UV protection (E-SPF 35)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+        ],
+        price: 45,
+        tiers: [{ sph: '+3.00 to -6.00', cyl: '-0.25 to -2.00' }],
+      },
+    ],
+    tips: [
+      'Eyezen Start blocks at least 50% of harmful blue light — the pick for long screen hours.',
+      'All three Crizal options carry E-SPF 35 UV protection and the Blue UV Capture finish.',
+    ],
+  },
+  {
+    id: 'essilor-airwear-159',
+    name: 'Essilor AirWear 1.59',
+    title: 'Essilor AirWear 1.59',
+    subtitle:
+      'Thin, light and impact-resistant polycarbonate lenses with the Crizal Sapphire HR finish.',
+    recommendedFor:
+      'Ideal for children, sports, and anyone who needs a tougher, lighter lens.',
+    goodFor: [
+      { label: 'Children', icon: 'happy-outline' },
+      { label: 'Sports', icon: 'football-outline' },
+      { label: 'Everyday safety', icon: 'shield-checkmark-outline' },
+    ],
+    demo: 'impact',
+    products: [
+      {
+        id: 'airwear-crizal-sapphire-hr-159',
+        name: '1.59 AirWear Crizal Sapphire HR',
+        coating: { label: 'Blue UV Filter', color: COATING.blue },
+        features: [
+          'Thin, light, impact-resistant polycarbonate',
+          'Anti-reflective protection 360°',
+          'UV protection (E-SPF 35)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+        ],
+        price: 125,
+        tiers: [
+          { sph: '0.00 to -4.00', cyl: '-0.25 to -2.00' },
+          { sph: '+0.25 to +4.00', note: 'No CYL' },
+        ],
+      },
+    ],
+    tips: [
+      'Polycarbonate resists impact far better than standard resin — the safest everyday choice.',
+      'Carries the same Blue UV Filter finish and E-SPF 35 UV protection.',
+    ],
+  },
+  {
+    id: 'essilor-transitions',
+    name: 'Essilor Transitions',
+    title: 'Essilor Transitions',
+    subtitle:
+      'Photochromic lenses that darken in sunlight and turn clear again indoors.',
+    recommendedFor:
+      'Ideal for people moving between indoors and outdoors all day, and for driving.',
+    goodFor: [
+      { label: 'Indoor & outdoor', icon: 'partly-sunny-outline' },
+      { label: 'Driving', icon: 'car-outline' },
+      { label: 'All-day wear', icon: 'sunny-outline' },
+    ],
+    demo: 'photochromic',
+    products: [
+      {
+        id: 'transitions-gens-sapphire-hr-16',
+        name: '1.6 AS Transitions GenS Sapphire HR',
+        coating: { label: 'Blue UV Filter', color: COATING.blue },
+        features: [
+          'Fast, responsive colour change',
+          'Anti-reflective protection 360°',
+          'UV protection (E-SPF 35)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+          'Free Transitions authenticity and warranty cards',
+        ],
+        price: 225,
+        tiers: [
+          { sph: '+0.00 to -4.00', cyl: '-0.25 to -1.00' },
+          { sph: '-4.25 to -6.00', note: 'No CYL' },
+        ],
+      },
+      {
+        id: 'transitions-classic-easypro-156',
+        name: '1.56 AS Transitions Classic EasyPro',
+        coating: { label: 'Blue UV Filter', color: COATING.green },
+        features: [
+          'Classic colour change across the standard tint range',
+          'Anti-reflective protection 360°',
+          'UV protection (E-SPF 35)',
+          'Scratch-, water- and dust-resistant',
+          'Smudge-resistant, easy to wipe clean (x3)',
+          'Free Transitions authenticity and warranty cards',
+        ],
+        price: 100,
+        tiers: [
+          { sph: '0.00 to -6.00', cyl: '-0.25 to -2.00' },
+          { sph: '0.00 to +4.00', note: 'No CYL' },
+        ],
+      },
+    ],
+    tips: [
+      'GenS Sapphire HR changes colour fastest — best for frequent in-and-out movement.',
+      'Both options ship with a Transitions authenticity card and warranty card.',
     ],
   },
 ];

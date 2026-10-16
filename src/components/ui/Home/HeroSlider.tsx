@@ -26,18 +26,17 @@ import { useResponsive } from '../../../hook/useResponsive';
  * logo and Sign In button on top of it, and carry its own headline — anything
  * else left letterbox bands down the sides.
  *
- * A fixed-ratio card (16:9 on phones, 3:2 on iPad) fixes all three. `cover`
- * means any uploaded photo fills it cleanly, the crop is shallow because the
- * ratios are common ones, and the headline comes from the API rather than
- * being baked into the image.
+ * A fixed-ratio 16:9 card fixes all three. `cover` means any uploaded photo
+ * fills it cleanly, and the headline comes from the API rather than being
+ * baked into the image.
+ *
+ * Phones and iPads share the one ratio, so a single 16:9 upload (2400×1350)
+ * fills both exactly with nothing cropped. iPad used to get a taller 3:2 card,
+ * which cut the sides off every banner and took up too much of the screen.
  */
 const GUTTER = Spacing.md;
 const GAP = 12;
-// iPad gets a taller 3:2 card across the full Home column: more presence on
-// the larger screen, and portrait uploads lose less of the picture. A 16:9
-// banner only loses a sliver at each side.
-const PHONE_RATIO = 9 / 16;
-const TABLET_RATIO = 2 / 3;
+const BANNER_RATIO = 9 / 16;
 
 const AUTOPLAY_MS = 4200;
 
@@ -55,11 +54,9 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ slides = DEFAULT_SLIDES }) => {
   const safeSlides = slides?.length ? slides : DEFAULT_SLIDES;
 
   // Measured from the Home column, not the device, so split view works too.
-  const { wideWidth, isTablet } = useResponsive();
+  const { wideWidth } = useResponsive();
   const cardWidth = wideWidth - GUTTER * 2;
-  const cardHeight = Math.round(
-    cardWidth * (isTablet ? TABLET_RATIO : PHONE_RATIO),
-  );
+  const cardHeight = Math.round(cardWidth * BANNER_RATIO);
   const snap = cardWidth + GAP;
 
   const startTimer = useCallback(() => {

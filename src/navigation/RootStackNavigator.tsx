@@ -219,6 +219,49 @@ const RootStackNavigator: React.FC = () => {
               animation: 'slide_from_right',
             }}
           />
+          {/* Guests browse the catalogue, so search works without an account. */}
+          <Stack.Screen
+            name="SearchScreen"
+            component={SearchScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="SearchResult"
+            component={SearchResultScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          {/* The Profile tab lists these for guests too, and the policies must
+              be readable without an account (App Review checks this). */}
+          <Stack.Screen
+            name="Support"
+            component={SupportScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="Privacy"
+            component={PrivacyPolicyScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="Terms"
+            component={TermsAndConditionsScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
         </>
       )}
     </Stack.Navigator>
