@@ -86,11 +86,16 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
 
   const totalPoints = points ?? 0;
 
-  // No next tier means the member is already at the top — the bar is full and
-  // there is no "n points away" line to show.
-  const isTopTier = !translatedNextTier;
+  // No tier and no next tier means tiers are not running yet, so there is no
+  // bar at all. With a tier but no next tier the member is at the top — the
+  // bar is full and there is no "n points away" line to show.
+  const hasTiers = !!tierName?.trim() || !!nextTier?.trim();
+  const isTopTier = hasTiers && !translatedNextTier;
   const hasRemaining =
-    !isTopTier && remainingPoints !== null && remainingPoints !== undefined;
+    hasTiers &&
+    !isTopTier &&
+    remainingPoints !== null &&
+    remainingPoints !== undefined;
 
   const safeProgress = isTopTier
     ? 100
@@ -105,7 +110,11 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
     >
       <View style={styles.topRow}>
         <View style={[styles.medallion, { backgroundColor: theme.accent }]}>
-          <Ionicons name="diamond" size={15} color="#FFFFFF" />
+          <Ionicons
+            name={hasTiers ? 'diamond' : 'star'}
+            size={15}
+            color="#FFFFFF"
+          />
         </View>
 
         <AppText style={styles.tierName} numberOfLines={1}>
@@ -120,25 +129,33 @@ const ProfilePointSection: React.FC<ProfilePointSectionProps> = ({
         </AppText>
       </View>
 
-      <View style={styles.track}>
-        <View
-          style={[
-            styles.fill,
-            { width: `${safeProgress}%`, backgroundColor: theme.accent },
-          ]}
-        />
-      </View>
+      {hasTiers ? (
+        <>
+          <View style={styles.track}>
+            <View
+              style={[
+                styles.fill,
+                { width: `${safeProgress}%`, backgroundColor: theme.accent },
+              ]}
+            />
+          </View>
 
-      <AppText style={styles.caption} numberOfLines={1}>
-        {hasRemaining
-          ? t('PointsAwayFromTier', {
-              points: (remainingPoints as number).toLocaleString(
-                i18n.language,
-              ),
-              tier: translatedNextTier,
-            })
-          : t('TopTierReached')}
-      </AppText>
+          <AppText style={styles.caption} numberOfLines={1}>
+            {hasRemaining
+              ? t('PointsAwayFromTier', {
+                  points: (remainingPoints as number).toLocaleString(
+                    i18n.language,
+                  ),
+                  tier: translatedNextTier,
+                })
+              : t('TopTierReached')}
+          </AppText>
+        </>
+      ) : (
+        <AppText style={styles.caption} numberOfLines={1}>
+          {t('EarnPointsEveryPurchase')}
+        </AppText>
+      )}
     </View>
   );
 };

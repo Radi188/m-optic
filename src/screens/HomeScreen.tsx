@@ -59,6 +59,7 @@ import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
+import { formatPrice } from '../utils/formatPrice';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -302,7 +303,9 @@ const HomeScreen: React.FC = () => {
                   </AppText>
 
                   <View style={styles.bsFooter}>
-                    <AppText style={styles.bsPrice}>${item.price}</AppText>
+                    <AppText style={styles.bsPrice}>
+                      {formatPrice(item.price)}
+                    </AppText>
 
                     <TouchableOpacity
                       style={styles.tryOnBtn}

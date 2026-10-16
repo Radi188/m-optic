@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, Image, ImageSourcePropType } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Image,
+  ImageSourcePropType,
+  TouchableOpacity,
+} from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +13,11 @@ import { FontSize } from '../../../theme';
 import AppText from '../../AppText';
 
 type MembershipCardProps = {
+  /**
+   * False while membership is not launched: the card keeps only the brand and
+   * the name — no member number, points or tier — and says it is coming.
+   */
+  membershipOpen?: boolean;
   /** The cardholder — the customer's own name, as the shop has it. */
   name?: string | null;
   tierName?: string | null;
@@ -16,6 +27,8 @@ type MembershipCardProps = {
   nextTier?: string | null;
   remainingPoints?: number | null;
   progress?: number | null;
+  /** Shows an "Edit" pill beside the name that opens Edit Profile. */
+  onEditPress?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -87,6 +100,7 @@ const formatMemberId = (id?: number | string | null): string | null => {
  * far to the next one" without a second block underneath it.
  */
 const MembershipCard: React.FC<MembershipCardProps> = ({
+  membershipOpen = true,
   name,
   tierName,
   memberId,
@@ -94,6 +108,7 @@ const MembershipCard: React.FC<MembershipCardProps> = ({
   nextTier,
   remainingPoints,
   progress,
+  onEditPress,
   style,
 }) => {
   const { t, i18n } = useTranslation();
@@ -113,9 +128,16 @@ const MembershipCard: React.FC<MembershipCardProps> = ({
   const translatedTier = getTranslatedTier(tierName) ?? t('Member');
   const translatedNextTier = getTranslatedTier(nextTier);
 
-  const isTopTier = !translatedNextTier;
+  // No tier and no next tier means tiers are not running yet — not that the
+  // member is at the top. Reading it as "top tier" told a 0-point customer
+  // they had reached the highest tier.
+  const hasTiers = membershipOpen && (!!tierName?.trim() || !!nextTier?.trim());
+  const isTopTier = hasTiers && !translatedNextTier;
   const hasRemaining =
-    !isTopTier && remainingPoints !== null && remainingPoints !== undefined;
+    hasTiers &&
+    !isTopTier &&
+    remainingPoints !== null &&
+    remainingPoints !== undefined;
 
   const safeProgress = isTopTier
     ? 100
@@ -136,52 +158,103 @@ const MembershipCard: React.FC<MembershipCardProps> = ({
       <View style={styles.headerRow}>
         <AppText style={styles.brand}>M OPTIC</AppText>
 
-        <View style={styles.tierPill}>
-          <Ionicons name="diamond" size={11} color={theme.accent} />
-          <AppText style={[styles.tierPillText, { color: theme.accent }]}>
-            {translatedTier}
+        {hasTiers && (
+          <View style={styles.tierPill}>
+            <Ionicons name="diamond" size={11} color={theme.accent} />
+            <AppText style={[styles.tierPillText, { color: theme.accent }]}>
+              {translatedTier}
+            </AppText>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.identityRow}>
+        <View style={styles.identity}>
+          <AppText style={styles.nameLabel}>{t('Member')}</AppText>
+          <AppText style={styles.name} numberOfLines={1}>
+            {name?.trim() || '—'}
           </AppText>
         </View>
+
+        {!!onEditPress && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onEditPress}
+            style={styles.editButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('EditProfile')}
+          >
+            <Ionicons name="create-outline" size={14} color="#FFFFFF" />
+            <AppText style={styles.editText}>{t('Edit')}</AppText>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <View style={styles.identity}>
-        <AppText style={styles.nameLabel}>{t('Member')}</AppText>
-        <AppText style={styles.name} numberOfLines={1}>
-          {name?.trim() || '—'}
-        </AppText>
-      </View>
-
-      <View style={styles.footRow}>
-        <View style={styles.footBlock}>
-          <AppText style={styles.footLabel}>{t('MemberNumber')}</AppText>
-          <AppText style={styles.footValue}>{number ?? '—'}</AppText>
-        </View>
-
-        <View style={[styles.footBlock, styles.footBlockRight]}>
-          <AppText style={styles.footLabel}>{t('Points')}</AppText>
-          <AppText style={[styles.footValue, { color: theme.accent }]}>
-            {(points ?? 0).toLocaleString(i18n.language)}
+      {!membershipOpen ? (
+        <View style={styles.earnRow}>
+          <Ionicons name="time-outline" size={13} color={theme.accent} />
+          <AppText style={styles.earnText} numberOfLines={1}>
+            {t('MembershipComingSoon')}
           </AppText>
         </View>
-      </View>
+      ) : (
+        <>
+          <View style={styles.footRow}>
+            <View style={styles.footBlock}>
+              <AppText style={styles.footLabel}>{t('MemberNumber')}</AppText>
+              <AppText style={styles.footValue}>{number ?? '—'}</AppText>
+            </View>
 
-      <View style={styles.track}>
-        <View
-          style={[
-            styles.fill,
-            { width: `${safeProgress}%`, backgroundColor: theme.accent },
-          ]}
-        />
-      </View>
+            <View style={[styles.footBlock, styles.footBlockRight]}>
+              <AppText style={styles.footLabel}>{t('Points')}</AppText>
+              <AppText style={[styles.footValue, { color: theme.accent }]}>
+                {(points ?? 0).toLocaleString(i18n.language)}
+              </AppText>
+            </View>
+          </View>
 
-      <AppText style={styles.caption} numberOfLines={1}>
-        {hasRemaining
-          ? t('PointsAwayFromTier', {
-              points: (remainingPoints as number).toLocaleString(i18n.language),
-              tier: translatedNextTier,
-            })
-          : t('TopTierReached')}
-      </AppText>
+          {hasTiers ? (
+            <>
+              <View style={styles.track}>
+                <View
+                  style={[
+                    styles.fill,
+                    {
+                      width: `${safeProgress}%`,
+                      backgroundColor: theme.accent,
+                    },
+                  ]}
+                />
+              </View>
+
+              <AppText style={styles.caption} numberOfLines={1}>
+                {hasRemaining
+                  ? t('PointsAwayFromTier', {
+                      points: (remainingPoints as number).toLocaleString(
+                        i18n.language,
+                      ),
+                      tier: translatedNextTier,
+                    })
+                  : t('TopTierReached')}
+              </AppText>
+            </>
+          ) : (
+            // Points only: a divider and an invitation instead of a progress bar
+            // with nothing to progress toward.
+            <View style={styles.earnRow}>
+              <Ionicons
+                name="sparkles-outline"
+                size={13}
+                color={theme.accent}
+              />
+              <AppText style={styles.earnText} numberOfLines={1}>
+                {t('EarnPointsEveryPurchase')}
+              </AppText>
+            </View>
+          )}
+        </>
+      )}
     </View>
   );
 };
@@ -254,7 +327,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  identity: { marginTop: 22 },
+  identityRow: {
+    marginTop: 22,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+
+  identity: { flex: 1 },
+
+  // Frosted pill on the card surface, the same treatment as the tier pill.
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+
+  editText: {
+    fontSize: FontSize.xs,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
 
   nameLabel: {
     fontSize: 10,
@@ -311,6 +411,22 @@ const styles = StyleSheet.create({
 
   caption: {
     marginTop: 8,
+    fontSize: FontSize.xs,
+    color: 'rgba(255,255,255,0.78)',
+  },
+
+  earnRow: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.22)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  earnText: {
+    flexShrink: 1,
     fontSize: FontSize.xs,
     color: 'rgba(255,255,255,0.78)',
   },

@@ -12,6 +12,7 @@ import glassReducer from './slices/glassSlice';
 import authReducer from './slices/authSlice';
 import notificationsReducer from './slices/notificationsSlice';
 import favoritesReducer from './slices/favoritesSlice';
+import featuresReducer from './slices/featuresSlice';
 
 // ─── Persist config ───────────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ const rootReducer = combineReducers({
   glass:         persistReducer(glassPersistConfig, glassReducer),
   notifications: notificationsReducer,
   favorites:     persistReducer(favoritesPersistConfig, favoritesReducer),
+  features:      featuresReducer,
 });
 
 // ─── Store ────────────────────────────────────────────────────────────────────

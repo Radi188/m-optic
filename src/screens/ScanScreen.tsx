@@ -53,6 +53,7 @@ import type { StoreLocation } from '../services/branchService';
 import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
+import { formatPrice } from '../utils/formatPrice';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2648,7 +2649,7 @@ const ProductRecommendations: React.FC<{
                 {reasonFor(p)}
               </AppText>
             </View>
-            <AppText style={prStyles.price}>${p.price}</AppText>
+            <AppText style={prStyles.price}>{formatPrice(p.price)}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
         </TouchableOpacity>

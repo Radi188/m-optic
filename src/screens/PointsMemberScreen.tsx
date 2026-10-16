@@ -16,6 +16,8 @@ import PointsSkeleton from '../components/ui/Loading/PointsLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import AppText from '../components/AppText';
 import { Layout } from '../theme';
+import { useAppSelector } from '../store';
+import { selectMembershipEnabled } from '../store/slices/featuresSlice';
 
 type PointsMemberScreenProps = {
   navigation?: any;
@@ -58,14 +60,25 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
   const { t, i18n } = useTranslation();
   const { pointsData, transactions, isLoading, isRefreshing, error, refetch } =
     usePoints();
+  const membershipEnabled = useAppSelector(selectMembershipEnabled);
 
   // Passed through as-is: the card themes itself from the real tier, and a
   // null tier must read as "no tier yet" rather than defaulting to Silver.
-  const currentTierName = pointsData?.tier?.name ?? null;
-  const nextTierName = pointsData?.next_tier?.name ?? null;
+  // While membership is switched off, every tier field is treated as absent so
+  // the screen shows points only.
+  const currentTierName = membershipEnabled
+    ? pointsData?.tier?.name ?? null
+    : null;
+  const nextTierName = membershipEnabled
+    ? pointsData?.next_tier?.name ?? null
+    : null;
   const progress = pointsData?.progress_percentage ?? 0;
 
-  const tiers = useMemo(() => pointsData?.all_tiers ?? [], [pointsData]);
+  const tiers = useMemo(
+    () => (membershipEnabled ? pointsData?.all_tiers ?? [] : []),
+    [membershipEnabled, pointsData],
+  );
+  const hasTiers = !!currentTierName || !!nextTierName || tiers.length > 0;
 
   const activeTierIndex = useMemo(
     () => tiers.findIndex(tier => tier.id === pointsData?.tier?.id),
@@ -113,7 +126,9 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
     return paged.length ? paged : pointsData?.recent_transactions ?? [];
   }, [transactions?.data, pointsData?.recent_transactions]);
 
-  const discount = formatPercent(pointsData?.tier?.discount_percentage);
+  const discount = membershipEnabled
+    ? formatPercent(pointsData?.tier?.discount_percentage)
+    : null;
 
   const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
@@ -226,64 +241,72 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
             </View>
           )}
 
-          {/* ── Benefits of the tier the member is on ── */}
-          <View style={styles.sectionHeader}>
-            <AppText style={styles.sectionTitle}>{t('YourBenefits')}</AppText>
-            {!!currentTierName && (
-              <View style={styles.sectionChip}>
-                <AppText style={styles.sectionChipText}>
-                  {currentTierName}
+          {/* ── Benefits of the tier the member is on (none without tiers) ── */}
+          {hasTiers && (
+            <>
+              <View style={styles.sectionHeader}>
+                <AppText style={styles.sectionTitle}>
+                  {t('YourBenefits')}
                 </AppText>
+                {!!currentTierName && (
+                  <View style={styles.sectionChip}>
+                    <AppText style={styles.sectionChipText}>
+                      {currentTierName}
+                    </AppText>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
 
-          {benefits.length > 0 ? (
-            <View style={styles.listCard}>
-              {benefits.map((benefit: any, index: number) => (
-                <View
-                  key={benefit.id ?? index}
-                  style={[
-                    styles.listItem,
-                    index !== benefits.length - 1 && styles.listDivider,
-                  ]}
-                >
-                  <View style={styles.listLeft}>
-                    <View style={styles.listIconBox}>
+              {benefits.length > 0 ? (
+                <View style={styles.listCard}>
+                  {benefits.map((benefit: any, index: number) => (
+                    <View
+                      key={benefit.id ?? index}
+                      style={[
+                        styles.listItem,
+                        index !== benefits.length - 1 && styles.listDivider,
+                      ]}
+                    >
+                      <View style={styles.listLeft}>
+                        <View style={styles.listIconBox}>
+                          <Ionicons
+                            name={benefitIcon(benefit.icon) as any}
+                            size={18}
+                            color="#9B6A3D"
+                          />
+                        </View>
+
+                        <View style={styles.activityTextBox}>
+                          <AppText style={styles.listTitle}>
+                            {benefit.title ?? benefit.name ?? '—'}
+                          </AppText>
+                          {!!benefit.description && (
+                            <AppText style={styles.activityDate}>
+                              {benefit.description}
+                            </AppText>
+                          )}
+                        </View>
+                      </View>
+
                       <Ionicons
-                        name={benefitIcon(benefit.icon) as any}
-                        size={18}
-                        color="#9B6A3D"
+                        name="checkmark-circle"
+                        size={20}
+                        color="#2DBD7E"
                       />
                     </View>
-
-                    <View style={styles.activityTextBox}>
-                      <AppText style={styles.listTitle}>
-                        {benefit.title ?? benefit.name ?? '—'}
-                      </AppText>
-                      {!!benefit.description && (
-                        <AppText style={styles.activityDate}>
-                          {benefit.description}
-                        </AppText>
-                      )}
-                    </View>
-                  </View>
-
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#2DBD7E"
-                  />
+                  ))}
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyActivityCard}>
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="ribbon-outline" size={24} color="#9B6A3D" />
-              </View>
-              <AppText style={styles.emptyTitle}>{t('NoBenefitsYet')}</AppText>
-            </View>
+              ) : (
+                <View style={styles.emptyActivityCard}>
+                  <View style={styles.emptyIconBox}>
+                    <Ionicons name="ribbon-outline" size={24} color="#9B6A3D" />
+                  </View>
+                  <AppText style={styles.emptyTitle}>
+                    {t('NoBenefitsYet')}
+                  </AppText>
+                </View>
+              )}
+            </>
           )}
 
           {/* ── What the next tier unlocks ── */}
@@ -343,33 +366,37 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
             </>
           )}
 
-          {/* ── Rewards shortcut ── */}
-          <View style={styles.sectionHeader}>
-            <AppText style={styles.sectionTitle}>{t('Rewards')}</AppText>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.rewardPreviewCard}
-            onPress={() => navigation?.navigate?.('Reward')}
-          >
-            <View style={styles.rewardPreviewLeft}>
-              <View style={styles.rewardIconBox}>
-                <Ionicons name="gift-outline" size={22} color="#FFFFFF" />
+          {/* ── Rewards shortcut (hidden while the backend has it off) ── */}
+          {membershipEnabled && (
+            <>
+              <View style={styles.sectionHeader}>
+                <AppText style={styles.sectionTitle}>{t('Rewards')}</AppText>
               </View>
 
-              <View style={styles.rewardPreviewTextBox}>
-                <AppText style={styles.rewardPreviewTitle}>
-                  {t('RedeemYourPoints')}
-                </AppText>
-                <AppText style={styles.rewardPreviewSubtitle}>
-                  {t('UsePointsForDiscounts')}
-                </AppText>
-              </View>
-            </View>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.rewardPreviewCard}
+                onPress={() => navigation?.navigate?.('Reward')}
+              >
+                <View style={styles.rewardPreviewLeft}>
+                  <View style={styles.rewardIconBox}>
+                    <Ionicons name="gift-outline" size={22} color="#FFFFFF" />
+                  </View>
 
-            <Ionicons name="chevron-forward" size={22} color="#A39186" />
-          </TouchableOpacity>
+                  <View style={styles.rewardPreviewTextBox}>
+                    <AppText style={styles.rewardPreviewTitle}>
+                      {t('RedeemYourPoints')}
+                    </AppText>
+                    <AppText style={styles.rewardPreviewSubtitle}>
+                      {t('UsePointsForDiscounts')}
+                    </AppText>
+                  </View>
+                </View>
+
+                <Ionicons name="chevron-forward" size={22} color="#A39186" />
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* ── Activity ── */}
           <View style={styles.sectionHeader}>
@@ -380,7 +407,8 @@ const PointsMemberScreen: React.FC<PointsMemberScreenProps> = ({
             <View style={styles.listCard}>
               {activity.map((item: any, index: number) => {
                 const isMinus =
-                  item.points < 0 || /redeem|spend|deduct/i.test(item.type ?? '');
+                  item.points < 0 ||
+                  /redeem|spend|deduct/i.test(item.type ?? '');
 
                 return (
                   <View

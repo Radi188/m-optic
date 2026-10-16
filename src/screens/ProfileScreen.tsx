@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -10,7 +10,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppModal, Input, GlassView, GlassBackground } from '../components/ui';
 import {
@@ -38,6 +38,7 @@ import {
   markAllRead,
 } from '../store/slices/notificationsSlice';
 import { selectFavoriteCount } from '../store/slices/favoritesSlice';
+import { selectMembershipEnabled } from '../store/slices/featuresSlice';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import ProfileHeader from '../components/ui/Profile/ProfileHeader';
 import ProfileSettingSection from '../components/ui/Profile/ProfileSettingSection';
@@ -117,6 +118,7 @@ const ProfileScreen: React.FC = () => {
   const initials = useAppSelector(selectUserInitials);
   const unreadCount = useAppSelector(selectUnreadCount);
   const notifications = useAppSelector(selectNotifications);
+  const membershipEnabled = useAppSelector(selectMembershipEnabled);
 
   const [editModal, setEditModal] = useState(false);
   const [logoutModal, setLogoutModal] = useState(false);
@@ -139,7 +141,21 @@ const ProfileScreen: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const { profile, isLoading, isRefreshing, error, refetch } = useUserProfile();
+  const { profile, isLoading, isRefreshing, error, refetch, reload } =
+    useUserProfile();
+
+  // Coming back from Edit Profile (or any other screen) should show the saved
+  // details. The first focus is skipped: the hook already loads on mount.
+  const hasFocused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocused.current) {
+        hasFocused.current = true;
+        return;
+      }
+      if (user) reload();
+    }, [user, reload]),
+  );
 
   // The prescription arrives as two combined strings ("-4.00/-2.00x180"), the
   // same shape the history rows use. Splitting it here lets this card render
@@ -330,11 +346,16 @@ const ProfileScreen: React.FC = () => {
             hasUnreadNotification={unreadCount > 0}
             // Notifications and rewards belong to an account, and neither
             // screen exists for a guest: the bell asks them to sign in and the
-            // reward button is left out.
+            // reward button is left out. It is also left out while the backend
+            // has rewards switched off (`features.mobile_membership_enabled`).
             notificationPress={() =>
               navigation.navigate(user ? 'NotificationList' : 'Login')
             }
-            rewardPress={user ? () => navigation.navigate('Reward') : undefined}
+            rewardPress={
+              user && membershipEnabled
+                ? () => navigation.navigate('Reward')
+                : undefined
+            }
             label={t('MyProfile')}
           />
 
@@ -358,16 +379,24 @@ const ProfileScreen: React.FC = () => {
                 <>
                   <TouchableOpacity
                     activeOpacity={0.9}
+                    // Nothing to open until membership is switched on.
+                    disabled={!membershipEnabled}
                     onPress={() => navigation.navigate('PointMember')}
                     style={{ marginBottom: Spacing.lg }}
                   >
                     <MembershipCard
+                      membershipOpen={membershipEnabled}
+                      onEditPress={() => navigation.navigate('EditProfile')}
                       name={profile?.customer_name}
-                      tierName={profile?.tier?.name}
+                      // Tiers only show once membership is switched on; until
+                      // then the card is a plain points card.
+                      tierName={membershipEnabled ? profile?.tier?.name : null}
                       memberId={profile?.id}
                       points={profile?.loyalty_total_points}
                       remainingPoints={profile?.points_to_next_tier}
-                      nextTier={profile?.next_tier?.name}
+                      nextTier={
+                        membershipEnabled ? profile?.next_tier?.name : null
+                      }
                       progress={
                         // The API computes this itself; the local calculation
                         // is only a fallback for payloads that omit it.

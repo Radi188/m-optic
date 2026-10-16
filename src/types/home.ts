@@ -9,6 +9,14 @@ export interface HomeData {
   brands: BrandResponse[];
   frame_shapes: FrameShapeItem[];
   announcements: AnnouncementItem[];
+  features?: HomeFeatures;
+}
+
+/** Server-side switches, so a feature can be closed without a new build. */
+export interface HomeFeatures {
+  mobile_membership_enabled?: boolean | null;
+  /** The name the API used before `mobile_membership_enabled`. */
+  membership_enabled?: boolean | null;
 }
 
 export interface BannerItem {

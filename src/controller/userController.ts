@@ -1,11 +1,30 @@
 // controller/userController.ts
 import api from '../services/api';
-import { CustomerProfileResponse } from '../types/user';
+import {
+  CustomerProfileResponse,
+  UpdateProfileResponse,
+  UploadAvatarResponse,
+} from '../types/user';
 
 export type UploadAvatarPayload = {
   uri: string;
   type?: string;
   name?: string;
+};
+
+/**
+ * PUT /profile. Every field is optional — send only what changed. The phone
+ * number is not here on purpose: it is the login identity.
+ */
+export type UpdateProfilePayload = {
+  /** max 255 */
+  customer_name?: string;
+  /** valid email, max 255 */
+  email?: string;
+  /** `male` | `female` | `other` — the API only accepts lowercase. */
+  gender?: 'male' | 'female' | 'other';
+  /** integer 0–150 */
+  age?: number;
 };
 
 export const userController = {
@@ -35,9 +54,22 @@ export const userController = {
     return response.data;
   },
 
+  async updateProfile(
+    payload: UpdateProfilePayload,
+  ): Promise<UpdateProfileResponse> {
+    const response = await api.put<UpdateProfileResponse>('/profile', payload);
+
+    if (__DEV__) {
+      console.log('[profile] update:', JSON.stringify(response.data, null, 2));
+    }
+
+    return response.data;
+  },
+
+  /** jpeg / png / jpg / webp, max 5 MB. Replaces (and deletes) the old one. */
   async uploadAvatar(
     image: UploadAvatarPayload,
-  ): Promise<CustomerProfileResponse> {
+  ): Promise<UploadAvatarResponse> {
     const formData = new FormData();
 
     formData.append('avatar', {
@@ -46,7 +78,7 @@ export const userController = {
       name: image.name || `avatar-${Date.now()}.jpg`,
     } as any);
 
-    const response = await api.post<CustomerProfileResponse>(
+    const response = await api.post<UploadAvatarResponse>(
       '/profile/avatar',
       formData,
       {

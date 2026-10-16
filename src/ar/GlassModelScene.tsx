@@ -20,6 +20,7 @@ import { Colors, FontSize, Spacing } from '../theme';
 import AppText from '../components/AppText';
 import { useGlassesGlb } from './glassesModel';
 import { GLB_SCRIPT_TAGS, GLB_HELPERS_JS } from './glassesModelWeb';
+import { formatPrice } from '../utils/formatPrice';
 
 interface Props {
   glass: GlassItem;
@@ -98,7 +99,7 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
 <div id="label">
   <div id="lname">${escapeHtml(glass.name)}</div>
   <div id="lbrand">${escapeHtml(glass.brand)}</div>
-  <div id="lprice">$${escapeHtml(String(glass.price))}</div>
+  <div id="lprice">${escapeHtml(formatPrice(glass.price))}</div>
 </div>
 <div id="info">Drag to rotate · Pinch to zoom</div>
 <div id="boot"><div class="spinner"></div>Loading 3D model…</div>

@@ -7,6 +7,7 @@ import { Product } from '../../../types/glasses';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
 import { useFavorite } from '../../../hook/useFavorite';
+import { formatPrice } from '../../../utils/formatPrice';
 
 const FAVORITE_RED = '#E5484D';
 
@@ -86,7 +87,7 @@ const GlassCard: React.FC<Props> = ({
             accessibilityLabel="Log in to see the price"
           >
             <AppText style={[styles.price, styles.priceBlurred]}>
-              ${price}
+              {formatPrice(price)}
             </AppText>
             <AppText style={styles.priceLockHint}>
               <Ionicons name="lock-closed" size={11} color={Colors.primary} />{' '}
@@ -94,7 +95,7 @@ const GlassCard: React.FC<Props> = ({
             </AppText>
           </TouchableOpacity>
         ) : (
-          <AppText style={styles.price}>${price}</AppText>
+          <AppText style={styles.price}>{formatPrice(price)}</AppText>
         )}
       </View>
     </TouchableOpacity>

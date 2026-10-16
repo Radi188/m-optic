@@ -14,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { Colors, FontSize, Spacing, Layout } from '../../../theme';
 import AppText from '../../AppText';
 
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
 export type SelectedProfileImage = {
   uri: string;
   type: string;
@@ -35,6 +37,14 @@ const ChangePhotoModal: React.FC<ChangePhotoModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const handleSelectedImage = (image: any) => {
+    // POST /profile/avatar rejects anything over 5 MB. The 800×800 crop at
+    // 0.85 quality is far below that, so this only catches the unexpected.
+    if (typeof image?.size === 'number' && image.size > MAX_AVATAR_BYTES) {
+      onClose();
+      Alert.alert(t('UploadError'), t('PhotoTooLarge'));
+      return;
+    }
+
     const selectedImage: SelectedProfileImage = {
       uri: image.path,
       type: image.mime || 'image/jpeg',

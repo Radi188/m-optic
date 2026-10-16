@@ -22,6 +22,7 @@ import type { Invoice, Refraction } from '../types/history';
 import AppText from '../components/AppText';
 import CurrentPrescriptionCard from '../components/ui/Profile/CurrentPrescriptionCard';
 import HistorySkeleton from '../components/ui/Loading/HistoryLoadingScreen';
+import { formatPrice } from '../utils/formatPrice';
 
 type Segment = 'refractions' | 'invoices';
 
@@ -43,7 +44,7 @@ function formatDate(iso: string | null, locale: string): string | null {
 
 function formatMoney(value: number | null, currency: string): string | null {
   if (value === null) return null;
-  return `${currency}${value.toFixed(2)}`;
+  return formatPrice(value, { currency, decimals: 2 });
 }
 
 /** Maps a free-text status onto the palette's semantic colours. */

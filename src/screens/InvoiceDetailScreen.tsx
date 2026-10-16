@@ -16,6 +16,7 @@ import type { Invoice, InvoiceItem } from '../types/history';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 import { eventColors } from '../utils/invoiceEvent';
+import { formatPrice } from '../utils/formatPrice';
 
 /**
  * The full receipt behind a row in History › Invoices.
@@ -35,7 +36,9 @@ const InvoiceDetailScreen: React.FC = () => {
   const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 
   const money = (value: number | null) =>
-    value === null ? null : `${invoice?.currency ?? '$'}${value.toFixed(2)}`;
+    value === null
+      ? null
+      : formatPrice(value, { currency: invoice?.currency ?? '$', decimals: 2 });
 
   const eventTint = eventColors(invoice?.event ?? null);
 
@@ -240,7 +243,7 @@ const ItemRow: React.FC<{
           <AppText style={styles.itemMeta}>
             {t('Qty')} {item.quantity}
             {item.unitPrice !== null
-              ? `  ·  ${currency}${item.unitPrice.toFixed(2)}`
+              ? `  ·  ${formatPrice(item.unitPrice, { currency, decimals: 2 })}`
               : ''}
           </AppText>
         )}
@@ -248,8 +251,7 @@ const ItemRow: React.FC<{
 
       {item.total !== null && (
         <AppText style={styles.itemTotal}>
-          {currency}
-          {item.total.toFixed(2)}
+          {formatPrice(item.total, { currency, decimals: 2 })}
         </AppText>
       )}
     </View>

@@ -46,6 +46,7 @@ import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import { useFavorite } from '../hook/useFavorite';
+import { formatPrice } from '../utils/formatPrice';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -107,7 +108,7 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
               {mode === '3d' ? '3D Model' : 'Try On'} — {glass.name}
             </AppText>
             <AppText style={viewer.subtitle}>
-              {glass.brand} · ${glass.price}
+              {glass.brand} · {formatPrice(glass.price)}
             </AppText>
           </View>
           <View
@@ -471,7 +472,7 @@ const GlassDetailScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.nameRow}>
             <AppText style={styles.frameName}>{product?.name}</AppText>
-            <AppText style={styles.framePrice}>${price}</AppText>
+            <AppText style={styles.framePrice}>{formatPrice(price)}</AppText>
           </View>
           {/* {glass.description ? (
             <AppText style={styles.description}>{glass.description}</AppText>

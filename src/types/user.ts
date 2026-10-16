@@ -3,10 +3,12 @@ export type CustomerProfileResponse = {
   customer_name: string;
   phone_number: string;
   email: string | null;
-  gender: 'Male' | 'Female' | 'Other' | string;
+  /** Shop-created customers come back capitalised ("Male"); see PUT note. */
+  gender: 'Male' | 'Female' | 'Other' | string | null;
   age: number | null;
   avatar_url: string | null;
-  is_member: boolean;
+  /** Sent as 1 / 0. */
+  is_member: boolean | number;
   order_count: number;
   loyalty_points: number;
   loyalty_total_points: number;
@@ -15,6 +17,21 @@ export type CustomerProfileResponse = {
   points_to_next_tier: number;
   progress_percentage: number;
   prescription: CustomerPrescription | null;
+};
+
+/**
+ * PUT /profile → 200. `customer` is the raw record: no avatar_url, tier or
+ * loyalty summary, so the screen refetches GET /profile instead of using it.
+ */
+export type UpdateProfileResponse = {
+  message: string;
+  customer: Partial<CustomerProfileResponse>;
+};
+
+/** POST /profile/avatar → 200. The URL changes on every upload. */
+export type UploadAvatarResponse = {
+  message: string;
+  avatar_url: string;
 };
 
 export type CustomerTier = {

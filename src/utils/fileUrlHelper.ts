@@ -3,7 +3,7 @@
  * Uses a default base URL if none is provided
  */
 
-export const BASE_FILE_URL = 'https://v2.m-eyewear.com';
+export const BASE_FILE_URL = 'https://m-eyewear.com';
 
 export const buildFileUrl = (
   filePath: string | null | undefined,

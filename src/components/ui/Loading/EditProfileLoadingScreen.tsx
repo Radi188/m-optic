@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors, Spacing, BorderRadius, Layout } from '../../../theme';
+import { Spacing, BorderRadius, Layout } from '../../../theme';
 import { SkeletonBlock, SkeletonCircle } from './Skeleton';
 
 /** Edit-profile placeholder: the avatar, then the form fields. */
@@ -29,10 +29,11 @@ const EditProfileSkeleton: React.FC<{ fields?: number }> = ({ fields = 5 }) => (
 export default EditProfileSkeleton;
 
 const styles = StyleSheet.create({
+  // Same surface and gutters as the Edit Profile screen it stands in for.
   root: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.lg,
-    backgroundColor: Colors.background,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    backgroundColor: '#FAF7F5',
     flex: 1,
   },
   avatarBlock: { alignItems: 'center', marginBottom: Spacing.xl },

@@ -39,6 +39,7 @@ import {
   HEAD_POSE_JS,
   FACE_GEOMETRY_JS,
 } from './glassesModelWeb';
+import { formatPrice } from '../utils/formatPrice';
 
 interface Props {
   glass: GlassItem;
@@ -718,7 +719,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
         <View style={styles.glassInfo}>
           <AppText style={styles.glassName}>{glass.name}</AppText>
           <AppText style={styles.glassBrand}>
-            {glass.brand} · ${glass.price}
+            {glass.brand} · {formatPrice(glass.price)}
           </AppText>
         </View>
         <View style={styles.badge}>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,8 @@ import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import Header from '../components/ui/Header/HeaderComponent';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
+import { useAppSelector } from '../store';
+import { selectMembershipEnabled } from '../store/slices/featuresSlice';
 
 type RewardScreenProps = {
   navigation?: any;
@@ -42,6 +44,16 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
     redeemingId,
     redeem,
   } = useReward();
+
+  const membershipEnabled = useAppSelector(selectMembershipEnabled);
+
+  // The entry points are hidden while rewards are switched off; this covers
+  // anything that still lands here (e.g. the switch flipping on a refresh).
+  useEffect(() => {
+    if (!membershipEnabled && navigation?.canGoBack?.()) {
+      navigation.goBack();
+    }
+  }, [membershipEnabled, navigation]);
 
   const locale = i18n.language === 'km' ? 'km-KH' : 'en-GB';
 

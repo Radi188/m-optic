@@ -22,8 +22,9 @@ import ThicknessDemo from './ThicknessDemo';
 import PhotochromicDemo from './PhotochromicDemo';
 import ImpactDemo from './ImpactDemo';
 import ZoneMapDemo from './ZoneMapDemo';
+import { formatPrice } from '../../../utils/formatPrice';
 
-const money = (v: number) => `$${v.toFixed(2)}`;
+const money = (v: number) => formatPrice(v, { decimals: 2 });
 
 /**
  * One prescription band: its SPH/CYL range on the left and, when the lens is
