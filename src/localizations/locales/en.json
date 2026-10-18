@@ -95,6 +95,7 @@
   "NoImageAvailable": "No image available",
   "ArTryOn": "AR Try On",
   "ThreeDModel": "3D Model",
+  "ModelNotAvailable": "3D model and AR try-on are not available for this product",
   "OpenNow": "Open now",
   "Closed": "Closed",
   "Hours": "HOURS",

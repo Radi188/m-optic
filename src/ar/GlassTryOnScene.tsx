@@ -1,9 +1,10 @@
 /**
  * GlassTryOnScene — real-time AR glasses try-on
  *
- * Always renders the default `essilor.glb` model:
- *  1. The GLB is fetched from Metro on the RN JS thread and handed to the
- *     WebView as a base64 `data:` URI (see ./glassesModel).
+ * Renders the product's own .glb — there is no default model, so a product
+ * without one shows a "not available" notice and never opens the camera:
+ *  1. The GLB is fetched on the RN JS thread and handed to the WebView as a
+ *     base64 `data:` URI (see ./glassesModel).
  *  2. Parsed by Three.js `GLTFLoader` and rendered on an alpha-transparent
  *     canvas overlaid on the mirrored camera frame FaceMesh just analysed, so
  *     the glasses never lag behind the face.
@@ -33,6 +34,7 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../theme';
 import type { GlassItem } from '../types/navigation';
 import AppText from '../components/AppText';
 import { useGlassesGlb } from './glassesModel';
+import { useTranslation } from 'react-i18next';
 import {
   GLB_SCRIPT_TAGS,
   GLB_HELPERS_JS,
@@ -116,7 +118,7 @@ var ACCENT     = '${accentHex}';
 var GLASS_NAME = '${glass.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
 
 // If the glasses appear to face away from the camera, set this to Math.PI.
-// essilor.glb is authored front-facing +Z, which already faces our camera.
+// Product GLBs are authored front-facing +Z, which already faces our camera.
 var MODEL_BASE_ROT_Y = 0;
 
 // Overall size of the glasses relative to the temple-to-temple span measured
@@ -614,7 +616,8 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   // the one being sold. Every tuning constant below is a fraction of the model's
   // own width or the measured face width, so nothing here is calibrated to one
   // particular GLB.
-  const { dataUri, error } = useGlassesGlb(glass.modelUrl);
+  const { dataUri, error, missing } = useGlassesGlb(glass.modelUrl);
+  const { t } = useTranslation();
 
   const html = useMemo(
     () => (dataUri ? buildHtml(glass, dataUri) : null),
@@ -627,7 +630,8 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   // grant via mediaCapturePermissionGrantType="grant".
   const [cameraGranted, setCameraGranted] = useState(Platform.OS !== 'android');
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    // No model, no try-on — so no reason to ask for the camera.
+    if (Platform.OS !== 'android' || missing) return;
     PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
       .then(result => {
         if (result === PermissionsAndroid.RESULTS.GRANTED) {
@@ -674,6 +678,14 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
     },
     [showCameraAlert],
   );
+
+  if (missing) {
+    return (
+      <View style={styles.center}>
+        <AppText style={styles.errorTitle}>{t('ModelNotAvailable')}</AppText>
+      </View>
+    );
+  }
 
   if (error) {
     return (
@@ -750,7 +762,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   errorIcon: { fontSize: 36, color: '#F7A440' },
-  errorTitle: { fontSize: FontSize.md, fontWeight: '700', color: '#fff' },
+  errorTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
   errorSub: {
     fontSize: FontSize.sm,
     color: 'rgba(255,255,255,0.4)',

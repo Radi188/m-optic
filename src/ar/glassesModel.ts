@@ -1,12 +1,12 @@
 /**
  * glassesModel — shared loading pipeline for a glasses GLB.
  *
- * `essilor.glb` is a binary glTF, so (unlike the old .obj path) it cannot be
- * embedded in the WebView HTML as text. Instead it is fetched once from the
- * Metro asset server on the RN JS thread, converted to a base64 `data:` URI and
- * handed to Three.js `GLTFLoader` inside the WebView. A `data:` URI is
- * same-origin for the WebView, so this works in dev and in release builds on
- * both platforms without any CORS/file-access configuration.
+ * A .glb is binary glTF, so (unlike the old .obj path) it cannot be embedded in
+ * the WebView HTML as text. Instead it is fetched once on the RN JS thread,
+ * converted to a base64 `data:` URI and handed to Three.js `GLTFLoader` inside
+ * the WebView. A `data:` URI is same-origin for the WebView, so this works in
+ * dev and in release builds on both platforms without any CORS/file-access
+ * configuration.
  *
  * The result is cached module-wide PER URL, so the 3-D viewer and the AR try-on
  * share a single fetch + encode for the same model.
@@ -16,15 +16,13 @@
  * WebView runs on a 'http://localhost' origin and the asset host sends no
  * Access-Control-Allow-Origin — a direct load would be blocked by CORS. RN's
  * own fetch has no such restriction, so the bytes come across here and go in as
- * a data: URI. `essilor.glb` remains the fallback when a product has no model.
+ * a data: URI.
+ *
+ * There is deliberately no bundled fallback model: a product without its own
+ * .glb has no 3-D viewer or AR try-on, rather than showing a frame that is not
+ * the one being sold.
  */
 import { useEffect, useState } from 'react';
-import { Image } from 'react-native';
-
-// Metro gives us a URL for the .glb asset ('glb' is in metro.config.js assetExts).
-export const GLB_URI = Image.resolveAssetSource(
-  require('../assets/models/essilor.glb'),
-).uri;
 
 const B64_CHARS =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -85,12 +83,8 @@ async function viaArrayBuffer(url: string): Promise<string> {
 
 const cache = new Map<string, Promise<string>>();
 
-/**
- * Fetches + encodes a GLB once per URL; subsequent callers reuse the promise.
- * Omit `url` for the bundled fallback model.
- */
-export function loadGlbDataUri(url?: string | null): Promise<string> {
-  const src = url || GLB_URI;
+/** Fetches + encodes a GLB once per URL; subsequent callers reuse the promise. */
+export function loadGlbDataUri(src: string): Promise<string> {
   const hit = cache.get(src);
   if (hit) {
     return hit;
@@ -115,12 +109,14 @@ export function loadGlbDataUri(url?: string | null): Promise<string> {
 }
 
 /**
- * Hook wrapper: `{ dataUri, error }`, both null while loading.
- * Pass the product's own model URL; omit it to get the bundled fallback.
+ * Hook wrapper: `{ dataUri, error, missing }`. `dataUri` and `error` are both
+ * null while loading; `missing` is true when the product has no model URL, in
+ * which case nothing is fetched.
  */
 export function useGlassesGlb(url?: string | null): {
   dataUri: string | null;
   error: Error | null;
+  missing: boolean;
 } {
   const [dataUri, setDataUri] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -129,6 +125,9 @@ export function useGlassesGlb(url?: string | null): {
     let alive = true;
     setDataUri(null);
     setError(null);
+    if (!url) {
+      return;
+    }
     loadGlbDataUri(url)
       .then(uri => {
         if (alive) {
@@ -146,5 +145,5 @@ export function useGlassesGlb(url?: string | null): {
     };
   }, [url]);
 
-  return { dataUri, error };
+  return { dataUri, error, missing: !url };
 }

@@ -22,6 +22,11 @@ type GlassessProductImageSliderProps = {
   onPressArTryOn?: () => void;
   onPress3DModel?: () => void;
   onPressImage?: (index: number) => void;
+  /**
+   * Whether the product has its own 3-D model. Without one, the AR / 3-D
+   * buttons are disabled and a notice says why.
+   */
+  modelAvailable?: boolean;
 };
 
 const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
@@ -29,6 +34,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   onPressArTryOn,
   onPress3DModel,
   onPressImage,
+  modelAvailable = true,
 }) => {
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -74,8 +80,8 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   };
 
   // NOTE: the AR / 3-D buttons below must render even when the product has no
-  // photos — they open the shared default model, which does not depend on the
-  // product's imagery. Returning early here used to hide both entry points.
+  // photos — the model does not depend on the product's imagery. Returning
+  // early here used to hide both entry points.
   return (
     <View
       style={styles.container}
@@ -126,29 +132,56 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
       )}
 
       <View style={styles.floatingActions}>
-        <TouchableOpacity
-          style={styles.floatingButton}
-          activeOpacity={0.9}
-          onPress={onPressArTryOn}
-        >
-          <View style={styles.iconWrap}>
-            <Ionicons name="scan-outline" size={16} color={Colors.black} />
+        {!modelAvailable && (
+          <View style={styles.unavailableNotice}>
+            <Ionicons
+              name="information-circle-outline"
+              size={14}
+              color={Colors.gray700}
+            />
+            <AppText style={styles.unavailableText}>
+              {t('ModelNotAvailable')}
+            </AppText>
           </View>
-          <AppText style={styles.floatingButtonText}>{t('ArTryOn')}</AppText>
-        </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={styles.floatingButton}
-          activeOpacity={0.9}
-          onPress={onPress3DModel}
-        >
-          <View style={styles.iconWrap}>
-            <Ionicons name="cube-outline" size={16} color={Colors.black} />
-          </View>
-          <AppText style={styles.floatingButtonText}>
-            {t('ThreeDModel')}
-          </AppText>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[
+              styles.floatingButton,
+              !modelAvailable && styles.floatingButtonDisabled,
+            ]}
+            activeOpacity={0.9}
+            onPress={onPressArTryOn}
+            disabled={!modelAvailable}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !modelAvailable }}
+          >
+            <View style={styles.iconWrap}>
+              <Ionicons name="scan-outline" size={16} color={Colors.black} />
+            </View>
+            <AppText style={styles.floatingButtonText}>{t('ArTryOn')}</AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.floatingButton,
+              !modelAvailable && styles.floatingButtonDisabled,
+            ]}
+            activeOpacity={0.9}
+            onPress={onPress3DModel}
+            disabled={!modelAvailable}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !modelAvailable }}
+          >
+            <View style={styles.iconWrap}>
+              <Ionicons name="cube-outline" size={16} color={Colors.black} />
+            </View>
+            <AppText style={styles.floatingButtonText}>
+              {t('ThreeDModel')}
+            </AppText>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -208,8 +241,34 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     bottom: 24,
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+
+  buttonRow: {
     gap: 8,
     flexDirection: 'row',
+  },
+
+  unavailableNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: 260,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+
+  unavailableText: {
+    flexShrink: 1,
+    fontSize: 10,
+    color: Colors.gray700,
+  },
+
+  floatingButtonDisabled: {
+    opacity: 0.4,
   },
 
   floatingButton: {

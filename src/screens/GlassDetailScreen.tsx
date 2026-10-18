@@ -445,6 +445,7 @@ const GlassDetailScreen: React.FC = () => {
             images={images}
             onPressArTryOn={() => openViewer('tryon')}
             onPress3DModel={() => openViewer('3d')}
+            modelAvailable={!!productModelUrl}
             onPressImage={(index: number) =>
               navigation.navigate('ProductImageView', {
                 images: images,
@@ -600,7 +601,7 @@ const GlassDetailScreen: React.FC = () => {
       </View>
 
       {/* ── Viewer Modal ─────────────────────────────────────────────────────── */}
-      {viewerMode !== null && viewerGlass && (
+      {viewerMode !== null && viewerGlass?.modelUrl && (
         <ViewerModal
           visible
           mode={viewerMode}

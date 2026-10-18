@@ -1,9 +1,10 @@
 /**
  * GlassModelScene — 3-D glasses viewer
  *
- * Loads the default `essilor.glb` model: the GLB is fetched from the Metro
- * asset server on the RN JS thread, encoded as a base64 `data:` URI (see
- * ../ar/glassesModel) and parsed by Three.js `GLTFLoader` inside the WebView.
+ * Loads the product's own .glb: the GLB is fetched on the RN JS thread, encoded
+ * as a base64 `data:` URI (see ../ar/glassesModel) and parsed by Three.js
+ * `GLTFLoader` inside the WebView. A product without a model shows a
+ * "not available" notice instead — there is no default model.
  *
  * The model's authored PBR materials are kept as-is (metal frame + transmissive
  * lenses), lit by a RoomEnvironment IBL so the reflections read correctly.
@@ -19,6 +20,7 @@ import type { GlassItem } from '../types/navigation';
 import { Colors, FontSize, Spacing } from '../theme';
 import AppText from '../components/AppText';
 import { useGlassesGlb } from './glassesModel';
+import { useTranslation } from 'react-i18next';
 import { GLB_SCRIPT_TAGS, GLB_HELPERS_JS } from './glassesModelWeb';
 import { formatPrice } from '../utils/formatPrice';
 
@@ -450,15 +452,23 @@ window.addEventListener('resize', function () {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const GlassModelScene: React.FC<Props> = ({ glass }) => {
-  // The product's own .glb when the shop has uploaded one; the bundled
-  // essilor.glb otherwise.
-  const { dataUri, error } = useGlassesGlb(glass.modelUrl);
+  // The product's own .glb. There is no fallback model.
+  const { dataUri, error, missing } = useGlassesGlb(glass.modelUrl);
+  const { t } = useTranslation();
 
   const html = useMemo(
     () => (dataUri ? buildHtml(glass, dataUri) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [glass.id, glass.status, dataUri],
   );
+
+  if (missing) {
+    return (
+      <View style={styles.center}>
+        <AppText style={styles.errorTitle}>{t('ModelNotAvailable')}</AppText>
+      </View>
+    );
+  }
 
   if (error) {
     return (
@@ -518,5 +528,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorIcon: { fontSize: 36, color: '#B4761F' },
-  errorTitle: { fontSize: FontSize.md, fontWeight: '700', color: STUDIO.ink },
+  errorTitle: {
+    fontSize: FontSize.md,
+    fontWeight: '700',
+    color: STUDIO.ink,
+    textAlign: 'center',
+  },
 });
