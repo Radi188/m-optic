@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  type TextInputProps,
+} from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -36,7 +42,17 @@ interface FieldProps {
   autoCapitalize?: any;
   autoCorrect?: boolean;
   editable?: boolean;
+  textContentType?: TextInputProps['textContentType'];
+  autoComplete?: TextInputProps['autoComplete'];
 }
+
+/**
+ * The API stores local numbers ("012345678"), but the number iOS / Android
+ * autofill offers is often international ("+855 12 345 678"). Swap the
+ * Cambodian country code for the leading 0 so it matches the account.
+ */
+const toLocalPhone = (text: string): string =>
+  text.replace(/^\s*(?:\+|00)\s*855[\s-]*0?/, '0');
 
 const FormField: React.FC<FieldProps> = ({
   label,
@@ -48,6 +64,8 @@ const FormField: React.FC<FieldProps> = ({
   autoCapitalize,
   autoCorrect,
   editable = true,
+  textContentType,
+  autoComplete,
 }) => {
   const [focused, setFocused] = useState(false);
 
@@ -73,6 +91,8 @@ const FormField: React.FC<FieldProps> = ({
           autoCapitalize={autoCapitalize ?? 'none'}
           autoCorrect={autoCorrect ?? false}
           editable={editable}
+          textContentType={textContentType}
+          autoComplete={autoComplete}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -151,9 +171,13 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         label={t('PhoneNumber')}
         icon="call-outline"
         value={phone}
-        onChangeText={setPhone}
-        placeholder="016 622 357"
+        onChangeText={text => setPhone(toLocalPhone(text))}
+        placeholder={t('EnterYourPhoneNumber')}
         keyboardType="phone-pad"
+        // Lets the keyboard offer the user's own number (iOS: "My Card" in
+        // Contacts; Android: autofill) to fill in with one tap.
+        textContentType="telephoneNumber"
+        autoComplete="tel"
       />
 
       <View style={styles.pinBlock}>
