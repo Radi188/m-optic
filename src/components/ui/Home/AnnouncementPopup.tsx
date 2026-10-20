@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { BorderRadius, Colors, FontSize, MaxWidth, Spacing } from '../../../theme';
 import type { AnnouncementItem } from '../../../types/home';
@@ -65,16 +66,20 @@ export const latestAnnouncement = (
     return diff > 0 || (diff === 0 && a.id > latest.id) ? a : latest;
   }, null);
 
-/** Shows the latest announcement once per app launch. */
+/** Shows the latest announcement once per app launch, while Home is focused. */
 export function useAnnouncementPopup(announcements?: AnnouncementItem[]) {
   const [popup, setPopup] = useState<AnnouncementItem | null>(null);
+  const isFocused = useIsFocused();
   const latest = latestAnnouncement(announcements);
   const latestId = latest?.id ?? null;
 
   useEffect(() => {
-    // Nothing to show yet (still loading, or no announcements), or already
-    // shown since the app was opened.
-    if (!latest || shownThisLaunch) return;
+    // Nothing to show yet (still loading, or no announcements), already shown
+    // since the app was opened, or Home is not on screen. Tabs stay mounted, so
+    // without the focus check a timer started on Home would present the native
+    // modal while another tab is showing; leaving Home cancels it instead, and
+    // coming back starts it again.
+    if (!latest || shownThisLaunch || !isFocused) return;
 
     const timer = setTimeout(() => {
       shownThisLaunch = true;
@@ -82,9 +87,10 @@ export function useAnnouncementPopup(announcements?: AnnouncementItem[]) {
     }, SHOW_DELAY_MS);
 
     return () => clearTimeout(timer);
-    // Re-run only when the latest announcement changes (e.g. once it loads).
+    // Re-run only when the latest announcement changes (e.g. once it loads)
+    // or Home gains or loses focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestId]);
+  }, [latestId, isFocused]);
 
   return { popup, closePopup: () => setPopup(null) };
 }

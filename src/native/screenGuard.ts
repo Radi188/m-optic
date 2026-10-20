@@ -13,7 +13,10 @@
 // Those screens hold a block through `useBlockScreenCapture` while they are
 // focused. Blocks are counted rather than toggled, so a capturable screen
 // opening on top of a priced one cannot lift the block underneath it when it
-// closes, and two priced screens in a row never flicker unprotected.
+// closes. Lifting is also delayed a moment (ALLOW_DELAY_MS): moving between two
+// priced screens (e.g. the Home and Glass tabs) releases the old block before
+// the new one is taken, and without the delay iOS would re-parent the whole
+// app's layer out of the secure layer and straight back in on every switch.
 //
 // Native side: Android sets/clears FLAG_SECURE; iOS moves the app's content
 // into a secure layer (captures come out black) and covers screen recordings.
@@ -39,6 +42,18 @@ let appliedAllowed: boolean | null = null;
 /** One call at a time — the last one to land must be the one that sticks. */
 let inFlight = false;
 let warned = false;
+
+/** How long the last release waits before capture is actually allowed again. */
+const ALLOW_DELAY_MS = 150;
+/** Pending lift of the block; a new block taken meanwhile cancels it. */
+let allowTimer: ReturnType<typeof setTimeout> | null = null;
+
+function cancelPendingAllow(): void {
+  if (allowTimer !== null) {
+    clearTimeout(allowTimer);
+    allowTimer = null;
+  }
+}
 
 function warnOnce() {
   if (__DEV__ && !warned) {
@@ -75,8 +90,9 @@ function sync(): void {
     })
     .finally(() => {
       inFlight = false;
-      // Blocks may have changed while the call was in flight.
-      if (appliedAllowed !== null) sync();
+      // Blocks may have changed while the call was in flight. A pending lift
+      // syncs on its own once its delay is up.
+      if (appliedAllowed !== null && allowTimer === null) sync();
     });
 }
 
@@ -88,6 +104,7 @@ sync();
  * Prefer `useBlockScreenCapture`; this is for non-React call sites.
  */
 export function acquireScreenCaptureBlock(): () => void {
+  cancelPendingAllow();
   blocks += 1;
   sync();
 
@@ -96,6 +113,14 @@ export function acquireScreenCaptureBlock(): () => void {
     if (released) return;
     released = true;
     blocks = Math.max(0, blocks - 1);
-    sync();
+    if (blocks > 0) return;
+
+    // Blocking is immediate; allowing waits in case the next screen is priced
+    // too and takes its block straight away.
+    cancelPendingAllow();
+    allowTimer = setTimeout(() => {
+      allowTimer = null;
+      sync();
+    }, ALLOW_DELAY_MS);
   };
 }

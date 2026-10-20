@@ -243,13 +243,23 @@ final class ScreenGuard {
     // which leaves no way back and keeps the capture block intact: what makes
     // captures come out black is the content's LAYER sitting in the field's
     // canvas, not where the field's view happens to live.
-    window.addSubview(secureField)
+    //
+    // It goes directly above the content, NOT on top of the window. A modal RN
+    // has presented (announcement pop-up, alerts, sheets) lives in a window
+    // subview above the content; parking the field on top would paint the app
+    // over that modal while the modal still takes every touch — the app looks
+    // normal but nothing can be tapped.
+    if content.superview === window {
+      window.insertSubview(secureField, aboveSubview: content)
+    } else {
+      window.addSubview(secureField)
+    }
 
     // Belt and braces: the field's layer must not sit inside the content it is
-    // about to host, or that content's layer becomes its own ancestor. Adding it
-    // to the window above already put it here; this keeps the invariant explicit
-    // if that ever changes.
-    contentSuperlayer.addSublayer(secureField.layer)
+    // about to host, or that content's layer becomes its own ancestor. Inserting
+    // it on the window above already put it here, right above the content; this
+    // keeps both invariants explicit if that ever changes.
+    contentSuperlayer.insertSublayer(secureField.layer, above: content.layer)
 
     // The canvas UIKit keeps out of captures is the field's last sublayer on
     // iOS 17+, and its first on older releases.
@@ -281,7 +291,10 @@ final class ScreenGuard {
 
     // Order matters: move the content out of the field's canvas first, so
     // tearing the field down can never take the app's own layer with it.
-    host.addSublayer(content.layer)
+    // It goes back where the field sat, not on top: `addSublayer` would paint
+    // the content over any modal presented in the meantime (see
+    // `applySecureLayer`).
+    host.insertSublayer(content.layer, below: secureField.layer)
     secureField.removeFromSuperview()
     secureField.layer.removeFromSuperlayer()
   }
