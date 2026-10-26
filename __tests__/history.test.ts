@@ -1,4 +1,5 @@
 import {
+  invoiceSavings,
   normaliseHistory,
   normaliseInvoice,
   normaliseRefraction,
@@ -116,6 +117,8 @@ describe('history normalisers', () => {
       quantity: 1,
       unitPrice: null,
       total: 90,
+      discount: null,
+      originalTotal: null,
       image: null,
     });
     expect(inv.items[1].id).toBe('item-1');
@@ -230,5 +233,60 @@ describe('combined eye readings', () => {
     expect(normaliseRefraction({ right_eye: '  -1.00 / -0.50  ' }, 0).right)
       .toEqual({ sph: '-1.00', cyl: '-0.50', axis: null, va: null });
     expect(normaliseRefraction({ right_eye: '   ' }, 0).right.sph).toBeNull();
+  });
+});
+
+describe('invoice discounts', () => {
+  it('keeps the full price of a discounted line', () => {
+    const invoice = normaliseInvoice(
+      {
+        invoice_details: [
+          // Full price on total_amount, paid price on grand_total.
+          { total_amount: '120.0000', discount_amount: '20.0000', grand_total: '100.0000' },
+          // total_amount missing: full price is rebuilt from the discount.
+          { discount_amount: 15, grand_total: 45 },
+          // Not discounted.
+          { total_amount: 30, discount_amount: 0, grand_total: 30 },
+        ],
+      },
+      0,
+    );
+    expect(invoice.items.map(i => [i.originalTotal, i.discount, i.total])).toEqual([
+      [120, 20, 100],
+      [60, 15, 45],
+      [null, null, 30],
+    ]);
+  });
+
+  it('works out the invoice saving from the API discount', () => {
+    const savings = invoiceSavings(
+      normaliseInvoice(
+        { total_amount_usd: '200', discount_amount: '50', grand_total_usd: '150' },
+        0,
+      ),
+    );
+    expect(savings).toEqual({ fullPrice: 200, discount: 50, percent: 25 });
+  });
+
+  it('falls back to line discounts when the invoice has none of its own', () => {
+    const savings = invoiceSavings(
+      normaliseInvoice(
+        {
+          grand_total_usd: 90,
+          invoice_details: [{ total_amount: 100, discount_amount: 10, grand_total: 90 }],
+        },
+        0,
+      ),
+    );
+    expect(savings).toEqual({ fullPrice: 100, discount: 10, percent: 10 });
+  });
+
+  it('does not call a deposit a discount', () => {
+    // Paid less than the subtotal, but the API reports no discount.
+    expect(
+      invoiceSavings(
+        normaliseInvoice({ total_amount_usd: 300, grand_total_usd: 100, event: 'Deposit' }, 0),
+      ),
+    ).toBeNull();
   });
 });

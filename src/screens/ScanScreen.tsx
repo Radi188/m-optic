@@ -43,7 +43,7 @@ import {
   Shadow,
   Layout,
 } from '../theme';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useResponsive } from '../hook/useResponsive';
 import { useFrameShapeCounts } from '../hook/useFrameShapeCounts';
 import { useProductList } from '../hook/useProductList';
@@ -220,18 +220,19 @@ const pick = <T,>(arr: T[], n: number): T[] => shuffle(arr).slice(0, n);
 // 8 directions around the clock, spaced 45° apart, 0 = gap pointing up. The
 // coarser step keeps the choice unambiguous on a phone-sized target.
 const LANDOLT_ANGLES = Array.from({ length: 8 }, (_, i) => i * 45);
+// Translation keys for each direction's accessibility label.
 const LANDOLT_LABELS = [
-  'Up',
-  'Up-right',
-  'Right',
-  'Down-right',
-  'Down',
-  'Down-left',
-  'Left',
-  'Up-left',
+  'EyeTest.DirUp',
+  'EyeTest.DirUpRight',
+  'EyeTest.DirRight',
+  'EyeTest.DirDownRight',
+  'EyeTest.DirDown',
+  'EyeTest.DirDownLeft',
+  'EyeTest.DirLeft',
+  'EyeTest.DirUpLeft',
 ];
-const LANDOLT_DIRECTIONS: { angle: number; label: string }[] =
-  LANDOLT_ANGLES.map((angle, i) => ({ angle, label: LANDOLT_LABELS[i] }));
+const LANDOLT_DIRECTIONS: { angle: number; labelKey: string }[] =
+  LANDOLT_ANGLES.map((angle, i) => ({ angle, labelKey: LANDOLT_LABELS[i] }));
 
 // The size ladder, biggest first. A correct read steps one rung down (smaller),
 // a miss steps one rung back up (bigger), clamped at both ends — so a wrong
@@ -309,43 +310,33 @@ function computeRisk(
   return 'low';
 }
 
+// `key` picks the EyeTest.Risk<key>Label / Summary / Advice copy.
 const RISK_CONFIG: Record<
   RiskLevel,
   {
     color: string;
     bg: string;
-    label: string;
     icon: string;
-    summary: string;
-    advice: string;
+    key: 'Low' | 'Medium' | 'High';
   }
 > = {
   low: {
     color: '#2DBD7E',
     bg: 'rgba(45,189,126,0.12)',
-    label: 'Low Risk',
     icon: 'checkmark-circle-outline',
-    summary: 'Your vision appears healthy based on this screening.',
-    advice:
-      'No immediate concerns detected. Routine annual check-ups are still recommended to keep your eyes healthy.',
+    key: 'Low',
   },
   medium: {
     color: '#F4A830',
     bg: 'rgba(244,168,48,0.12)',
-    label: 'Possible Issue',
     icon: 'alert-circle-outline',
-    summary: 'Some signs of a possible refractive error were detected.',
-    advice:
-      'We recommend a professional eye examination within the next 1–3 months. An optometrist can confirm and prescribe the right correction.',
+    key: 'Medium',
   },
   high: {
     color: '#E74C3C',
     bg: 'rgba(231,76,60,0.12)',
-    label: 'Attention Needed',
     icon: 'warning-outline',
-    summary: 'Significant signs of refractive error were detected.',
-    advice:
-      'Please book an appointment with our optometrist as soon as possible. Early correction prevents further deterioration.',
+    key: 'High',
   },
 };
 
@@ -401,21 +392,8 @@ const slotsFor = (
   return out;
 };
 
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+// Day and month names come from EyeTest.Day0..6 / EyeTest.Month0..11, indexed
+// by Date#getDay() and Date#getMonth().
 
 function getAvailableDays(count = 10): Date[] {
   const days: Date[] = [];
@@ -434,11 +412,11 @@ const AVAILABLE_DAYS = getAvailableDays(10);
 
 // ─── Ishihara-style Plate Data & HTML Generator ───────────────────────────────
 
+// Sentinel answer for "no number visible" — shown as EyeTest.Nothing.
 const CANT_SEE = 'Nothing';
 type CvPlate = {
   number: string;
-  hint: string;
-  question: string;
+  hintKey: string;
   options: string[];
   correct: string;
 };
@@ -472,11 +450,10 @@ const genCvPlates = (n = 3): CvPlate[] => {
     );
     return {
       number: num,
-      hint:
+      hintKey:
         num.length > 1
-          ? 'A two-digit number is hidden among the dots.'
-          : 'A single digit is concealed in the pattern.',
-      question: 'What number do you see?',
+          ? 'EyeTest.PlateHintTwoDigit'
+          : 'EyeTest.PlateHintOneDigit',
       options: [...shuffle([num, ...distractors]), CANT_SEE],
       correct: num,
     };
@@ -3078,199 +3055,179 @@ const GlassesBottomSheet: React.FC<{
 
 // ─── Refraction — Intro ───────────────────────────────────────────────────────
 
-const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => (
-  <ScrollView
-    contentContainerStyle={styles.contentPad}
-    showsVerticalScrollIndicator={false}
-  >
-    <View style={styles.heroCard}>
-      <View style={styles.heroIconRing}>
-        <Ionicons name="eye-outline" size={56} color={Colors.primary} />
+const RefractionIntro: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+  const { t } = useTranslation();
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.heroCard}>
+        <View style={styles.heroIconRing}>
+          <Ionicons name="eye-outline" size={56} color={Colors.primary} />
+        </View>
+        <AppText style={styles.heroTitle}>{t('EyeTest.IntroTitle')}</AppText>
+        <AppText style={styles.heroSub}>{t('EyeTest.IntroSub')}</AppText>
+        <View style={rfStyles.oneHandBanner}>
+          <Ionicons
+            name="hand-left-outline"
+            size={20}
+            color={Colors.primaryDark}
+          />
+          <AppText style={rfStyles.oneHandBannerText}>
+            {t('EyeTest.OneHandBanner')}
+          </AppText>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.primaryBtn,
+            { marginTop: Spacing.md, alignSelf: 'stretch' },
+          ]}
+          onPress={onStart}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="play-outline" size={20} color={Colors.white} />
+          <AppText style={styles.primaryBtnText}>
+            {t('EyeTest.BeginTest')}
+          </AppText>
+        </TouchableOpacity>
       </View>
-      <AppText style={styles.heroTitle}>Eye Refraction Test</AppText>
-      <AppText style={styles.heroSub}>
-        A quick 3-part screening to help identify potential refractive errors
-        and colour vision.
-      </AppText>
-      <View style={rfStyles.oneHandBanner}>
+
+      <AppText style={styles.sectionLabel}>{t('EyeTest.WhatWeTest')}</AppText>
+      {[
+        {
+          icon: 'compass-outline',
+          title: t('EyeTest.AcuityName'),
+          desc: t('EyeTest.IntroAcuityDesc', { count: ACUITY_TRIALS }),
+        },
+        {
+          icon: 'color-palette-outline',
+          title: t('EyeTest.ColorName'),
+          desc: t('EyeTest.IntroColorDesc'),
+        },
+        {
+          icon: 'radio-button-off-outline',
+          title: t('EyeTest.AstigmatismName'),
+          desc: t('EyeTest.IntroAstigmatismDesc'),
+        },
+      ].map(item => (
+        <View key={item.icon} style={styles.featureRow}>
+          <View style={styles.featureIconBox}>
+            <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText style={styles.featureTitle}>{item.title}</AppText>
+            <AppText style={styles.featureDesc}>{item.desc}</AppText>
+          </View>
+        </View>
+      ))}
+
+      <View style={styles.disclaimerCard}>
         <Ionicons
-          name="hand-left-outline"
-          size={20}
-          color={Colors.primaryDark}
+          name="information-circle-outline"
+          size={16}
+          color={Colors.gray400}
         />
-        <AppText style={rfStyles.oneHandBannerText}>
-          Cover one eye with your free hand — you'll only need your other thumb
-          to tap through each step.
+        <AppText style={styles.disclaimerText}>
+          {t('EyeTest.IntroDisclaimer')}
         </AppText>
       </View>
-      <TouchableOpacity
-        style={[
-          styles.primaryBtn,
-          { marginTop: Spacing.md, alignSelf: 'stretch' },
-        ]}
-        onPress={onStart}
-        activeOpacity={0.82}
-      >
-        <Ionicons name="play-outline" size={20} color={Colors.white} />
-        <AppText style={styles.primaryBtnText}>Begin Test</AppText>
-      </TouchableOpacity>
-    </View>
-
-    <AppText style={styles.sectionLabel}>What we'll test</AppText>
-    {[
-      {
-        icon: 'compass-outline',
-        title: 'Visual Acuity',
-        desc: `Cover one eye at a time and tap where the gap is on each of ${ACUITY_TRIALS} rings. No time limit.`,
-      },
-      {
-        icon: 'color-palette-outline',
-        title: 'Colour Vision',
-        desc: 'Identify numbers hidden in coloured dot plates (Ishihara-style).',
-      },
-      {
-        icon: 'radio-button-off-outline',
-        title: 'Astigmatism Check',
-        desc: 'View a radial pattern to detect uneven focus in the eye.',
-      },
-    ].map(item => (
-      <View key={item.title} style={styles.featureRow}>
-        <View style={styles.featureIconBox}>
-          <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <AppText style={styles.featureTitle}>{item.title}</AppText>
-          <AppText style={styles.featureDesc}>{item.desc}</AppText>
-        </View>
-      </View>
-    ))}
-
-    <View style={styles.disclaimerCard}>
-      <Ionicons
-        name="information-circle-outline"
-        size={16}
-        color={Colors.gray400}
-      />
-      <AppText style={styles.disclaimerText}>
-        This is a preliminary screening only and does not replace a professional
-        eye examination by a qualified optometrist.
-      </AppText>
-    </View>
-  </ScrollView>
-);
+    </ScrollView>
+  );
+};
 
 // ─── Refraction — Per-Test Instructions ──────────────────────────────────────
 // Shown immediately before each of the three tests (so the user learns what
 // they're about to do right when it's relevant, rather than all at once up
 // front): what the test looks for, then how to answer it.
 
+// `prefix` picks the EyeTest.<prefix>Name / Purpose / Step1..4 / Note copy.
 type TestInfo = {
   stepNum: string;
-  name: string;
+  prefix: 'Acuity' | 'Color' | 'Astigmatism';
   icon: string;
-  purpose: string;
-  steps: string[];
-  note: string;
 };
 
 const TEST_INFO: Record<'acuity' | 'color' | 'astigmatism', TestInfo> = {
-  acuity: {
-    stepNum: '1',
-    name: 'Visual Acuity',
-    icon: 'compass-outline',
-    purpose:
-      'Measures how much fine detail your eye can resolve — the sharpness of your sight. Trouble here often points to short- or long-sightedness.',
-    steps: [
-      'Cover one eye with your free hand — each eye is tested on its own.',
-      "Hold the phone at arm's length and look at the small broken ring (a “C”).",
-      'Tap the spot on the big ring below where you saw the gap.',
-      `You'll do this ${ACUITY_TRIALS} times per eye. Get one right and the next ring shrinks; get one wrong and it grows back.`,
-    ],
-    note: "There's no timer — take as long as you need on each ring.",
-  },
-  color: {
-    stepNum: '2',
-    name: 'Colour Vision',
-    icon: 'color-palette-outline',
-    purpose:
-      'Checks how well you tell colours apart, especially reds and greens. This is an Ishihara-style test, the standard screen for colour vision deficiency.',
-    steps: [
-      'Both eyes stay open for this one — nothing to cover.',
-      'Each plate is a circle of coloured dots with a number hidden inside.',
-      `Tap the number you can see. If no number stands out, tap “${CANT_SEE}”.`,
-      'Keep your screen brightness up and avoid strong coloured lighting.',
-    ],
-    note: 'Answer with your first impression — guessing at a blurry plate is fine, and there is no timer.',
-  },
+  acuity: { stepNum: '1', prefix: 'Acuity', icon: 'compass-outline' },
+  color: { stepNum: '2', prefix: 'Color', icon: 'color-palette-outline' },
   astigmatism: {
     stepNum: '3',
-    name: 'Astigmatism Check',
+    prefix: 'Astigmatism',
     icon: 'radio-button-off-outline',
-    purpose:
-      'Looks for an unevenly curved cornea, which makes some directions focus more sharply than others. It shows up as lines that look darker or blurrier in one direction.',
-    steps: [
-      'Cover one eye with your free hand — again, one eye at a time.',
-      "Hold the phone at arm's length and look at the centre dot of the fan.",
-      'Let your eyes relax and notice the spokes with your side vision.',
-      'Tell us whether all the lines look equally sharp, or some stand out.',
-    ],
-    note: 'Some lines looking bolder than others is exactly what this test is designed to catch — answer honestly.',
   },
 };
+const TEST_STEP_COUNT = 4;
 
 const TestInstructions: React.FC<{
   info: TestInfo;
   onStart: () => void;
-}> = ({ info, onStart }) => (
-  <ScrollView
-    contentContainerStyle={styles.contentPad}
-    showsVerticalScrollIndicator={false}
-  >
-    <View style={styles.stepHeader}>
-      <AppText style={styles.stepCounter}>
-        Step {info.stepNum} of 3 — {info.name}
-      </AppText>
-    </View>
-
-    <View style={styles.heroCard}>
-      <View style={styles.heroIconRing}>
-        <Ionicons name={info.icon as any} size={56} color={Colors.primary} />
-      </View>
-      <AppText style={styles.heroTitle}>{info.name}</AppText>
-      <AppText style={styles.heroSub}>{info.purpose}</AppText>
-    </View>
-
-    <AppText style={styles.sectionLabel}>How it works</AppText>
-    {info.steps.map((step, i) => (
-      <View key={step} style={styles.featureRow}>
-        <View style={styles.featureIconBox}>
-          <AppText style={rfStyles.instructionStepNum}>{i + 1}</AppText>
-        </View>
-        <View style={{ flex: 1 }}>
-          <AppText style={styles.featureDesc}>{step}</AppText>
-        </View>
-      </View>
-    ))}
-
-    <View style={rfStyles.oneHandBanner}>
-      <Ionicons
-        name="information-circle-outline"
-        size={20}
-        color={Colors.primaryDark}
-      />
-      <AppText style={rfStyles.oneHandBannerText}>{info.note}</AppText>
-    </View>
-
-    <TouchableOpacity
-      style={[styles.primaryBtn, { marginTop: Spacing.lg }]}
-      onPress={onStart}
-      activeOpacity={0.82}
+}> = ({ info, onStart }) => {
+  const { t } = useTranslation();
+  const name = t(`EyeTest.${info.prefix}Name`);
+  const steps = Array.from({ length: TEST_STEP_COUNT }, (_, i) =>
+    t(`EyeTest.${info.prefix}Step${i + 1}`, {
+      count: ACUITY_TRIALS,
+      nothing: t('EyeTest.Nothing'),
+    }),
+  );
+  return (
+    <ScrollView
+      contentContainerStyle={styles.contentPad}
+      showsVerticalScrollIndicator={false}
     >
-      <Ionicons name="play-outline" size={20} color={Colors.white} />
-      <AppText style={styles.primaryBtnText}>Start {info.name}</AppText>
-    </TouchableOpacity>
-  </ScrollView>
-);
+      <View style={styles.stepHeader}>
+        <AppText style={styles.stepCounter}>
+          {t('EyeTest.StepHeader', { step: info.stepNum, name })}
+        </AppText>
+      </View>
+
+      <View style={styles.heroCard}>
+        <View style={styles.heroIconRing}>
+          <Ionicons name={info.icon as any} size={56} color={Colors.primary} />
+        </View>
+        <AppText style={styles.heroTitle}>{name}</AppText>
+        <AppText style={styles.heroSub}>
+          {t(`EyeTest.${info.prefix}Purpose`)}
+        </AppText>
+      </View>
+
+      <AppText style={styles.sectionLabel}>{t('EyeTest.HowItWorks')}</AppText>
+      {steps.map((step, i) => (
+        <View key={i} style={styles.featureRow}>
+          <View style={styles.featureIconBox}>
+            <AppText style={rfStyles.instructionStepNum}>{i + 1}</AppText>
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText style={styles.featureDesc}>{step}</AppText>
+          </View>
+        </View>
+      ))}
+
+      <View style={rfStyles.oneHandBanner}>
+        <Ionicons
+          name="information-circle-outline"
+          size={20}
+          color={Colors.primaryDark}
+        />
+        <AppText style={rfStyles.oneHandBannerText}>
+          {t(`EyeTest.${info.prefix}Note`)}
+        </AppText>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.primaryBtn, { marginTop: Spacing.lg }]}
+        onPress={onStart}
+        activeOpacity={0.82}
+      >
+        <Ionicons name="play-outline" size={20} color={Colors.white} />
+        <AppText style={styles.primaryBtnText}>
+          {t('EyeTest.StartTest', { name })}
+        </AppText>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+};
 
 // ─── Refraction — Eye Switch Instruction ─────────────────────────────────────
 // Shown between per-eye tests so each eye is a clearly separated session:
@@ -3282,7 +3239,8 @@ const EyeCoverStep: React.FC<{
   testName: string;
   onContinue: () => void;
 }> = ({ eye, stepNum, testName, onContinue }) => {
-  const coverEye = eye === 'left' ? 'right' : 'left';
+  const { t } = useTranslation();
+  const side = eye === 'left' ? 'Left' : 'Right';
   return (
     <ScrollView
       contentContainerStyle={styles.contentPad}
@@ -3290,8 +3248,7 @@ const EyeCoverStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step {stepNum} of 3 — {testName} ({eye === 'left' ? 'Left' : 'Right'}{' '}
-          Eye)
+          {t(`EyeTest.StepHeader${side}`, { step: stepNum, name: testName })}
         </AppText>
       </View>
       <View style={styles.heroCard}>
@@ -3299,12 +3256,9 @@ const EyeCoverStep: React.FC<{
           <Ionicons name="eye-outline" size={56} color={Colors.primary} />
         </View>
         <AppText style={styles.heroTitle}>
-          {eye === 'left' ? 'Left' : 'Right'} Eye's Turn
+          {t(`EyeTest.${side}EyeTurn`)}
         </AppText>
-        <AppText style={styles.heroSub}>
-          Cover your {coverEye} eye with your free hand. When you're ready,
-          we'll test your {eye} eye only.
-        </AppText>
+        <AppText style={styles.heroSub}>{t(`EyeTest.CoverSub${side}`)}</AppText>
         <View style={rfStyles.oneHandBanner}>
           <Ionicons
             name="hand-left-outline"
@@ -3312,8 +3266,7 @@ const EyeCoverStep: React.FC<{
             color={Colors.primaryDark}
           />
           <AppText style={rfStyles.oneHandBannerText}>
-            Keep the phone at arm's length and tap Continue once your {coverEye}{' '}
-            eye is covered.
+            {t(`EyeTest.CoverBanner${side}`)}
           </AppText>
         </View>
         <TouchableOpacity
@@ -3326,7 +3279,7 @@ const EyeCoverStep: React.FC<{
         >
           <Ionicons name="play-outline" size={20} color={Colors.white} />
           <AppText style={styles.primaryBtnText}>
-            Continue — {eye === 'left' ? 'Left' : 'Right'} Eye
+            {t(`EyeTest.Continue${side}`)}
           </AppText>
         </TouchableOpacity>
       </View>
@@ -3434,6 +3387,7 @@ const DirectionPicker: React.FC<{
   correctAngle: number;
   onSelect: (angle: number) => void;
 }> = ({ selected, correctAngle, onSelect }) => {
+  const { t } = useTranslation();
   const center = PICKER_BOX / 2;
   const span = 360 / LANDOLT_DIRECTIONS.length;
   // Middle of the wedge's thickness — where the touch target and the
@@ -3471,7 +3425,7 @@ const DirectionPicker: React.FC<{
         })}
       </Svg>
 
-      <AppText style={rfStyles.pickerHint}>Tap the gap</AppText>
+      <AppText style={rfStyles.pickerHint}>{t('EyeTest.TapTheGap')}</AppText>
 
       {LANDOLT_DIRECTIONS.map(dir => {
         const pt = polarPoint(center, center, hitRadius, dir.angle);
@@ -3482,7 +3436,7 @@ const DirectionPicker: React.FC<{
           <TouchableOpacity
             key={dir.angle}
             accessibilityRole="button"
-            accessibilityLabel={dir.label}
+            accessibilityLabel={t(dir.labelKey)}
             disabled={selected !== null}
             style={[
               rfStyles.pickerHit,
@@ -3510,6 +3464,7 @@ const AcuityStep: React.FC<{
   angles: number[];
   onComplete: (passCount: number) => void;
 }> = ({ eye, angles, onComplete }) => {
+  const { t } = useTranslation();
   const [trialIndex, setTrialIndex] = useState(0);
   const [levelIndex, setLevelIndex] = useState(ACUITY_START_LEVEL);
   const [passCount, setPassCount] = useState(0);
@@ -3545,7 +3500,7 @@ const AcuityStep: React.FC<{
   };
 
   const progress = (trialIndex / ACUITY_TRIALS) * 100;
-  const coverEye = eye === 'left' ? 'right' : 'left';
+  const side = eye === 'left' ? 'Left' : 'Right';
   const stepNum = eye === 'left' ? '1a' : '1b';
 
   return (
@@ -3556,11 +3511,16 @@ const AcuityStep: React.FC<{
       {/* Progress */}
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step {stepNum} of 3 — Visual Acuity (
-          {eye === 'left' ? 'Left' : 'Right'} Eye)
+          {t(`EyeTest.StepHeader${side}`, {
+            step: stepNum,
+            name: t('EyeTest.AcuityName'),
+          })}
         </AppText>
         <AppText style={styles.stepCounterRight}>
-          Ring {trialIndex + 1}/{ACUITY_TRIALS}
+          {t('EyeTest.RingCounter', {
+            current: trialIndex + 1,
+            total: ACUITY_TRIALS,
+          })}
         </AppText>
       </View>
       <View style={styles.progressTrack}>
@@ -3574,22 +3534,25 @@ const AcuityStep: React.FC<{
           color={Colors.primaryDark}
         />
         <AppText style={rfStyles.coverEyeBannerText}>
-          Cover your <AppText style={rfStyles.coverEyeBold}>{coverEye}</AppText>{' '}
-          eye with your free hand, then read with your {eye} eye only.
+          <Trans
+            i18nKey={`EyeTest.AcuityCover${side}`}
+            components={{ bold: <AppText style={rfStyles.coverEyeBold} /> }}
+          />
         </AppText>
       </View>
 
       <View style={styles.acuityCard}>
         <AppText style={styles.acuityInstruction}>
-          Hold the phone at arm's length. Find the gap in the ring below — take
-          as long as you need.
+          {t('EyeTest.AcuityInstruction')}
         </AppText>
         <View style={styles.acuityLetterBox}>
           <LandoltC size={level.size} angle={correctAngle} />
-          <AppText style={styles.acuityLabel}>{level.label} line</AppText>
+          <AppText style={styles.acuityLabel}>
+            {t('EyeTest.AcuityLine', { label: level.label })}
+          </AppText>
         </View>
         <AppText style={styles.acuityQuestion}>
-          Tap the spot on the ring below where you saw the gap.
+          {t('EyeTest.AcuityQuestion')}
         </AppText>
       </View>
 
@@ -3612,8 +3575,9 @@ const AstigmatismStep: React.FC<{
   eye: 'left' | 'right';
   onComplete: (result: 'equal' | 'unequal') => void;
 }> = ({ eye, onComplete }) => {
+  const { t } = useTranslation();
   const [answered, setAnswered] = useState(false);
-  const coverEye = eye === 'left' ? 'right' : 'left';
+  const side = eye === 'left' ? 'Left' : 'Right';
   const stepNum = eye === 'left' ? '3a' : '3b';
 
   const handleAnswer = (result: 'equal' | 'unequal') => {
@@ -3629,8 +3593,10 @@ const AstigmatismStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step {stepNum} of 3 — Astigmatism Check (
-          {eye === 'left' ? 'Left' : 'Right'} Eye)
+          {t(`EyeTest.StepHeader${side}`, {
+            step: stepNum,
+            name: t('EyeTest.AstigmatismName'),
+          })}
         </AppText>
       </View>
       <View style={styles.progressTrack}>
@@ -3649,14 +3615,16 @@ const AstigmatismStep: React.FC<{
           color={Colors.primaryDark}
         />
         <AppText style={rfStyles.coverEyeBannerText}>
-          Cover your <AppText style={rfStyles.coverEyeBold}>{coverEye}</AppText>{' '}
-          eye with your free hand, hold the phone at arm's length.
+          <Trans
+            i18nKey={`EyeTest.AstigmatismCover${side}`}
+            components={{ bold: <AppText style={rfStyles.coverEyeBold} /> }}
+          />
         </AppText>
       </View>
 
       <View style={styles.acuityCard}>
         <AppText style={styles.acuityInstruction}>
-          Look at the center dot of the pattern below. Keep your eyes relaxed.
+          {t('EyeTest.AstigmatismInstruction')}
         </AppText>
 
         {/* Radial fan rendered with rotated views */}
@@ -3678,7 +3646,7 @@ const AstigmatismStep: React.FC<{
         </View>
 
         <AppText style={styles.acuityQuestion}>
-          Do all the lines appear equally dark and the same thickness?
+          {t('EyeTest.AstigmatismQuestion')}
         </AppText>
       </View>
 
@@ -3690,7 +3658,7 @@ const AstigmatismStep: React.FC<{
       >
         <Ionicons name="checkmark-circle" size={24} color={Colors.white} />
         <AppText style={rfStyles.answerYesBtnText}>
-          Yes, all lines look equal
+          {t('EyeTest.AstigmatismYes')}
         </AppText>
       </TouchableOpacity>
 
@@ -3702,7 +3670,7 @@ const AstigmatismStep: React.FC<{
       >
         <Ionicons name="close-circle" size={22} color={Colors.error} />
         <AppText style={rfStyles.answerNoBtnText}>
-          Some lines look darker / thicker
+          {t('EyeTest.AstigmatismNo')}
         </AppText>
       </TouchableOpacity>
     </ScrollView>
@@ -3717,6 +3685,7 @@ const ColorVisionStep: React.FC<{
   plates: CvPlate[];
   onComplete: (result: ColorResult) => void;
 }> = ({ plates, onComplete }) => {
+  const { t } = useTranslation();
   const [plateIndex, setPlateIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [answered, setAnswered] = useState(false);
@@ -3752,10 +3721,16 @@ const ColorVisionStep: React.FC<{
     >
       <View style={styles.stepHeader}>
         <AppText style={styles.stepCounter}>
-          Step 2 of 3 — Colour Vision
+          {t('EyeTest.StepHeader', {
+            step: '2',
+            name: t('EyeTest.ColorName'),
+          })}
         </AppText>
         <AppText style={styles.stepCounterRight}>
-          Plate {plateIndex + 1}/{plates.length}
+          {t('EyeTest.PlateCounter', {
+            current: plateIndex + 1,
+            total: plates.length,
+          })}
         </AppText>
       </View>
       <View style={styles.progressTrack}>
@@ -3763,7 +3738,7 @@ const ColorVisionStep: React.FC<{
       </View>
 
       <View style={[styles.acuityCard, { paddingBottom: Spacing.md }]}>
-        <AppText style={styles.acuityInstruction}>{plate.hint}</AppText>
+        <AppText style={styles.acuityInstruction}>{t(plate.hintKey)}</AppText>
 
         <View style={rfStyles.plateContainer}>
           <WebView
@@ -3775,7 +3750,9 @@ const ColorVisionStep: React.FC<{
           />
         </View>
 
-        <AppText style={styles.acuityQuestion}>{plate.question}</AppText>
+        <AppText style={styles.acuityQuestion}>
+          {t('EyeTest.PlateQuestion')}
+        </AppText>
       </View>
 
       {plate.options.map(opt => {
@@ -3801,7 +3778,7 @@ const ColorVisionStep: React.FC<{
                 isNone && { color: Colors.gray500 },
               ]}
             >
-              {opt}
+              {isNone ? t('EyeTest.Nothing') : opt}
             </AppText>
           </TouchableOpacity>
         );
@@ -3814,8 +3791,7 @@ const ColorVisionStep: React.FC<{
           color={Colors.gray400}
         />
         <AppText style={rfStyles.footerNoteText}>
-          This is a self-reported screening. Results may vary with screen
-          brightness and ambient lighting.
+          {t('EyeTest.ColorFooter')}
         </AppText>
       </View>
     </ScrollView>
@@ -3828,6 +3804,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
   visible,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const { sheetInset } = useResponsive();
   const [branchId, setBranchId] = useState<string | null>(null);
   const [date, setDate] = useState<Date | null>(null);
@@ -3897,7 +3874,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
         {/* Header */}
         <View style={bkStyles.header}>
           <AppText style={bkStyles.headerTitle}>
-            {confirmed ? 'Booking Summary' : 'Book Appointment'}
+            {confirmed
+              ? t('EyeTest.BookingSummary')
+              : t('EyeTest.BookAppointment')}
           </AppText>
           <TouchableOpacity
             onPress={handleClose}
@@ -3918,11 +3897,10 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               <Ionicons name="checkmark-circle" size={56} color="#2DBD7E" />
             </View>
             <AppText style={bkStyles.successTitle}>
-              Appointment Requested
+              {t('EyeTest.AppointmentRequested')}
             </AppText>
             <AppText style={bkStyles.successSub}>
-              Call the store to confirm your slot. Our team will be happy to
-              assist you.
+              {t('EyeTest.AppointmentRequestedSub')}
             </AppText>
 
             <View style={bkStyles.summaryCard}>
@@ -3932,9 +3910,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                 { icon: 'call-outline', text: branch.phone },
                 {
                   icon: 'calendar-outline',
-                  text: `${DAY_SHORT[date.getDay()]}, ${date.getDate()} ${
-                    MONTH_SHORT[date.getMonth()]
-                  }`,
+                  text: `${t(`EyeTest.Day${date.getDay()}`)}, ${date.getDate()} ${t(
+                    `EyeTest.Month${date.getMonth()}`,
+                  )}`,
                 },
                 { icon: 'time-outline', text: timeSlot },
               ]
@@ -3960,7 +3938,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                 activeOpacity={0.82}
               >
                 <Ionicons name="call-outline" size={18} color={Colors.white} />
-                <AppText style={styles.primaryBtnText}>Call to Confirm</AppText>
+                <AppText style={styles.primaryBtnText}>
+                  {t('EyeTest.CallToConfirm')}
+                </AppText>
               </TouchableOpacity>
             )}
 
@@ -3969,7 +3949,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               onPress={handleClose}
               activeOpacity={0.8}
             >
-              <AppText style={styles.outlineBtnText}>Done</AppText>
+              <AppText style={styles.outlineBtnText}>
+                {t('EyeTest.Done')}
+              </AppText>
             </TouchableOpacity>
           </ScrollView>
         ) : (
@@ -3980,7 +3962,9 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               showsVerticalScrollIndicator={false}
             >
               {/* Branch */}
-              <AppText style={bkStyles.sectionTitle}>Select Branch</AppText>
+              <AppText style={bkStyles.sectionTitle}>
+                {t('EyeTest.SelectBranch')}
+              </AppText>
               {branchLoading && !branches.length && (
                 <View style={bkStyles.branchState}>
                   <ActivityIndicator color={Colors.primary} />
@@ -3998,14 +3982,14 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                     color={Colors.primary}
                   />
                   <AppText style={bkStyles.branchStateText}>
-                    Couldn't load our stores. Tap to retry.
+                    {t('EyeTest.BranchLoadError')}
                   </AppText>
                 </TouchableOpacity>
               )}
               {!branchLoading && !branchError && !branches.length && (
                 <View style={bkStyles.branchState}>
                   <AppText style={bkStyles.branchStateText}>
-                    No stores are listed right now.
+                    {t('EyeTest.NoBranches')}
                   </AppText>
                 </View>
               )}
@@ -4056,7 +4040,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               <AppText
                 style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}
               >
-                Select Date
+                {t('EyeTest.SelectDate')}
               </AppText>
               <ScrollView
                 horizontal
@@ -4081,7 +4065,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                           selected && bkStyles.dateTextActive,
                         ]}
                       >
-                        {DAY_SHORT[d.getDay()]}
+                        {t(`EyeTest.Day${d.getDay()}`)}
                       </AppText>
                       <AppText
                         style={[
@@ -4097,7 +4081,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                           selected && bkStyles.dateTextActive,
                         ]}
                       >
-                        {MONTH_SHORT[d.getMonth()]}
+                        {t(`EyeTest.Month${d.getMonth()}`)}
                       </AppText>
                     </TouchableOpacity>
                   );
@@ -4108,16 +4092,16 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
               <AppText
                 style={[bkStyles.sectionTitle, { marginTop: Spacing.lg }]}
               >
-                Select Time
+                {t('EyeTest.SelectTime')}
               </AppText>
               {!branch && (
                 <AppText style={bkStyles.timeHint}>
-                  Pick a store first to see its opening times.
+                  {t('EyeTest.PickStoreFirst')}
                 </AppText>
               )}
               {!!branch && !slots.length && (
                 <AppText style={bkStyles.timeHint}>
-                  No times left on this day — try another date.
+                  {t('EyeTest.NoTimesLeft')}
                 </AppText>
               )}
               <View style={bkStyles.timeGrid}>
@@ -4160,7 +4144,7 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
                   color={Colors.white}
                 />
                 <AppText style={styles.primaryBtnText}>
-                  Confirm Appointment
+                  {t('EyeTest.ConfirmAppointment')}
                 </AppText>
               </TouchableOpacity>
             </View>
@@ -4188,6 +4172,7 @@ const RefractionResult: React.FC<{
   colorVision,
   onRetry,
 }) => {
+  const { t } = useTranslation();
   const cfg = RISK_CONFIG[risk];
   const [showBooking, setShowBooking] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -4196,41 +4181,41 @@ const RefractionResult: React.FC<{
     acuityLeftPass >= ACUITY_PASS_MARK && acuityRightPass >= ACUITY_PASS_MARK;
   const colorOk = colorVision === 'normal';
   const astigmatismOk = astigmatism === 'equal';
+  const eyeStatus = (pass: number) =>
+    pass >= ACUITY_PASS_MARK ? t('EyeTest.Good') : t('EyeTest.NeedsAttention');
 
   const results: { key: string; label: string; ok: boolean; detail: string }[] =
     [
       {
         key: 'acuity',
-        label: 'Visual Acuity',
+        label: t('EyeTest.AcuityName'),
         ok: acuityOk,
-        detail: `Left eye: ${
-          acuityLeftPass >= ACUITY_PASS_MARK ? 'Good' : 'Needs attention'
-        }. Right eye: ${
-          acuityRightPass >= ACUITY_PASS_MARK ? 'Good' : 'Needs attention'
-        }. ${
-          acuityOk
-            ? 'Both eyes read the chart clearly.'
-            : 'One or both eyes had difficulty reading the smaller lines.'
-        }`,
+        detail: t('EyeTest.AcuityDetail', {
+          left: eyeStatus(acuityLeftPass),
+          right: eyeStatus(acuityRightPass),
+          summary: acuityOk
+            ? t('EyeTest.AcuityAllClear')
+            : t('EyeTest.AcuityDifficulty'),
+        }),
       },
       {
         key: 'color',
-        label: 'Colour Vision',
+        label: t('EyeTest.ColorName'),
         ok: colorOk,
         detail:
           colorVision === 'normal'
-            ? 'Normal colour discrimination.'
+            ? t('EyeTest.ColorNormal')
             : colorVision === 'mild'
-            ? 'Possible mild colour vision deficiency.'
-            : 'Signs of colour vision deficiency detected.',
+            ? t('EyeTest.ColorMild')
+            : t('EyeTest.ColorDeficient'),
       },
       {
         key: 'astigmatism',
-        label: 'Astigmatism',
+        label: t('EyeTest.AstigmatismShort'),
         ok: astigmatismOk,
         detail: astigmatismOk
-          ? 'All lines appeared equally dark and clear — no irregularity detected.'
-          : 'Some lines appeared darker or thicker than others.',
+          ? t('EyeTest.AstigmatismOk')
+          : t('EyeTest.AstigmatismNotOk'),
       },
     ];
 
@@ -4248,24 +4233,27 @@ const RefractionResult: React.FC<{
       >
         <Ionicons name={cfg.icon as any} size={48} color={cfg.color} />
         <AppText style={[rfStyles.riskLabel, { color: cfg.color }]}>
-          {cfg.label}
+          {t(`EyeTest.Risk${cfg.key}Label`)}
         </AppText>
-        <AppText style={rfStyles.riskSummary}>{cfg.summary}</AppText>
+        <AppText style={rfStyles.riskSummary}>
+          {t(`EyeTest.Risk${cfg.key}Summary`)}
+        </AppText>
       </View>
 
       {/* Recommendation */}
       <View style={[rfStyles.adviceCard, { borderLeftColor: cfg.color }]}>
-        <AppText style={rfStyles.adviceTitle}>Our Recommendation</AppText>
-        <AppText style={rfStyles.adviceText}>{cfg.advice}</AppText>
+        <AppText style={rfStyles.adviceTitle}>
+          {t('EyeTest.OurRecommendation')}
+        </AppText>
+        <AppText style={rfStyles.adviceText}>
+          {t(`EyeTest.Risk${cfg.key}Advice`)}
+        </AppText>
       </View>
 
       {/* Specialist referral card */}
       <View style={rfStyles.specialistCard}>
         <AppText style={rfStyles.specialistText}>
-          If you have an eye condition and need to see a specialist, please
-          submit a request below. A referral is necessary for a specialist
-          appointment, which you can obtain from your General Practitioner or
-          Optometrist.
+          {t('EyeTest.SpecialistText')}
         </AppText>
         <TouchableOpacity
           style={styles.primaryBtn}
@@ -4274,7 +4262,7 @@ const RefractionResult: React.FC<{
         >
           <Ionicons name="calendar-outline" size={18} color={Colors.white} />
           <AppText style={styles.primaryBtnText}>
-            Request for specialist appointment
+            {t('EyeTest.RequestSpecialist')}
           </AppText>
         </TouchableOpacity>
       </View>
@@ -4338,7 +4326,9 @@ const RefractionResult: React.FC<{
         activeOpacity={0.82}
       >
         <Ionicons name="refresh-outline" size={18} color={Colors.white} />
-        <AppText style={styles.primaryBtnText}>Re-do Test</AppText>
+        <AppText style={styles.primaryBtnText}>
+          {t('EyeTest.RedoTest')}
+        </AppText>
       </TouchableOpacity>
 
       <View style={rfStyles.footerNote}>
@@ -4348,8 +4338,7 @@ const RefractionResult: React.FC<{
           color={Colors.gray400}
         />
         <AppText style={rfStyles.footerNoteText}>
-          Results are indicative only. A full clinical eye examination by a
-          licensed optometrist is required for a prescription.
+          {t('EyeTest.ResultFooter')}
         </AppText>
       </View>
     </ScrollView>
@@ -4359,6 +4348,7 @@ const RefractionResult: React.FC<{
 // ─── Refraction Flow ──────────────────────────────────────────────────────────
 
 const RefractionFlow: React.FC = () => {
+  const { t } = useTranslation();
   const [stage, setStage] = useState<RefractionStage>('intro');
   const [acuityLeftPass, setAcuityLeftPass] = useState(0);
   const [acuityRightPass, setAcuityRightPass] = useState(0);
@@ -4436,7 +4426,7 @@ const RefractionFlow: React.FC = () => {
       <EyeCoverStep
         eye="left"
         stepNum="1a"
-        testName="Visual Acuity"
+        testName={t('EyeTest.AcuityName')}
         onContinue={() => setStage('acuityLeft')}
       />
     );
@@ -4453,7 +4443,7 @@ const RefractionFlow: React.FC = () => {
       <EyeCoverStep
         eye="right"
         stepNum="1b"
-        testName="Visual Acuity"
+        testName={t('EyeTest.AcuityName')}
         onContinue={() => setStage('acuityRight')}
       />
     );
@@ -4491,7 +4481,7 @@ const RefractionFlow: React.FC = () => {
       <EyeCoverStep
         eye="left"
         stepNum="3a"
-        testName="Astigmatism Check"
+        testName={t('EyeTest.AstigmatismName')}
         onContinue={() => setStage('astigmatismLeft')}
       />
     );
@@ -4504,7 +4494,7 @@ const RefractionFlow: React.FC = () => {
       <EyeCoverStep
         eye="right"
         stepNum="3b"
-        testName="Astigmatism Check"
+        testName={t('EyeTest.AstigmatismName')}
         onContinue={() => setStage('astigmatismRight')}
       />
     );
@@ -6309,7 +6299,9 @@ const bkStyles = StyleSheet.create({
 
   // Date chips
   dateChip: {
-    width: 56,
+    // minWidth, not width — Khmer day/month names run wider than "Mon"/"Jan".
+    minWidth: 56,
+    paddingHorizontal: Spacing.xs,
     alignItems: 'center',
     paddingVertical: Spacing.sm + 2,
     borderRadius: BorderRadius.lg,

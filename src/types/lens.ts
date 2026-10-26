@@ -42,10 +42,24 @@ export type LensTier = {
   note?: string;
 };
 
+/**
+ * The one thing a lens or lens family is bought for — Eyezen's big optical
+ * centre, Varilux's progressive design — shown as a large panel above the
+ * detail rather than as one bullet among many.
+ */
+export type LensHighlight = {
+  /** Ionicons name. */
+  icon: string;
+  title: Localized;
+  text: Localized;
+};
+
 export type LensProduct = {
   id: string;
   /** SKU name — not translated. */
   name: string;
+  /** This lens's own headline benefit, shown big at the top of its card. */
+  highlight?: LensHighlight;
   /** The coating badge — label plus its dot colour. */
   coating: { label: Localized; color: string };
   features: Localized[];
@@ -63,6 +77,8 @@ export type LensCategory = {
   name: Localized;
   title: Localized;
   subtitle: Localized;
+  /** The family's headline benefit, shown big at the top of the tab. */
+  highlight?: LensHighlight;
   /** Empty string when the shop has not supplied copy for this category yet. */
   recommendedFor: Localized;
   /**
@@ -468,6 +484,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'HOYA Nulux Full Control',
     subtitle:
       'Best-selling HOYA single vision lenses, supplied with the complete Full Control coating package.',
+    highlight: {
+      icon: 'shield-checkmark-outline',
+      title: 'Full Control: 4 coatings in 1 lens',
+      text: 'Hi-Vision LongLife, BlueControl, UV Control and Hi-Vision Anti-bacterial — on every Nulux lens.',
+    },
     recommendedFor:
       'Ideal for everyday single vision wearers who want premium Japanese coating quality.',
     goodFor: [
@@ -483,6 +504,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'nulux-fc-155',
         name: 'Nulux Classic Full Control 1.55',
+        highlight: {
+          icon: 'glasses-outline',
+          title: 'Standard thickness, full coating',
+          text: 'The everyday 1.55 index with the complete Full Control package.',
+        },
         coating: { label: 'Full Control Coating', color: COATING.blue },
         features: ['1.55 index — standard thickness', ...HOYA_FULL_CONTROL],
         price: 80,
@@ -491,6 +517,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'nulux-fc-153',
         name: 'Nulux Classic Full Control 1.53',
+        highlight: {
+          icon: 'shield-outline',
+          title: 'Impact-resistant material',
+          text: 'A 1.53 index material that stands up better to knocks and drops.',
+        },
         coating: { label: 'Full Control Coating', color: COATING.blue },
         features: ['1.53 index — impact-resistant material', ...HOYA_FULL_CONTROL],
         price: 125,
@@ -502,6 +533,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'nulux-fc-160',
         name: 'Nulux Classic Full Control 1.60',
+        highlight: {
+          icon: 'remove-outline',
+          title: 'Thinner and lighter',
+          text: 'A 1.60 index that keeps the lens slimmer than the standard 1.55.',
+        },
         coating: { label: 'Full Control Coating', color: COATING.blue },
         features: ['1.60 index — thinner and lighter', ...HOYA_FULL_CONTROL],
         price: 125,
@@ -510,6 +546,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'nulux-fc-167',
         name: 'Nulux Classic Full Control 1.67',
+        highlight: {
+          icon: 'contract-outline',
+          title: 'Extra thin for strong prescriptions',
+          text: 'A 1.67 index that keeps strong prescriptions slim and light.',
+        },
         coating: { label: 'Full Control Coating', color: COATING.blue },
         features: [
           '1.67 index — extra thin for strong prescriptions',
@@ -533,6 +574,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor Crizal 1.56 AS',
     subtitle:
       'Everyday clear lenses with UV protection and the Blue UV Capture finish.',
+    highlight: {
+      icon: 'sunny-outline',
+      title: 'E-SPF 35 UV protection',
+      text: 'Every lens in this range carries E-SPF 35 UV protection and the Blue UV Capture finish.',
+    },
     recommendedFor:
       'Ideal for digital device users, office workers, and general everyday wear.',
     goodFor: [
@@ -545,6 +591,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'eyezen-start-156',
         name: 'Eyezen Start Stock 1.56',
+        highlight: {
+          icon: 'scan-circle-outline',
+          title: 'Big optical centre',
+          text: 'A larger clear-vision zone in the middle of the lens — designed for digital device users.',
+        },
         coating: { label: 'Blue UV Capture', color: COATING.blue },
         features: [
           'Designed for digital device users',
@@ -561,6 +612,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'crizal-sapphire-hr-blue-156',
         name: 'Crizal Sapphire HR Blue Capture 1.56',
+        highlight: {
+          icon: 'aperture-outline',
+          title: '360° anti-reflection',
+          text: 'Fewer reflections from every angle, with E-SPF 35 UV protection.',
+        },
         coating: { label: 'Blue UV Capture', color: COATING.blue },
         features: [
           'Anti-reflective protection 360°',
@@ -578,6 +634,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'crizal-156',
         name: 'Crizal 1.56',
+        highlight: {
+          icon: 'water-outline',
+          title: 'Easy-care everyday lens',
+          text: 'Scratch-, water- and dust-resistant, and easy to wipe clean.',
+        },
         coating: { label: 'Blue UV Capture', color: COATING.green },
         features: [
           'UV protection (E-SPF 35)',
@@ -599,6 +660,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor AirWear 1.59',
     subtitle:
       'Thin, light and impact-resistant polycarbonate lenses with the Crizal Sapphire HR finish.',
+    highlight: {
+      icon: 'shield-checkmark-outline',
+      title: 'Impact-resistant polycarbonate',
+      text: 'Resists impact far better than standard resin — the safest everyday choice.',
+    },
     recommendedFor:
       'Ideal for children, sports, and anyone who needs a tougher, lighter lens.',
     goodFor: [
@@ -611,6 +677,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'airwear-crizal-sapphire-hr-159',
         name: '1.59 AirWear Crizal Sapphire HR',
+        highlight: {
+          icon: 'barbell-outline',
+          title: 'Thin, light and tough',
+          text: 'Polycarbonate with the Crizal Sapphire HR finish and 360° anti-reflection.',
+        },
         coating: { label: 'Blue UV Filter', color: COATING.blue },
         features: [
           'Thin, light, impact-resistant polycarbonate',
@@ -637,6 +708,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor Transitions',
     subtitle:
       'Photochromic lenses that darken in sunlight and turn clear again indoors.',
+    highlight: {
+      icon: 'partly-sunny-outline',
+      title: 'Dark outdoors, clear indoors',
+      text: 'One pair of glasses that changes with the light, so you need no separate sunglasses.',
+    },
     recommendedFor:
       'Ideal for people moving between indoors and outdoors all day, and for driving.',
     goodFor: [
@@ -649,6 +725,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'transitions-gens-sapphire-hr-16',
         name: '1.6 AS Transitions GenS Sapphire HR',
+        highlight: {
+          icon: 'flash-outline',
+          title: 'Fastest colour change',
+          text: 'Best for moving in and out all day — it darkens and clears quickest.',
+        },
         coating: { label: 'Blue UV Filter', color: COATING.blue },
         features: [
           'Fast, responsive colour change',
@@ -667,6 +748,11 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
       {
         id: 'transitions-classic-easypro-156',
         name: '1.56 AS Transitions Classic EasyPro',
+        highlight: {
+          icon: 'contrast-outline',
+          title: 'Classic colour change',
+          text: 'Dependable tint across the standard range, at a lower price than GenS.',
+        },
         coating: { label: 'Blue UV Filter', color: COATING.green },
         features: [
           'Classic colour change across the standard tint range',

@@ -20,6 +20,21 @@ const resources = {
   },
 };
 
+// Fast Refresh re-runs this module when a locale file changes, but i18next is
+// a singleton that was already initialised with the old copy — so new keys
+// rendered as their fallback names until a full restart. Push the fresh copy in.
+if (i18n.isInitialized) {
+  supportedLanguages.forEach(language => {
+    i18n.addResourceBundle(
+      language,
+      'translation',
+      resources[language].translation,
+      true,
+      true,
+    );
+  });
+}
+
 const isSupportedLanguage = (
   language: string | null,
 ): language is AppLanguage => {

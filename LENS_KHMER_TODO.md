@@ -161,27 +161,27 @@ them in place; say the word and I will strip these to English too.
 
 | key | English | current Khmer | corrected Khmer |
 |---|---|---|---|
-| `LensGuideTitle` | Lens Technology | បច្ចេកវិទ្យាកែវ |  |
+| `LensGuideTitle` | Lens Technology | បច្ចេកវិទ្យាកញ្ចក់ |  |
 | `LensRecommendedFor` | Recommended For | សមស្របសម្រាប់ |  |
 | `LensFeatures` | Features | លក្ខណៈពិសេស |  |
 | `LensRangePrice` | Range & Price | កម្រិត និងតម្លៃ |  |
 | `LensTips` | Recommendation Tips | ការណែនាំ |  |
 | `LensComingSoon` | Details coming soon | ព័ត៌មានលម្អិតនឹងមកដល់ឆាប់ៗ |  |
-| `LensComingSoonHint` | Lens options for this type are being added. Ask in store for current pricing. | ជម្រើសកែវសម្រាប់ប្រភេទនេះកំពុងត្រូវបានបញ្ចូល។ សូមសាកសួរនៅសាខាសម្រាប់តម្លៃបច្ចុប្បន្ន។ |  |
+| `LensComingSoonHint` | Lens options for this type are being added. Ask in store for current pricing. | ជម្រើសកញ្ចក់សម្រាប់ប្រភេទនេះកំពុងត្រូវបានបញ្ចូល។ សូមសាកសួរនៅសាខាសម្រាប់តម្លៃបច្ចុប្បន្ន។ |  |
 | `LensDemoKicker` | Interactive demo | ការសាកល្បងផ្ទាល់ |  |
 | `LensDemoTitle` | Blue Block Laser Simulation | ការសាកល្បងពន្លឺ Blue Block |  |
 | `LensDemoLaser` | Laser | ពន្លឺ |  |
-| `LensDemoLens` | Lens | កែវ |  |
+| `LensDemoLens` | Lens | កញ្ចក់ |  |
 | `LensDemoEye` | Eye | ភ្នែក |  |
 | `LensDemoLaserOn` | Laser: ON | ពន្លឺ៖ បើក |  |
 | `LensDemoLaserOff` | Laser: OFF | ពន្លឺ៖ បិទ |  |
 | `LensDemoUv400` | UV400 | UV400 |  |
 | `LensDemoBlueBlock` | Blue Block | Blue Block |  |
-| `LensDemoIdle` | Turn the laser on to see how each coating handles blue light. | សូមបើកពន្លឺ ដើម្បីមើលថាកែវនីមួយៗការពារពន្លឺខៀវយ៉ាងដូចម្តេច។ |  |
-| `LensDemoBlocked` | The Blue Block coating stops the blue light at the lens — your eye stays protected. | ស្រទាប់ Blue Block បញ្ឈប់ពន្លឺខៀវនៅត្រង់កែវ — ភ្នែករបស់អ្នកត្រូវបានការពារ។ |  |
+| `LensDemoIdle` | Turn the laser on to see how each coating handles blue light. | សូមបើកពន្លឺ ដើម្បីមើលថាកញ្ចក់នីមួយៗការពារពន្លឺខៀវយ៉ាងដូចម្តេច។ |  |
+| `LensDemoBlocked` | The Blue Block coating stops the blue light at the lens — your eye stays protected. | ស្រទាប់ Blue Block បញ្ឈប់ពន្លឺខៀវនៅត្រង់កញ្ចក់ — ភ្នែករបស់អ្នកត្រូវបានការពារ។ |  |
 | `LensDemoPassing` | UV400 filters sunlight, but digital blue light still reaches your eye. | UV400 ការពារពន្លឺព្រះអាទិត្យ ប៉ុន្តែពន្លឺខៀវពីអេក្រង់នៅតែចូលដល់ភ្នែក។ |  |
-| `LensOptions` | Lens Options | ជម្រើសកែវ |  |
-| `LensThicknessTitle` | Lens Index Thickness Comparison SPH -4.00 | ការប្រៀបធៀបកម្រាស់កែវតាមសន្ទស្សន៍ SPH -4.00 |  |
+| `LensOptions` | Lens Options | ជម្រើសកញ្ចក់ |  |
+| `LensThicknessTitle` | Lens Index Thickness Comparison SPH -4.00 | ការប្រៀបធៀបកម្រាស់កញ្ចក់តាមសន្ទស្សន៍ SPH -4.00 |  |
 | `LensThicknessBaseline` | 1.56 Index (Thicker) | សន្ទស្សន៍ 1.56 (ក្រាស់ជាង) |  |
 | `LensThicknessSelected` | {{index}} Thinner | {{index}} ស្តើងជាង |  |
 | `LensThicknessVs` | VS | ធៀបនឹង |  |
@@ -203,12 +203,45 @@ them in place; say the word and I will strip these to English too.
 | `TintTeal` | Teal | បៃតងខៀវ |  |
 | `TintOrange` | Orange | ទឹកក្រូច |  |
 | `TintPink` | Pink | ផ្កាឈូក |  |
-| `LensZoneBifocalTitle` | Bifocal Zone Mapping | ផែនទីតំបន់កែវពីរកម្រិត |  |
-| `LensZoneProgressiveTitle` | Progressive Zone Mapping | ផែនទីតំបន់កែវបន្តបន្ទាប់ |  |
-| `ZoneTapHint` | Tap a lens segment to map the zones | ចុចលើផ្នែកកែវ ដើម្បីមើលតំបន់នីមួយៗ |  |
+| `LensZoneBifocalTitle` | Bifocal Zone Mapping | ផែនទីតំបន់កញ្ចក់ពីរកម្រិត |  |
+| `LensZoneProgressiveTitle` | Progressive Zone Mapping | ផែនទីតំបន់កញ្ចក់បន្តបន្ទាប់ |  |
+| `ZoneTapHint` | Tap a lens segment to map the zones | ចុចលើផ្នែកកញ្ចក់ ដើម្បីមើលតំបន់នីមួយៗ |  |
 | `ZoneFar` | FAR | ឆ្ងាយ |  |
 | `ZoneMid` | MID | កណ្តាល |  |
 | `ZoneNear` | NEAR | ជិត |  |
 | `ZoneFarBody` | The upper zone, used for distance — driving, watching TV, seeing across a room. | ផ្នែកខាងលើ សម្រាប់មើលឆ្ងាយ — បើកបរ មើលទូរទស្សន៍ មើលឆ្លងបន្ទប់។ |  |
 | `ZoneMidBody` | The middle corridor, for arm's-length work such as a computer screen. | ច្រករបៀងកណ្តាល សម្រាប់ការងារចម្ងាយដៃ ដូចជាអេក្រង់កុំព្យូទ័រ។ |  |
 | `ZoneNearBody` | The lower zone, for close work — reading, your phone, fine detail. | ផ្នែកខាងក្រោម សម្រាប់មើលជិត — អាន មើលទូរស័ព្ទ និងព័ត៌មានលម្អិត។ |  |
+
+## Headline benefits (big panels)
+
+| where | field | English | Khmer |
+|---|---|---|---|
+| hoya-nulux-full-control | title | Full Control: 4 coatings in 1 lens |  |
+| hoya-nulux-full-control | text | Hi-Vision LongLife, BlueControl, UV Control and Hi-Vision Anti-bacterial — on every Nulux lens. |  |
+| nulux-fc-155 | title | Standard thickness, full coating |  |
+| nulux-fc-155 | text | The everyday 1.55 index with the complete Full Control package. |  |
+| nulux-fc-153 | title | Impact-resistant material |  |
+| nulux-fc-153 | text | A 1.53 index material that stands up better to knocks and drops. |  |
+| nulux-fc-160 | title | Thinner and lighter |  |
+| nulux-fc-160 | text | A 1.60 index that keeps the lens slimmer than the standard 1.55. |  |
+| nulux-fc-167 | title | Extra thin for strong prescriptions |  |
+| nulux-fc-167 | text | A 1.67 index that keeps strong prescriptions slim and light. |  |
+| essilor-crizal-156-as | title | E-SPF 35 UV protection |  |
+| essilor-crizal-156-as | text | Every lens in this range carries E-SPF 35 UV protection and the Blue UV Capture finish. |  |
+| eyezen-start-156 | title | Big optical centre |  |
+| eyezen-start-156 | text | A larger clear-vision zone in the middle of the lens — designed for digital device users. |  |
+| crizal-sapphire-hr-blue-156 | title | 360° anti-reflection |  |
+| crizal-sapphire-hr-blue-156 | text | Fewer reflections from every angle, with E-SPF 35 UV protection. |  |
+| crizal-156 | title | Easy-care everyday lens |  |
+| crizal-156 | text | Scratch-, water- and dust-resistant, and easy to wipe clean. |  |
+| essilor-airwear-159 | title | Impact-resistant polycarbonate |  |
+| essilor-airwear-159 | text | Resists impact far better than standard resin — the safest everyday choice. |  |
+| airwear-crizal-sapphire-hr-159 | title | Thin, light and tough |  |
+| airwear-crizal-sapphire-hr-159 | text | Polycarbonate with the Crizal Sapphire HR finish and 360° anti-reflection. |  |
+| essilor-transitions | title | Dark outdoors, clear indoors |  |
+| essilor-transitions | text | One pair of glasses that changes with the light, so you need no separate sunglasses. |  |
+| transitions-gens-sapphire-hr-16 | title | Fastest colour change |  |
+| transitions-gens-sapphire-hr-16 | text | Best for moving in and out all day — it darkens and clears quickest. |  |
+| transitions-classic-easypro-156 | title | Classic colour change |  |
+| transitions-classic-easypro-156 | text | Dependable tint across the standard range, at a lower price than GenS. |  |

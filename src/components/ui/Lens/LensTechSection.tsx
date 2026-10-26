@@ -13,6 +13,7 @@ import {
 import { LENS_CATEGORIES, localize } from '../../../types/lens';
 import type {
   LensCategory,
+  LensHighlight,
   LensProduct,
   LensTier,
 } from '../../../types/lens';
@@ -69,6 +70,65 @@ const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
 );
 
 /**
+ * The headline benefit, shown big. `variant="category"` is the solid banner at
+ * the top of a tab; `variant="product"` is the softer panel inside a lens card.
+ */
+const HighlightPanel: React.FC<{
+  highlight: LensHighlight;
+  kicker: string;
+  variant: 'category' | 'product';
+}> = ({ highlight, kicker, variant }) => {
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
+  const isCategory = variant === 'category';
+
+  return (
+    <View
+      style={[
+        styles.highlight,
+        isCategory ? styles.highlightCategory : styles.highlightProduct,
+      ]}
+    >
+      <View
+        style={[
+          styles.highlightIcon,
+          isCategory ? styles.highlightIconCategory : styles.highlightIconProduct,
+        ]}
+      >
+        <Ionicons
+          name={highlight.icon as any}
+          size={isCategory ? 30 : 26}
+          color={isCategory ? Colors.white : Colors.primary}
+        />
+      </View>
+      <View style={styles.highlightTextBox}>
+        <AppText
+          style={[
+            styles.highlightKicker,
+            isCategory && styles.highlightOnDark,
+          ]}
+        >
+          {kicker}
+        </AppText>
+        <AppText
+          style={[
+            styles.highlightTitle,
+            isCategory && styles.highlightTitleCategory,
+          ]}
+        >
+          {localize(highlight.title, lang)}
+        </AppText>
+        <AppText
+          style={[styles.highlightText, isCategory && styles.highlightOnDark]}
+        >
+          {localize(highlight.text, lang)}
+        </AppText>
+      </View>
+    </View>
+  );
+};
+
+/**
  * The web table becomes a card per lens: a table with four columns cannot be
  * read on a phone, but each row is self-contained so it stacks cleanly.
  */
@@ -93,6 +153,14 @@ const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
           {localize(product.coating.label, lang)}
         </AppText>
       </View>
+
+      {product.highlight && (
+        <HighlightPanel
+          highlight={product.highlight}
+          kicker={t('LensWhyThisLens')}
+          variant="product"
+        />
+      )}
 
       <AppText style={styles.blockLabel}>{t('LensFeatures')}</AppText>
       {product.features.map((feature, i) => (
@@ -197,6 +265,14 @@ const LensTechSection: React.FC<LensTechSectionProps> = ({
             the selected tab's own label, and the description below it said the
             same thing again in longer form. The recommendation box is the
             first thing the tab has to add. */}
+        {active.highlight && (
+          <HighlightPanel
+            highlight={active.highlight}
+            kicker={t('LensKeyBenefit')}
+            variant="category"
+          />
+        )}
+
         {detailed && !!localize(active.subtitle, lang) && (
           <AppText style={styles.subtitle}>
             {localize(active.subtitle, lang)}
@@ -359,6 +435,57 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: Spacing.md,
   },
+
+  highlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  highlightCategory: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.lg,
+    ...Shadow.sm,
+  },
+  highlightProduct: {
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.primary + '33',
+  },
+  highlightIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  highlightIconCategory: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  highlightIconProduct: { backgroundColor: Colors.white },
+  highlightTextBox: { flex: 1 },
+  highlightKicker: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  highlightTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '800',
+    color: Colors.black,
+    marginTop: 2,
+    lineHeight: 24,
+  },
+  highlightTitleCategory: { fontSize: 22, lineHeight: 28, color: Colors.white },
+  highlightText: {
+    fontSize: FontSize.sm,
+    color: Colors.gray600,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  highlightOnDark: { color: 'rgba(255,255,255,0.88)' },
 
   recommendBox: {
     flexDirection: 'row',

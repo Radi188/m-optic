@@ -142,3 +142,23 @@ it('shows each branded tab\'s "Good for" chips under its recommendation', () => 
     for (const g of tab.goodFor!) expect(found).toContain(localize(g.label, 'en'));
   }
 });
+
+it('shows the tab\'s key benefit and swaps the lens benefit with the chip', () => {
+  const crizal = BRAND_LENS_CATEGORIES.find(c => c.id === 'essilor-crizal-156-as')!;
+  const [eyezen, sapphire] = crizal.products;
+  let tree: any;
+  act(() => {
+    tree = renderer.create(<LensTechSection categories={BRAND_LENS_CATEGORIES} detailed />);
+  });
+  act(() => pressableLabelled(tree, localize(crizal.name, 'en')).props.onPress());
+
+  let found = texts(tree.toJSON());
+  expect(found).toContain(localize(crizal.highlight!.title, 'en'));
+  expect(found).toContain('Big optical centre');
+  expect(found).not.toContain(localize(sapphire.highlight!.title, 'en'));
+
+  act(() => pressableLabelled(tree, sapphire.name).props.onPress());
+  found = texts(tree.toJSON());
+  expect(found).toContain(localize(sapphire.highlight!.title, 'en'));
+  expect(found).not.toContain(localize(eyezen.highlight!.title, 'en'));
+});

@@ -192,7 +192,12 @@ export type InvoiceItem = {
   productType: string | null;
   quantity: number | null;
   unitPrice: number | null;
+  /** What the customer paid for the line, after its discount. */
   total: number | null;
+  /** Line discount in USD; null when the line was not discounted. */
+  discount: number | null;
+  /** Full price before the discount; null when there was no discount. */
+  originalTotal: number | null;
 };
 
 export type Invoice = {
@@ -411,6 +416,17 @@ function normaliseInvoiceItem(raw: RawInvoiceItem, index: number): InvoiceItem {
   const total = money(raw.grand_total, raw.total_amount, raw.total, raw.price);
   const unitPrice = money(raw.item_price, raw.unit_price, raw.price);
 
+  // `total_amount` is the line before its discount and `grand_total` after.
+  // When `total_amount` is missing (or not above what was paid), the full
+  // price is rebuilt from the paid total plus the discount.
+  const discount = money(raw.discount_amount);
+  const gross = money(raw.total_amount);
+  let originalTotal: number | null = null;
+  if (discount !== null && discount > 0 && total !== null) {
+    originalTotal =
+      gross !== null && gross > total ? gross : round2(total + discount);
+  }
+
   return {
     id: String(raw.id ?? raw.reference ?? `item-${index}`),
     name:
@@ -427,6 +443,50 @@ function normaliseInvoiceItem(raw: RawInvoiceItem, index: number): InvoiceItem {
     quantity: toNumber(raw.order_qty, raw.quantity, raw.qty),
     unitPrice: unitPrice && unitPrice > 0 ? unitPrice : null,
     total,
+    discount: originalTotal !== null ? discount : null,
+    originalTotal,
+  };
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export type InvoiceSavings = {
+  /** Price before any discount. */
+  fullPrice: number;
+  /** fullPrice − total, so the three figures always add up. */
+  discount: number;
+  /** Whole-number percentage off the full price. */
+  percent: number;
+};
+
+/**
+ * How much the customer saved on an invoice, or null when nothing was
+ * discounted. Only an explicit discount from the API (invoice-wide or on any
+ * line) counts — a deposit is also less than the item total, and that is
+ * not a saving.
+ */
+export function invoiceSavings(invoice: Invoice): InvoiceSavings | null {
+  if (invoice.total === null) return null;
+
+  const lineDiscount = invoice.items.reduce(
+    (sum, item) => sum + (item.discount ?? 0),
+    0,
+  );
+  const explicit = Math.max(invoice.discount ?? 0, lineDiscount);
+  if (explicit <= 0) return null;
+
+  // Prefer the backend's own pre-discount subtotal; fall back to rebuilding
+  // it from the discount when the subtotal is missing or already net.
+  const fullPrice =
+    invoice.subtotal !== null && invoice.subtotal > invoice.total
+      ? invoice.subtotal
+      : round2(invoice.total + explicit);
+  const discount = round2(fullPrice - invoice.total);
+
+  return {
+    fullPrice,
+    discount,
+    percent: Math.round((discount / fullPrice) * 100),
   };
 }
 

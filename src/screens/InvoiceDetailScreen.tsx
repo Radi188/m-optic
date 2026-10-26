@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BorderRadius, Colors, FontSize, Shadow, Spacing, Layout } from '../theme';
 import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
+import { invoiceSavings } from '../types/history';
 import type { Invoice, InvoiceItem } from '../types/history';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
@@ -41,6 +42,7 @@ const InvoiceDetailScreen: React.FC = () => {
       : formatPrice(value, { currency: invoice?.currency ?? '$', decimals: 2 });
 
   const eventTint = eventColors(invoice?.event ?? null);
+  const savings = invoice ? invoiceSavings(invoice) : null;
 
   const header = (
     <View style={styles.header}>
@@ -80,6 +82,12 @@ const InvoiceDetailScreen: React.FC = () => {
         {/* Amount first: it is the one number the customer opens this for. */}
         <View style={styles.heroCard}>
           <AppText style={styles.heroLabel}>{t('Total')}</AppText>
+          {/* Full price struck through above what was actually paid. */}
+          {savings && (
+            <AppText style={styles.heroOriginal}>
+              {money(savings.fullPrice)}
+            </AppText>
+          )}
           <AppText style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
             {money(invoice.total) ?? '—'}
           </AppText>
@@ -88,6 +96,16 @@ const InvoiceDetailScreen: React.FC = () => {
             <AppText style={styles.heroSecondary}>
               ៛{invoice.totalKhr.toLocaleString(locale)}
             </AppText>
+          )}
+
+          {savings && (
+            <View style={styles.savedPill}>
+              <Ionicons name="pricetag" size={13} color={Colors.success} />
+              <AppText style={styles.savedPillText}>
+                {t('YouSaved', { amount: money(savings.discount) })}
+                {savings.percent > 0 ? ` (-${savings.percent}%)` : ''}
+              </AppText>
+            </View>
           )}
 
           {!!invoice.event && (
@@ -129,12 +147,24 @@ const InvoiceDetailScreen: React.FC = () => {
         <AppText style={styles.sectionLabel}>{t('Summary')}</AppText>
 
         <View style={styles.card}>
-          <SummaryRow label={t('Subtotal')} value={money(invoice.subtotal)} />
-          {!!invoice.discount && (
-            <SummaryRow
-              label={t('Discount')}
-              value={`-${money(invoice.discount)}`}
-            />
+          {savings ? (
+            <>
+              <SummaryRow
+                label={t('FullPrice')}
+                value={money(savings.fullPrice)}
+              />
+              <SummaryRow
+                label={
+                  savings.percent > 0
+                    ? `${t('Discount')} (-${savings.percent}%)`
+                    : t('Discount')
+                }
+                value={`-${money(savings.discount)}`}
+                highlight
+              />
+            </>
+          ) : (
+            <SummaryRow label={t('Subtotal')} value={money(invoice.subtotal)} />
           )}
           <SummaryRow
             label={t('GrandTotal')}
@@ -250,9 +280,22 @@ const ItemRow: React.FC<{
       </View>
 
       {item.total !== null && (
-        <AppText style={styles.itemTotal}>
-          {formatPrice(item.total, { currency, decimals: 2 })}
-        </AppText>
+        <View style={styles.itemPrice}>
+          {/* Discounted line: full price struck through, then what was paid. */}
+          {item.originalTotal !== null && (
+            <AppText style={styles.itemOriginal}>
+              {formatPrice(item.originalTotal, { currency, decimals: 2 })}
+            </AppText>
+          )}
+          <AppText style={styles.itemTotal}>
+            {formatPrice(item.total, { currency, decimals: 2 })}
+          </AppText>
+          {item.originalTotal !== null && item.discount !== null && (
+            <AppText style={styles.itemDiscount}>
+              -{formatPrice(item.discount, { currency, decimals: 2 })}
+            </AppText>
+          )}
+        </View>
       )}
     </View>
   );
@@ -262,13 +305,21 @@ const SummaryRow: React.FC<{
   label: string;
   value: string | null;
   emphasis?: boolean;
+  /** Green value, for the discount line. */
+  highlight?: boolean;
   isLast?: boolean;
-}> = ({ label, value, emphasis = false, isLast = false }) => (
+}> = ({ label, value, emphasis = false, highlight = false, isLast = false }) => (
   <View style={[styles.summaryRow, isLast && styles.rowLast]}>
     <AppText style={[styles.summaryLabel, emphasis && styles.summaryLabelBold]}>
       {label}
     </AppText>
-    <AppText style={[styles.summaryValue, emphasis && styles.summaryValueBold]}>
+    <AppText
+      style={[
+        styles.summaryValue,
+        emphasis && styles.summaryValueBold,
+        highlight && styles.summaryValueSaving,
+      ]}
+    >
       {value ?? '—'}
     </AppText>
   </View>
@@ -378,6 +429,28 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.gray500,
   },
+  heroOriginal: {
+    marginTop: 6,
+    fontSize: FontSize.md,
+    fontWeight: '600',
+    color: Colors.gray400,
+    textDecorationLine: 'line-through',
+  },
+  savedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.successLight,
+  },
+  savedPillText: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.success,
+  },
   heroBadges: {
     flexDirection: 'row',
     gap: Spacing.sm,
@@ -447,10 +520,21 @@ const styles = StyleSheet.create({
     color: Colors.black,
   },
   itemMeta: { fontSize: FontSize.xs, color: Colors.gray500 },
+  itemPrice: { alignItems: 'flex-end', gap: 1 },
+  itemOriginal: {
+    fontSize: FontSize.xs,
+    color: Colors.gray400,
+    textDecorationLine: 'line-through',
+  },
   itemTotal: {
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.black,
+  },
+  itemDiscount: {
+    fontSize: FontSize.xs,
+    fontWeight: '700',
+    color: Colors.success,
   },
   emptyItems: {
     paddingVertical: Spacing.lg,
@@ -482,6 +566,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.black,
   },
+  summaryValueSaving: { color: Colors.success },
 
   detailRow: {
     flexDirection: 'row',

@@ -13,7 +13,11 @@ const walk = (): Localized[] => {
   for (const c of ALL_CATEGORIES) {
     out.push(c.name, c.title, c.subtitle, c.recommendedFor, ...c.tips);
     for (const g of c.goodFor ?? []) out.push(g.label);
-    for (const p of c.products) out.push(p.coating.label, ...p.features);
+    if (c.highlight) out.push(c.highlight.title, c.highlight.text);
+    for (const p of c.products) {
+      out.push(p.coating.label, ...p.features);
+      if (p.highlight) out.push(p.highlight.title, p.highlight.text);
+    }
   }
   return out;
 };
@@ -266,5 +270,30 @@ describe('branded lens tabs', () => {
     for (const p of hoya.products) {
       for (const tier of p.tiers) expect(tier.maxComp).toBeTruthy();
     }
+  });
+});
+
+describe('headline benefits', () => {
+  it('gives every branded tab and every branded lens its own benefit', () => {
+    for (const c of BRAND_LENS_CATEGORIES) {
+      expect([c.id, !!c.highlight]).toEqual([c.id, true]);
+      for (const p of c.products) {
+        expect([p.id, !!p.highlight]).toEqual([p.id, true]);
+      }
+    }
+  });
+
+  it('never repeats a lens benefit within a tab', () => {
+    for (const c of BRAND_LENS_CATEGORIES) {
+      const titles = c.products.map(p => localize(p.highlight!.title, 'en'));
+      expect(new Set(titles).size).toBe(titles.length);
+    }
+  });
+
+  it('leads Eyezen with its big optical centre', () => {
+    const eyezen = BRAND_LENS_CATEGORIES.flatMap(c => c.products).find(
+      p => p.id === 'eyezen-start-156',
+    );
+    expect(localize(eyezen!.highlight!.title, 'en')).toBe('Big optical centre');
   });
 });
