@@ -25,6 +25,7 @@ import type { AppDispatch } from '../../../store';
 import { Colors, FontSize, Layout, Spacing } from '../../../theme';
 import AppText from '../../AppText';
 import CodeInput from './CodeInput';
+import { posthog } from '../../../config/posthog';
 import { AuthButton, AuthError } from './AuthParts';
 
 const CODE_LENGTH = 6;
@@ -144,7 +145,10 @@ const PinSetupSheet: React.FC<PinSetupSheetProps> = ({
       if (setPinThunk.fulfilled.match(result)) {
         // set-pin doesn't reliably return the customer record, so sign in with
         // the new PIN to get the full session the rest of the app expects.
-        await dispatch(loginThunk({ phone_number: phone, pin }));
+        const loginResult = await dispatch(loginThunk({ phone_number: phone, pin }));
+        if (loginThunk.fulfilled.match(loginResult)) {
+          posthog?.capture('pin_setup_completed');
+        }
       }
       busy.current = false;
     },

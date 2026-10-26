@@ -42,6 +42,7 @@ import {
   FACE_GEOMETRY_JS,
 } from './glassesModelWeb';
 import { formatPrice } from '../utils/formatPrice';
+import { posthog } from '../config/posthog';
 
 interface Props {
   glass: GlassItem;
@@ -121,27 +122,54 @@ var GLASS_NAME = '${glass.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
 // Product GLBs are authored front-facing +Z, which already faces our camera.
 var MODEL_BASE_ROT_Y = 0;
 
-// Overall size of the glasses relative to the temple-to-temple span measured
-// between landmarks 234 / 454. The GLB is authored in real-world metres
-// (148 mm across), which already matches a real face, so 1.0 is "life size";
-// real frames usually sit a touch wider than the face at temple level.
-// ↑ Raise this to make the glasses bigger, lower it to shrink them.
-var SIZE_MULT = 1.10;
+// ── Size ──────────────────────────────────────────────────────────────────────
+// The frame FRONT (lenses + bridge + hinges, not the arms) is drawn at the
+// real frame's width relative to the wearer's face, measured each frame as the
+// span between landmarks 234 / 454 — the sides of the face, just in front of
+// the ears. A typical adult face is ~150 mm across there.
+//
+// FRAME_WIDTH_MM comes from the product's measurements (hinge to hinge, or
+// 2 x lens + bridge) when the shop has entered them; otherwise a medium
+// frame is assumed. Either way a frame comes out slightly narrower than the
+// face, which is how a well-fitted pair sits.
+//
+// The old fit drew the WHOLE model, arms included, at 110% of the face span,
+// which put the front well wider than the face.
+var FRAME_WIDTH_MM   = ${glass.frameWidthMm ?? 'null'};
+var DEFAULT_FRAME_MM = 138;   // a medium frame
+var FACE_WIDTH_MM    = 150;   // landmark 234 ↔ 454 on an average adult
+// Final fine-tune on top of the real size. ↑ bigger, ↓ smaller.
+var SIZE_MULT = 1.0;
+var FRONT_TO_FACE = ((FRAME_WIDTH_MM || DEFAULT_FRAME_MM) / FACE_WIDTH_MM) * SIZE_MULT;
 
-// ── Temple (arm) progressive reveal ───────────────────────────────────────────
+// ── Temple (arm) visibility ───────────────────────────────────────────────────
 // The model's own Temple_L/R_Locator_GRP nodes are the arms, and each side is
 // driven independently off the head basis rather than off |yaw|:
 //
 //   near arm (the one rotating TOWARDS the camera) — fades in as it clears the
-//     cheek, because that is the only arm whose silhouette we can get wrong;
-//   far  arm (rotating AWAY) — left at full opacity and handed to the head
-//     occluder, which hides it inside the head and lets it emerge naturally
-//     behind the jaw at a strong profile.
+//     cheek, then is drawn at its FULL length back to the ear. It is no longer
+//     depth-tested against the head occluder, which used to swallow most of it
+//     and leave a short stub at the hinge.
+//   far  arm (rotating AWAY) — fades OUT as the head turns. It used to be left
+//     opaque for the occluder to hide, but the occluder does not cover every
+//     head, and the arm showed through across the face.
+//   head-on (inside ±TEMPLE_DEAD_ZONE) — both arms point straight back behind
+//     the front and are left to the occluder.
 //
 // The signal is the head's X axis . camera Z ≈ sin(yaw): 0 head-on, +1 when the
 // wearer's LEFT temple points at the camera, -1 when their right one does.
-var TEMPLE_REVEAL_START = 0.03;   // ~2 degrees of turn — the arm starts to show
-var TEMPLE_REVEAL_FULL  = 0.20;   // ~12 degrees — fully opaque
+var TEMPLE_DEAD_ZONE   = 0.03;   // ~2 degrees either side of head-on
+var TEMPLE_REVEAL_FULL = 0.15;   // ~9 degrees — near arm fully shown
+var TEMPLE_HIDE_FULL   = 0.10;   // ~6 degrees — far arm fully hidden
+
+// Models whose arms are part of the frame mesh (no Temple_*_GRP) cannot be
+// faded per arm, so the arms are clipped away instead (see setupArmClipping):
+// everything further than this behind the lens front, as a fraction of the
+// frame-front width, counts as arm.
+var ARM_HINGE_DEPTH = 0.08;
+
+// Nose pads are clear silicone; the models author them opaque white.
+var NOSE_PAD_OPACITY = 0.35;
 
 // ── Face geometry (primary tracking) ─────────────────────────────────────────
 // FaceMesh solves a rigid head pose against its metric canonical face and
@@ -164,7 +192,9 @@ var GEOMETRY_FOV = 63;
 //            where the pupil sits at about 57% of the lens height.
 //            ↑ Raise this to seat the glasses lower, lower it to lift them.
 var LENS_FWD = 0.015;
-var EYE_DROP = 0.02;
+// 0.035 (~5 mm) seats the nose pads on the bridge of the nose: at 0.02 the
+// frame rode high with the pads up between the eyes, at 0.05 it sat too low.
+var EYE_DROP = 0.035;
 
 // Head occluder in face space (fractions of face width): a depth-only
 // ellipsoid for the skull, centred behind the temple line, so a temple arm is
@@ -298,13 +328,15 @@ function drawBackground(img) {
 var glassGroup  = null;   // pivot: origin at the front of the lenses
 var templeL = null, templeMatsL = [];   // wearer's LEFT arm  (model +X)
 var templeR = null, templeMatsR = [];   // wearer's RIGHT arm (model -X)
-var MODEL_WIDTH = 1.0;    // X-span in model units (metres), for AR scaling
+var MODEL_WIDTH = 1.0;    // frame-front X-span in model units, for AR scaling
+var armClip     = null;   // clipping state, for models without separate arms
 var faceFound   = false;
 var _baseQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), MODEL_BASE_ROT_Y);
 
 loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   hideFaceShadow(root);
   simplifyLenses(root, LENS_OPACITY);
+  softenNosePads(root, NOSE_PAD_OPACITY);
 
   // The front of the glasses never depth-tests, so the head occluder is free to
   // be a full-sized skull without ever clipping the lenses or the brow bar.
@@ -317,7 +349,16 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
   templeR = temples.templeR; templeMatsR = temples.matsR;
 
   var centred = centreGlasses(root, 'lens');
-  MODEL_WIDTH = centred.size.x;
+  MODEL_WIDTH = frontWidth(root, centred.size.x);
+
+  // Arms baked into the frame mesh: clip them per side instead of fading them,
+  // and drop the head occluder — it was what cut the near arm short, and the
+  // clipping now does its job of hiding the arms behind the head.
+  if (!hasNamedTemples(root)) {
+    armClip = setupArmClipping(root, MODEL_WIDTH, ARM_HINGE_DEPTH);
+    renderer.localClippingEnabled = true;
+    if (occluder) { occluder.visible = false; }
+  }
   glassGroup  = centred.pivot;
   glassGroup.visible = faceFound;   // the face may already be tracking
   faceAnchor.add(glassGroup);
@@ -331,33 +372,56 @@ loadGlassesGLB(GLB_DATA_URI).then(function (root) {
 var occluder = null;   // THREE.Mesh
 
 function setupOccluder() {
-  if (occluder || !OCCLUSION_ENABLED) { return; }
+  if (occluder || !OCCLUSION_ENABLED || armClip) { return; }
   occluder = makeHeadOccluder();
   faceAnchor.add(occluder);
 }
 
-// ── Temple reveal ─────────────────────────────────────────────────────────────
-// Smoothstep the near arm in over the TEMPLE_REVEAL window; the far arm (side
-// <= 0) is left opaque for the occluder to deal with.
-function templeReveal(side) {
-  if (side <= 0) { return 1; }
-  var t = (side - TEMPLE_REVEAL_START) / (TEMPLE_REVEAL_FULL - TEMPLE_REVEAL_START);
+// ── Temple visibility ─────────────────────────────────────────────────────────
+function smoothstep(from, to, x) {
+  var t = (x - from) / (to - from);
   t = t < 0 ? 0 : (t > 1 ? 1 : t);
   return t * t * (3 - 2 * t);
 }
 
-function setTempleOpacity(group, mats, o) {
-  if (!group) { return; }
-  for (var i = 0; i < mats.length; i++) { mats[i].opacity = o; }
-  group.visible = o > 0.004;   // skip the draw call while fully transparent
+// side > 0: this arm is swinging towards the camera; side < 0: away from it.
+var _templeState = { opacity: 1, depthTest: true };
+function templeState(side) {
+  if (side >= TEMPLE_DEAD_ZONE) {
+    // Near arm: full length over the cheek, fading in as the head turns.
+    _templeState.opacity   = smoothstep(TEMPLE_DEAD_ZONE, TEMPLE_REVEAL_FULL, side);
+    _templeState.depthTest = false;
+  } else if (side <= -TEMPLE_DEAD_ZONE) {
+    // Far arm: fades out as it goes round behind the head.
+    _templeState.opacity   = 1 - smoothstep(TEMPLE_DEAD_ZONE, TEMPLE_HIDE_FULL, -side);
+    _templeState.depthTest = true;
+  } else {
+    // Head-on: both arms run straight back, hidden by the head occluder.
+    _templeState.opacity   = 1;
+    _templeState.depthTest = true;
+  }
+  return _templeState;
 }
 
-// lNear ≈ sin(yaw): + when the wearer's left arm swings towards the camera.
-// That arm is about to appear in front of the cheek, so it fades in; an arm
-// going round the back of the head stays opaque and is depth-tested away.
+function applyTemple(group, mats, side) {
+  if (!group) { return; }
+  var s = templeState(side);
+  for (var i = 0; i < mats.length; i++) {
+    mats[i].opacity   = s.opacity;
+    mats[i].depthTest = s.depthTest;
+  }
+  group.visible = s.opacity > 0.004;   // skip the draw call while fully transparent
+}
+
+// lNear ≈ sin(yaw): + when the wearer's LEFT arm swings towards the camera.
 function revealTemples(lNear) {
-  setTempleOpacity(templeL, templeMatsL, templeReveal(lNear));
-  setTempleOpacity(templeR, templeMatsR, templeReveal(-lNear));
+  applyTemple(templeL, templeMatsL, lNear);
+  applyTemple(templeR, templeMatsR, -lNear);
+  if (armClip && glassGroup) {
+    // lNear > 0: the left arm faces the camera, so the right one is hidden.
+    updateArmClipping(armClip, glassGroup,
+      lNear >= TEMPLE_DEAD_ZONE ? 'right' : lNear <= -TEMPLE_DEAD_ZONE ? 'left' : 'both');
+  }
 }
 
 // ── Face geometry → transform (primary) ──────────────────────────────────────
@@ -431,7 +495,7 @@ function applyFaceGeometry(geo, lm, t) {
 
   glassGroup.position.copy(fit.place);
   glassGroup.quaternion.copy(_baseQ);
-  glassGroup.scale.setScalar((fit.fw * SIZE_MULT) / MODEL_WIDTH);
+  glassGroup.scale.setScalar((fit.fw * FRONT_TO_FACE) / MODEL_WIDTH);
 
   if (occluder) {
     occluder.quaternion.identity();
@@ -477,7 +541,7 @@ function applyLandmarkPose(lm, t) {
   glassGroup.position.copy(_sPos);
   glassGroup.quaternion.copy(_sQuat).multiply(_baseQ);
   // faceWidth is a true 3-D span, so the frame keeps its size as the head turns.
-  glassGroup.scale.setScalar((pose.faceWidth * SIZE_MULT) / MODEL_WIDTH);
+  glassGroup.scale.setScalar((pose.faceWidth * FRONT_TO_FACE) / MODEL_WIDTH);
 
   if (occluder) {
     updateHeadOccluder(occluder, pose, LEGACY_HEAD_OCC);
@@ -622,7 +686,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const html = useMemo(
     () => (dataUri ? buildHtml(glass, dataUri) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [glass.id, dataUri],
+    [glass.id, glass.frameWidthMm, dataUri],
   );
 
   // Android: the WebView can only grant getUserMedia when the app itself holds
@@ -654,6 +718,10 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
   const showCameraAlert = useCallback(() => {
     if (alertShown.current) return;
     alertShown.current = true;
+    posthog?.capture('try_on_camera_unavailable', {
+      product_id: String(glass.id),
+      platform: Platform.OS,
+    });
     Alert.alert(
       'Camera Access Required',
       Platform.OS === 'android'
@@ -664,7 +732,17 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
         { text: 'Open Settings', onPress: openSettings },
       ],
     );
-  }, [openSettings]);
+  }, [openSettings, glass.id]);
+
+  // Which products customers try on that have no 3D model yet.
+  useEffect(() => {
+    if (missing) {
+      posthog?.capture('try_on_model_missing', {
+        product_id: String(glass.id),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missing]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {

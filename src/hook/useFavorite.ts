@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
+import { posthog } from '../config/posthog';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
   selectIsFavorite,
   toggleFavorite,
 } from '../store/slices/favoritesSlice';
 import type { Product } from '../types/glasses';
+import { productPricing } from '../utils/salePrice';
 
 /**
  * Saved state for one frame, plus a toggle. Accepts the list or the detail
@@ -21,17 +23,22 @@ export function useFavorite(product?: Product | null, image?: string | null) {
 
   const toggle = useCallback(() => {
     if (!product) return;
-    const price = product.item_price ?? product.price;
+    const pricing = productPricing(product);
+    posthog?.capture(isFavorite ? 'favorite_removed' : 'favorite_added', {
+      product_id: String(product.id),
+    });
     dispatch(
       toggleFavorite({
         id: String(product.id),
         name: product.item_name || product.name || '',
         brand: product.category_name || product.brand?.name || '',
-        price: price === undefined || price === null ? null : Number(price),
+        price: pricing.price,
+        originalPrice: pricing.originalPrice,
+        discountPercentage: pricing.discountPercentage,
         image: image || product.image || null,
       }),
     );
-  }, [dispatch, image, product]);
+  }, [dispatch, image, isFavorite, product]);
 
   return { isFavorite: !!product && isFavorite, toggle };
 }

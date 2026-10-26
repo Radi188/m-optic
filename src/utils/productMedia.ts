@@ -73,15 +73,6 @@ export function colorOptions(product?: Product | null): ColorOption[] {
     }));
 }
 
-/** Parent price plus this colourway's adjustment. */
-export function variationPrice(
-  product: Product,
-  variation?: ProductVariation | null,
-): number {
-  const base = Number(product.price ?? 0);
-  return base + Number(variation?.price_adjustment ?? 0);
-}
-
 /**
  * Industry shorthand for frame dimensions: lens width, bridge, temple length.
  * Returns null when the API has not filled the measurements in.
@@ -100,6 +91,33 @@ export function measurementLabel(m?: Measurements | null): string | null {
  * follow the usual optical retail bands. Returns null rather than guessing when
  * the measurement is missing.
  */
+// Real frames are 100–170 mm across. Anything outside that is a data-entry
+// slip (cm typed as mm, a blank saved as 0) and must not size the try-on.
+const MIN_FRAME_MM = 100;
+const MAX_FRAME_MM = 170;
+// End pieces either side of the lenses, for a width rebuilt from lens + bridge.
+const END_PIECES_MM = 10;
+
+/**
+ * The frame front's width in mm, for sizing the AR try-on: hinge to hinge
+ * when the shop has entered it, otherwise two lenses + the bridge + end
+ * pieces. Null when neither is available or the figure is implausible.
+ */
+export function frameWidthMm(m?: Measurements | null): number | null {
+  const plausible = (mm: number | null) =>
+    mm !== null && Number.isFinite(mm) && mm >= MIN_FRAME_MM && mm <= MAX_FRAME_MM
+      ? mm
+      : null;
+
+  const hinge = plausible(m?.hinge_to_hinge == null ? null : Number(m.hinge_to_hinge));
+  if (hinge !== null) return hinge;
+
+  const lens = Number(m?.lens_width);
+  const bridge = Number(m?.bridge_size);
+  if (m?.lens_width == null || m?.bridge_size == null) return null;
+  return plausible(lens * 2 + bridge + END_PIECES_MM);
+}
+
 export function frameSizeName(m?: Measurements | null): string | null {
   const width = m?.hinge_to_hinge;
   if (width == null) return null;

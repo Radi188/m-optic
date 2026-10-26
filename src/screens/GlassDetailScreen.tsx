@@ -35,18 +35,23 @@ import { useProductDetail } from '../hook/useProductDetail';
 import {
   colorOptions,
   frameSizeName,
+  frameWidthMm,
   galleryImages,
   measurementLabel,
   modelUrl,
-  variationPrice,
 } from '../utils/productMedia';
+import { productPricing, variationPricing } from '../utils/salePrice';
+import PriceTag from '../components/ui/PriceTag';
+import { glbAssets } from '../features/try-on/core/productCalibration';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
+import { posthog } from '../config/posthog';
 import AppText from '../components/AppText';
 import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import { useFavorite } from '../hook/useFavorite';
 import { formatPrice } from '../utils/formatPrice';
+import { buildTelegramInquiry, telegramInquiryUrl } from '../utils/telegramInquiry';
 
 type RouteProps = RouteProp<RootStackParamList, 'GlassDetail'>;
 type NavProps = NativeStackNavigationProp<RootStackParamList, 'GlassDetail'>;
@@ -61,20 +66,6 @@ interface ViewerModalProps {
   glass: GlassItem;
   onClose: () => void;
 }
-
-/** M-Optic's Telegram account for product enquiries. */
-const TELEGRAM_CONTACT_URL = 'https://t.me/Mopticstm';
-
-/**
- * A photo link Telegram can turn into an image preview. Product photos are
- * stored as AVIF, which Telegram does not preview, so those go through wsrv.nl
- * (a free public image proxy) as a JPEG. Other formats are linked as they are.
- * Drop this once the server can hand out a JPEG/WebP copy itself.
- */
-const telegramPreviewImage = (url: string) =>
-  /\.avif($|\?)/i.test(url)
-    ? `https://wsrv.nl/?url=${url.replace(/^https?:\/\//i, '')}&output=jpg`
-    : url;
 
 const ViewerModal: React.FC<ViewerModalProps> = ({
   visible,
@@ -181,7 +172,13 @@ const GlassDetailScreen: React.FC = () => {
 
   const accentColor = Colors.primary;
 
-  const openViewer = (mode: ViewMode) => setViewerMode(mode);
+  const openViewer = (mode: ViewMode) => {
+    posthog?.capture('product_viewer_opened', {
+      product_id: String(id),
+      viewer: mode === '3d' ? '3d_model' : 'ar_try_on',
+    });
+    setViewerMode(mode);
+  };
   const closeViewer = () => setViewerMode(null);
 
   const {
@@ -194,7 +191,7 @@ const GlassDetailScreen: React.FC = () => {
     refresh,
   } = useProductDetail(id);
 
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   // Colourways. The parent product carries no colour and an empty gallery — the
   // media a shopper sees comes from whichever variation is selected.
@@ -219,10 +216,16 @@ const GlassDetailScreen: React.FC = () => {
     return fromVariation.length ? fromVariation : galleryImages(product);
   }, [product, selectedColor]);
 
-  const price = useMemo(
-    () => (product ? variationPrice(product, selectedColor?.variation) : 0),
+  // The selected colourway's own price and sale win over the parent's.
+  const pricing = useMemo(
+    () =>
+      product
+        ? variationPricing(product, selectedColor?.variation)
+        : productPricing(null),
     [product, selectedColor],
   );
+  // What the customer pays — the sale price when there is one.
+  const price = pricing.price ?? 0;
 
   // Saved with the photo of the colourway on screen.
   const { isFavorite, toggle: toggleFavorite } = useFavorite(
@@ -242,6 +245,27 @@ const GlassDetailScreen: React.FC = () => {
   // The AR / 3-D scenes take a GlassItem, but the detail endpoint returns the
   // richer API `Product` (brand/frame_shape are objects, not strings). Passing
   // the raw product through rendered the brand as "[object Object]".
+  // The live try-on needs the selected colourway's own GLB
+  // (`type === '3d_model' && format === 'glb'`); without one there is no button.
+  const tryOnAvailable = useMemo(
+    () =>
+      glbAssets(
+        selectedColor ? selectedColor.variation.assets : product?.assets,
+      ).length > 0,
+    [product, selectedColor],
+  );
+
+  const openTryOn = () => {
+    posthog?.capture('product_viewer_opened', {
+      product_id: String(id),
+      viewer: 'ar_try_on',
+    });
+    navigation.navigate('TryOn', {
+      productId: String(id),
+      variationId: selectedColor ? String(selectedColor.variation.id) : undefined,
+    });
+  };
+
   const viewerGlass = useMemo<GlassItem | null>(() => {
     if (!product) {
       return null;
@@ -264,8 +288,9 @@ const GlassDetailScreen: React.FC = () => {
         .replace(/\s+/g, '-') as GlassItem['frameShape'],
       description: product.description ?? undefined,
       modelUrl: productModelUrl,
+      frameWidthMm: frameWidthMm(measurements),
     };
-  }, [product, images, price, productModelUrl]);
+  }, [product, images, price, productModelUrl, measurements]);
 
   /**
    * The enquiry the customer sends us on Telegram: which frame, which colour,
@@ -280,40 +305,28 @@ const GlassDetailScreen: React.FC = () => {
    */
   const telegramMessage = useMemo(() => {
     if (!product) return '';
-    const tKm = i18n.getFixedT('km');
     const variation = selectedColor?.variation;
-    const name = product.name ?? product.item_name ?? '';
-    const colour = selectedColor?.label
-      ? variation?.color_code
-        ? `${selectedColor.label} (${variation.color_code})`
-        : selectedColor.label
-      : null;
-    const code = variation?.item_code || product.item_code;
-    const photo = images[0] ?? product.image;
-
-    return [
-      tKm('TelegramEnquiryIntro'),
-      '',
-      tKm('TelegramEnquiryProduct', { value: name }),
-      product.brand?.name
-        ? tKm('TelegramEnquiryBrand', { value: product.brand.name })
-        : null,
-      colour ? tKm('TelegramEnquiryColor', { value: colour }) : null,
-      code ? tKm('TelegramEnquiryCode', { value: code }) : null,
-      // Last, on its own line: Telegram shows the picture under the message.
-      photo ? `\n${telegramPreviewImage(photo)}` : null,
-    ]
-      .filter(line => line !== null)
-      .join('\n');
-  }, [product, selectedColor, images, i18n]);
+    return buildTelegramInquiry({
+      name: product.name ?? product.item_name ?? '',
+      brand: product.brand?.name,
+      colourLabel: selectedColor?.label,
+      colourCode: variation?.color_code,
+      itemCode: variation?.item_code || product.item_code,
+      photo: images[0] ?? product.image,
+    });
+  }, [product, selectedColor, images]);
 
   const handleOpenTelegram = async () => {
-    const url = telegramMessage
-      ? `${TELEGRAM_CONTACT_URL}?text=${encodeURIComponent(telegramMessage)}`
-      : TELEGRAM_CONTACT_URL;
+    const url = telegramInquiryUrl(telegramMessage);
 
     try {
       await Linking.openURL(url);
+      if (product) {
+        posthog?.capture('product_inquiry_started', {
+          product_id: String(product.id),
+          has_selected_color: !!selectedColor,
+        });
+      }
     } catch (error) {
       Alert.alert(t('Error'), t('FailedToOpenTelegramLink'));
     }
@@ -443,7 +456,8 @@ const GlassDetailScreen: React.FC = () => {
         <View style={styles.heroWrap}>
           <GlassessProductImageSlider
             images={images}
-            onPressArTryOn={() => openViewer('tryon')}
+            onPressArTryOn={openTryOn}
+            tryOnAvailable={tryOnAvailable}
             onPress3DModel={() => openViewer('3d')}
             modelAvailable={!!productModelUrl}
             onPressImage={(index: number) =>
@@ -473,7 +487,12 @@ const GlassDetailScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.nameRow}>
             <AppText style={styles.frameName}>{product?.name}</AppText>
-            <AppText style={styles.framePrice}>{formatPrice(price)}</AppText>
+            <PriceTag
+              pricing={pricing}
+              priceStyle={styles.framePrice}
+              style={styles.framePriceTag}
+              size="lg"
+            />
           </View>
           {/* {glass.description ? (
             <AppText style={styles.description}>{glass.description}</AppText>
@@ -713,6 +732,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: Spacing.sm,
+  },
+  // Price, struck regular price and badge sit right of the name, wrapping
+  // under each other rather than squeezing the name.
+  framePriceTag: {
+    maxWidth: '55%',
+    justifyContent: 'flex-end',
+    marginLeft: Spacing.sm,
   },
   frameName: {
     flex: 1,

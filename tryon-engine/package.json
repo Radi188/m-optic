@@ -1,0 +1,23 @@
+{
+  "name": "m-optic-tryon-engine",
+  "private": true,
+  "description": "The AR try-on that runs inside the app's WebView, ported from the M-Optic website. Built into src/features/try-on/engine/engineBundle.generated.ts.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.35",
+    "@react-three/fiber": "9.6.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "three": "0.184.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "0.184.1",
+    "esbuild": "0.25.12",
+    "typescript": "^5.8.3"
+  }
+}

@@ -12,11 +12,19 @@ const api = axios.create({
   },
 });
 
+// Endpoints whose products carry sale fields. Whether a sale shows depends on
+// the platform (a product can be on sale in the app but not on the website),
+// so these always say they are the app.
+const PRODUCT_ENDPOINT = /^\/?(products|homepage)(\/|\?|$)/;
+
 // ─── Attach stored token to every request ────────────────────────────────────
 api.interceptors.request.use(async config => {
   const token = await AsyncStorage.getItem('auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (PRODUCT_ENDPOINT.test(config.url ?? '')) {
+    config.params = { platform: 'mobile', ...config.params };
   }
   return config;
 });

@@ -22,6 +22,13 @@ export const GLB_SCRIPT_TAGS = `
  * Helper functions available to the page after injection:
  *   loadGlassesGLB(dataUri)            -> Promise<THREE.Group>  (gltf.scene)
  *   centreGlasses(root, zMode)         -> { pivot, size }
+ *   frontWidth(root, fullWidth)        -> width of the front, without the arms
+ *   findLens(root)                     -> the lens group, by GLB_NODE or by name
+ *   hasNamedTemples(root)              -> whether the arms are separate groups
+ *   softenNosePads(root, opacity)
+ *   setupArmClipping(root, frontW, hingeDepth) -> clip state, for models whose
+ *                                         arms are part of the frame mesh
+ *   updateArmClipping(clip, group, hide) hide: 'both' | 'left' | 'right'
  *   collectTemples(root)               -> { templeL, matsL, templeR, matsR, mats }
  *   frontAlwaysOnTop(root)
  *   makeHeadOccluder()                 -> THREE.Mesh (depth-only ellipsoid)
@@ -74,13 +81,156 @@ function centreGlasses(root, zMode) {
 
   var zRef = mid.z;
   if (zMode === 'lens') {
-    var lens = root.getObjectByName(GLB_NODE.lens);
-    if (lens) {
-      zRef = new THREE.Box3().setFromObject(lens).max.z;
-    }
+    var lens = findLens(root);
+    // No lens to measure from: the front of the model is the next best
+    // reference. Its middle is not — the arms run far back, so the middle
+    // sits halfway down them and the frame floated off the face.
+    zRef = lens ? new THREE.Box3().setFromObject(lens).max.z : box.max.z;
   }
   root.position.set(-mid.x, -mid.y, -zRef);
   return { pivot: pivot, size: size };
+}
+
+// ── Models without the named groups ──────────────────────────────────────────
+// Not every product GLB is authored with Frame_GRP / Lens_GRP / Temple_*_GRP.
+// Some arrive as a few plain meshes, e.g. 'lens', 'nose.001' and one mesh for
+// the whole frame with its arms. Parts are then found by name instead.
+var NAME_LENS = /lens/i;
+var NAME_LOGO = /logo/i;
+var NAME_NOSE = /nose|pad/i;
+
+function meshNamed(o, re) {
+  if (re.test(o.name || '')) { return true; }
+  var ms = Array.isArray(o.material) ? o.material : [o.material];
+  return ms.some(function (m) { return m && re.test(m.name || ''); });
+}
+
+function findLens(root) {
+  var named = root.getObjectByName(GLB_NODE.lens);
+  if (named) { return named; }
+  var hit = null;
+  root.traverse(function (o) {
+    if (!hit && o.isMesh && meshNamed(o, NAME_LENS) && !meshNamed(o, NAME_LOGO)) { hit = o; }
+  });
+  return hit;
+}
+
+function hasNamedTemples(root) {
+  return !!(root.getObjectByName(GLB_NODE.templeL) || root.getObjectByName(GLB_NODE.templeR));
+}
+
+// Nose pads are clear silicone. Models author them as an opaque, metallic
+// white, which reads as two bright white blobs on the nose in the try-on.
+function softenNosePads(root, opacity) {
+  var soft = null;
+  root.traverse(function (o) {
+    if (!o.isMesh || !meshNamed(o, NAME_NOSE)) { return; }
+    soft = soft || new THREE.MeshStandardMaterial({
+      color:       0xd8dcdf,
+      metalness:   0,
+      roughness:   0.35,
+      transparent: true,
+      opacity:     opacity,
+      depthWrite:  false,
+      depthTest:   false   // the pads always sit in front of the face
+    });
+    o.material  = soft;
+    o.renderOrder = 3;
+  });
+}
+
+// Arm hiding for a model whose arms are part of the frame mesh. Three.js
+// clipping planes, in the glasses' own space (lens front at z = 0, +X = the
+// wearer's left), cut away:
+//   - head-on: everything behind the hinges (both arms run back behind the
+//     head, which the camera cannot see);
+//   - turned:  only the far arm (far side AND behind the hinges), so the near
+//     arm shows at full length.
+// Both planes are always set with clipIntersection, so the program never has
+// to be rebuilt: head-on simply passes the hinge plane twice.
+function setupArmClipping(root, frontW, hingeDepth) {
+  var mats = [];
+  root.traverse(function (o) {
+    if (!o.isMesh || meshNamed(o, NAME_LENS) || meshNamed(o, NAME_NOSE)) { return; }
+    var ms = Array.isArray(o.material) ? o.material : [o.material];
+    ms.forEach(function (m) { if (mats.indexOf(m) === -1) { mats.push(m); } });
+  });
+  var local = {
+    hinge: new THREE.Plane(new THREE.Vector3(0, 0, 1), hingeDepth * frontW),
+    left:  new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0),   // clips x > 0
+    right: new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)     // clips x < 0
+  };
+  var planes = [new THREE.Plane(), new THREE.Plane()];
+  mats.forEach(function (m) {
+    m.clippingPlanes   = planes;
+    m.clipIntersection = true;
+  });
+  return { mats: mats, local: local, planes: planes };
+}
+
+// hide: 'both' | 'left' | 'right' — which arm(s) to cut away this frame.
+function updateArmClipping(clip, group, hide) {
+  group.updateWorldMatrix(true, false);
+  var second = hide === 'left' ? clip.local.left
+             : hide === 'right' ? clip.local.right
+             : clip.local.hinge;
+  clip.planes[0].copy(clip.local.hinge).applyMatrix4(group.matrixWorld);
+  clip.planes[1].copy(second).applyMatrix4(group.matrixWorld);
+}
+
+// Width of the frame FRONT only — lenses, rims, bridge and hinges — leaving out
+// the temple arms and the Extras group. The arms often splay wider than the
+// front, so the whole model's bounding box overstates the width a frame
+// measurement (hinge to hinge) describes.
+//
+// Call after centreGlasses(root, 'lens'), with the pivot not yet parented: the
+// lens front is then at z = 0 in world space.
+var FRONT_BAND = 0.08;   // depth behind the lens front that still counts as front
+
+function frontWidth(root, fullWidth) {
+  var skip = [
+    root.getObjectByName(GLB_NODE.templeL),
+    root.getObjectByName(GLB_NODE.templeR),
+    root.getObjectByName(GLB_NODE.extras)
+  ].filter(Boolean);
+  if (!skip.length) { return frontWidthByDepth(root, fullWidth); }
+
+  function skipped(o) {
+    for (var p = o; p; p = p.parent) {
+      if (skip.indexOf(p) !== -1) { return true; }
+    }
+    return false;
+  }
+
+  root.updateWorldMatrix(true, true);
+  var box = new THREE.Box3();
+  root.traverse(function (o) {
+    if (o.isMesh && !skipped(o)) { box.expandByObject(o); }
+  });
+  var w = box.isEmpty() ? 0 : box.max.x - box.min.x;
+  return w > 0 ? w : fullWidth;
+}
+
+// Arms that are part of the frame mesh cannot be left out by name, so the
+// front is measured as every vertex within FRONT_BAND of the lens front. The
+// arms only start there, and splay out further back.
+function frontWidthByDepth(root, fullWidth) {
+  root.updateWorldMatrix(true, true);
+  var band = -FRONT_BAND * fullWidth;
+  var v = new THREE.Vector3();
+  var minX = Infinity, maxX = -Infinity;
+  root.traverse(function (o) {
+    var pos = o.isMesh && o.geometry && o.geometry.attributes.position;
+    if (!pos) { return; }
+    for (var i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (v.z < band) { continue; }
+      if (v.x < minX) { minX = v.x; }
+      if (v.x > maxX) { maxX = v.x; }
+    }
+  });
+  var w = maxX - minX;
+  return w > 0 && w <= fullWidth ? w : fullWidth;
 }
 
 // The GLB carries a 'Shadow_GEO' plane under Extras_GRP meant for a baked
@@ -298,7 +448,7 @@ function measureExplodedFraming(root, parts) {
 // transmission for plain alpha there. (The product viewer keeps real
 // transmission, since it renders against an opaque background.)
 function simplifyLenses(root, minAlpha) {
-  var g = root.getObjectByName(GLB_NODE.lens);
+  var g = findLens(root);
   if (!g) { return; }
   // NOTE: mutating the authored material does NOT work. Once three has built a
   // material from KHR_materials_transmission it keeps drawing it through the

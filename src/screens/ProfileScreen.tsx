@@ -57,6 +57,7 @@ import ProfileTitleHeader from '../components/ui/Profile/ProfileTitleHeader';
 import ProfileErrorState from '../components/ui/Profile/ProfileErrorState';
 import { AppLanguage, changeAppLanguage } from '../localizations/i18n';
 import { useTranslation } from 'react-i18next';
+import { posthog } from '../config/posthog';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -179,6 +180,9 @@ const ProfileScreen: React.FC = () => {
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
 
+    // Capture before clearing Redux auth state so the identity boundary can
+    // reset the client after this event is attributed to the current customer.
+    posthog?.capture('logout_completed');
     // Clear token / user data here
     await dispatch(clearUser());
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
@@ -197,6 +201,7 @@ const ProfileScreen: React.FC = () => {
       return;
     }
 
+    posthog?.capture('account_deleted');
     setDeleteModalVisible(false);
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };

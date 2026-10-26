@@ -28,6 +28,11 @@ export type GlassItem = {
    * colourway. The viewers fall back to the bundled model when absent.
    */
   modelUrl?: string | null;
+  /**
+   * The real frame's front width in mm (from the product measurements), so the
+   * try-on can be drawn at its true size on the face. Absent → a typical size.
+   */
+  frameWidthMm?: number | null;
 };
 
 /** One colourway as the full-screen image viewer needs it. */
@@ -76,6 +81,12 @@ export type RootStackParamList = {
   SearchScreen: undefined;
   SearchResult: {
     query: string;
+  };
+  /** Live AR try-on of one product (see src/features/try-on). */
+  TryOn: {
+    productId: string;
+    /** The colourway to start on; the first one with a 3D model otherwise. */
+    variationId?: string;
   };
   Scan: {
     /** Which experience to open directly — the screen has no mode picker. */

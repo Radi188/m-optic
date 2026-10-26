@@ -76,3 +76,4 @@ yarn-error.log
 
 # Android release signing (never commit)
 android/keystore.properties
+.env

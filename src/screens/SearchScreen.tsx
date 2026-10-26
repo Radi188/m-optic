@@ -17,6 +17,7 @@ import { Colors, FontSize, Spacing, BorderRadius, Shadow, Layout } from '../them
 import type { RootStackParamList } from '../types/navigation';
 import AppText from '../components/AppText';
 import { useTranslation } from 'react-i18next';
+import { posthog } from '../config/posthog';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -27,11 +28,12 @@ const SearchScreen = () => {
   const navigation = useNavigation<Nav>();
   const [query, setQuery] = useState('');
 
-  const handleSearch = (text?: string) => {
+  const handleSearch = (text?: string, source: 'typed' | 'popular' = 'typed') => {
     const searchText = (text || query).trim();
 
     if (!searchText) return;
 
+    posthog?.capture('product_search_submitted', { search_source: source });
     Keyboard.dismiss();
 
     navigation.navigate('SearchResult', {
@@ -86,7 +88,7 @@ const SearchScreen = () => {
                 key={item}
                 style={styles.chip}
                 activeOpacity={0.8}
-                onPress={() => handleSearch(item)}
+                onPress={() => handleSearch(item, 'popular')}
               >
                 <AppText style={styles.chipText}>{item}</AppText>
               </TouchableOpacity>

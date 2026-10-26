@@ -27,6 +27,8 @@ import AuthScreenLayout from '../components/ui/Auth/AuthScreenLayout';
 import CodeInput from '../components/ui/Auth/CodeInput';
 import { AuthButton, AuthError } from '../components/ui/Auth/AuthParts';
 import PinSetupSheet from '../components/ui/Auth/PinSetupSheet';
+import { posthog } from '../config/posthog';
+import { posthogLog } from '../config/posthogLogs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -129,9 +131,16 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
   const digits = normalisePhone(phone);
 
-  const handlePinLogin = useCallback(() => {
+  const handlePinLogin = useCallback(async () => {
     if (!digits || pin.length < PIN_LENGTH) return;
-    dispatch(loginThunk({ phone_number: digits, pin }));
+    const result = await dispatch(loginThunk({ phone_number: digits, pin }));
+    if (loginThunk.fulfilled.match(result)) {
+      posthog?.capture('login_succeeded');
+      posthogLog.info('customer authentication completed', {
+        operation: 'pin_login',
+        outcome: 'success',
+      });
+    }
   }, [digits, dispatch, pin]);
 
   // The code and PIN set-up happen in a sheet over this screen; this holds the

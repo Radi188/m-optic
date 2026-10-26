@@ -20,7 +20,7 @@ import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 import EmptyState from '../components/ui/EmptyState';
-import { formatPrice } from '../utils/formatPrice';
+import PriceTag from '../components/ui/PriceTag';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -66,11 +66,21 @@ const FavoritesScreen: React.FC = () => {
           <AppText style={styles.name} numberOfLines={2}>
             {item.name}
           </AppText>
-          {item.price !== null && (
-            <AppText style={[styles.price, !showPrice && styles.priceHidden]}>
-              {showPrice ? formatPrice(item.price) : t('LoginToSeePrice')}
-            </AppText>
-          )}
+          {item.price !== null &&
+            (showPrice ? (
+              <PriceTag
+                pricing={{
+                  price: item.price,
+                  originalPrice: item.originalPrice ?? null,
+                  discountPercentage: item.discountPercentage ?? null,
+                }}
+                priceStyle={styles.price}
+              />
+            ) : (
+              <AppText style={[styles.price, styles.priceHidden]}>
+                {t('LoginToSeePrice')}
+              </AppText>
+            ))}
         </View>
 
         <TouchableOpacity

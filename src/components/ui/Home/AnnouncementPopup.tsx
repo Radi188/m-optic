@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Image,
-  Linking,
   Modal,
   StyleSheet,
   TouchableOpacity,
@@ -12,11 +11,19 @@ import {
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { BorderRadius, Colors, FontSize, MaxWidth, Spacing } from '../../../theme';
+import {
+  BorderRadius,
+  Colors,
+  FontSize,
+  MaxWidth,
+  Spacing,
+} from '../../../theme';
 import type { AnnouncementItem } from '../../../types/home';
 import { buildFileUrl } from '../../../utils/fileUrlHelper';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
+import AnnouncementDetailSheet from './AnnouncementDetailSheet';
+import { posthog } from '../../../config/posthog';
 
 /**
  * The home-screen pop-up. Its content is the latest announcement from the
@@ -32,6 +39,9 @@ let shownThisLaunch = false;
 const SHOW_DELAY_MS = 700;
 // Until the real image size is known, assume a portrait poster.
 const FALLBACK_RATIO = 4 / 5;
+// Tallest the poster may be, as a share of the screen — the title and button
+// below it still have to fit.
+const MAX_IMAGE_SHARE = 0.55;
 
 const resolveImage = (value?: string | null): string | null => {
   if (!value) return null;
@@ -105,17 +115,29 @@ const AnnouncementPopup: React.FC<AnnouncementPopupProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const scale = useRef(new Animated.Value(0.9)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const [ratio, setRatio] = useState(FALLBACK_RATIO);
+  // The full promotion, opened from the pop-up. It replaces the card inside
+  // this same Modal rather than opening a second one.
+  const [showDetails, setShowDetails] = useState(false);
 
   const imageUrl = resolveImage(announcement?.banner_image);
   const excerpt = announcement ? toPlainText(announcement.content) : '';
-  const linkUrl = announcement?.link_url;
+
+  // The box takes the poster's own shape, so `contain` fills it edge to edge
+  // and nothing is cropped. Only a poster too tall for the screen is capped;
+  // it is then scaled down whole, never cut.
+  const cardWidth = Math.min(windowWidth - Spacing.lg * 2, MaxWidth.dialog);
+  const naturalHeight = cardWidth / ratio;
+  const maxHeight = windowHeight * MAX_IMAGE_SHARE;
+  const imageHeight = Math.min(naturalHeight, maxHeight);
+  const isCapped = naturalHeight > maxHeight;
 
   useEffect(() => {
     if (!announcement) return;
+    setShowDetails(false);
     scale.setValue(0.9);
     fade.setValue(0);
     Animated.parallel([
@@ -151,76 +173,109 @@ const AnnouncementPopup: React.FC<AnnouncementPopupProps> = ({
     }).start(onClose);
   };
 
-  const openLink = () => {
-    if (linkUrl) Linking.openURL(linkUrl).catch(() => {});
-    close();
+  const openDetails = () => {
+    if (!announcement) return;
+    posthog?.capture('announcement_popup_details_opened', {
+      announcement_id: announcement.id,
+    });
+    Animated.timing(fade, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => setShowDetails(true));
   };
 
   if (!announcement) return null;
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent>
-      <Animated.View style={[styles.backdrop, { opacity: fade }]}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
-          activeOpacity={1}
-          onPress={close}
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={showDetails ? onClose : close}
+    >
+      {showDetails ? (
+        <AnnouncementDetailSheet
+          announcement={announcement}
+          onClose={onClose}
+          embedded
         />
-
-        <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
-          {imageUrl ? (
-            <AppImage
-              source={{ uri: imageUrl }}
-              style={[
-                styles.image,
-                { aspectRatio: ratio, maxHeight: windowHeight * 0.5 },
-              ]}
-              resizeMode="cover"
-            />
-          ) : null}
-
+      ) : (
+        <Animated.View style={[styles.backdrop, { opacity: fade }]}>
           <TouchableOpacity
-            style={styles.closeBtn}
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
             onPress={close}
-            hitSlop={8}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close" size={18} color={Colors.white} />
-          </TouchableOpacity>
+          />
 
-          <View style={styles.body}>
-            <AppText style={styles.title} numberOfLines={2}>
-              {announcement.title}
-            </AppText>
-            {!!excerpt && (
-              <AppText style={styles.excerpt} numberOfLines={4}>
-                {excerpt}
-              </AppText>
-            )}
+          <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+            {imageUrl ? (
+              <TouchableOpacity
+                style={[styles.imageBox, { height: imageHeight }]}
+                onPress={openDetails}
+                activeOpacity={0.9}
+                accessibilityRole="button"
+                accessibilityLabel={t('ReadMore')}
+              >
+                {/* A capped poster is narrower than the card; a blurred copy
+                  fills the sides instead of plain grey bars. */}
+                {isCapped && (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                    blurRadius={24}
+                  />
+                )}
+                <AppImage
+                  source={{ uri: imageUrl }}
+                  style={styles.image}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            ) : null}
 
-            {linkUrl ? (
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={close}
+              hitSlop={8}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={18} color={Colors.white} />
+            </TouchableOpacity>
+
+            <View style={styles.body}>
+              {/* Title and excerpt are a preview — tapping them opens the rest. */}
+              <TouchableOpacity
+                onPress={openDetails}
+                activeOpacity={0.7}
+                style={styles.preview}
+              >
+                <AppText style={styles.title} numberOfLines={2}>
+                  {announcement.title}
+                </AppText>
+                {!!excerpt && (
+                  <AppText style={styles.excerpt} numberOfLines={4}>
+                    {excerpt}
+                  </AppText>
+                )}
+              </TouchableOpacity>
+
+              {/* The full promotion carries the body, the link and its button,
+                so the pop-up leads there rather than straight off-app. */}
               <TouchableOpacity
                 style={styles.primaryBtn}
-                onPress={openLink}
+                onPress={openDetails}
                 activeOpacity={0.85}
               >
-                <AppText style={styles.primaryText}>
-                  {announcement.link_text || t('LearnMore')}
-                </AppText>
+                <AppText style={styles.primaryText}>{t('ReadMore')}</AppText>
                 <Ionicons name="arrow-forward" size={16} color={Colors.white} />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={close}
-                activeOpacity={0.85}
-              >
-                <AppText style={styles.primaryText}>{t('GotIt')}</AppText>
-              </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          </Animated.View>
         </Animated.View>
-      </Animated.View>
+      )}
     </Modal>
   );
 };
@@ -247,9 +302,14 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     elevation: 20,
   },
+  imageBox: {
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: Colors.gray100,
+  },
   image: {
     width: '100%',
-    backgroundColor: Colors.gray100,
+    height: '100%',
   },
   closeBtn: {
     position: 'absolute',
@@ -266,6 +326,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.sm,
   },
+  preview: { gap: Spacing.sm },
   title: {
     fontSize: FontSize.lg,
     fontWeight: '800',

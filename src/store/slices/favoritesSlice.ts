@@ -12,7 +12,14 @@ export interface FavoriteItem {
   id: string;
   name: string;
   brand: string;
+  /** What the customer pays — the sale price when it was on sale. */
   price: number | null;
+  /**
+   * Regular price and percent off, when it was on sale at the time it was
+   * saved. Optional: favourites saved before sales existed have neither.
+   */
+  originalPrice?: number | null;
+  discountPercentage?: number | null;
   image: string | null;
   /** When it was saved, ms since epoch. */
   addedAt: number;

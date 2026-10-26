@@ -43,6 +43,10 @@ export interface Product {
   name: string;
   description: string | null;
   price: number;
+  /** Sale fields — see Product in types/glasses and utils/salePrice. */
+  on_sale?: boolean;
+  sale_price?: number | null;
+  discount_percentage?: number | null;
   slug: string;
   product_type: string | null;
   gender: string | null;

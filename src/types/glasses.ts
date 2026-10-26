@@ -67,7 +67,17 @@ export interface Product {
   item_code: string;
   name: string;
   description: string | null;
+  /** Regular price. See utils/salePrice for what to display. */
   price: number;
+  /**
+   * The backend's decision that a sale shows on this platform (it already
+   * checks the product's and the category's "show on mobile" settings).
+   */
+  on_sale?: boolean;
+  /** What the customer pays; null unless `on_sale`. */
+  sale_price?: number | null;
+  /** Percent off, e.g. 20; null unless `on_sale`. */
+  discount_percentage?: number | null;
   // ── List endpoint (GET /products) uses lighter field names ──
   item_name?: string;
   item_name_kh?: string | null;

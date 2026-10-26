@@ -17,6 +17,7 @@ import EditProfileSkeleton from '../components/ui/Loading/EditProfileLoadingScre
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { posthog } from '../config/posthog';
 import { Colors, FontSize, Spacing, Layout, Shadow } from '../theme';
 import ChangePhotoModal, {
   SelectedProfileImage,
@@ -193,6 +194,10 @@ const EditProfileScreen = () => {
       }
       return;
     }
+
+    posthog?.capture('profile_updated', {
+      changed_fields: Object.keys(payload).sort(),
+    });
 
     // The cached account drives the initials and greeting elsewhere.
     dispatch(

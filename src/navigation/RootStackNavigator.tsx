@@ -24,6 +24,7 @@ import GlassesListScreen from '../screens/GlassesListScreen';
 import SearchResultScreen from '../screens/SearchResultScreen';
 import SearchScreen from '../screens/SearchScreen';
 import ScanScreen from '../screens/ScanScreen';
+import TryOnScreen from '../features/try-on/ui/TryOnScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -170,6 +171,15 @@ const RootStackNavigator: React.FC = () => {
               animation: 'slide_from_right',
             }}
           />
+          <Stack.Screen
+            name="TryOn"
+            component={TryOnScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_bottom',
+              gestureEnabled: false,
+            }}
+          />
         </>
       ) : (
         // ── Unauthenticated stack — Splash → Main, Login reachable from Profile
@@ -217,6 +227,15 @@ const RootStackNavigator: React.FC = () => {
             options={{
               headerShown: false,
               animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="TryOn"
+            component={TryOnScreen}
+            options={{
+              headerShown: false,
+              animation: 'slide_from_bottom',
+              gestureEnabled: false,
             }}
           />
           {/* Guests browse the catalogue, so search works without an account. */}

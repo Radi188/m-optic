@@ -54,6 +54,7 @@ import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 import { formatPrice } from '../utils/formatPrice';
+import { posthog } from '../config/posthog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2827,6 +2828,12 @@ const GlassesBottomSheet: React.FC<{
                   activeOpacity={0.85}
                   disabled={unavailable}
                   onPress={() => {
+                    posthog?.capture('face_shape_frame_tapped', {
+                      face_shape: shape,
+                      frame_style: frame,
+                      frame_shape: catalogueShape,
+                      is_best_match: best,
+                    });
                     onClose();
                     navigation.navigate('GlassesList', {
                       from: 'frame',
@@ -3932,9 +3939,12 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
             {!!branch.phone && (
               <TouchableOpacity
                 style={styles.primaryBtn}
-                onPress={() =>
-                  Linking.openURL(`tel:${branch.phone.replace(/[\s-]/g, '')}`)
-                }
+                onPress={() => {
+                  posthog?.capture('eye_test_booking_call_tapped', {
+                    branch_id: branch.id,
+                  });
+                  Linking.openURL(`tel:${branch.phone.replace(/[\s-]/g, '')}`);
+                }}
                 activeOpacity={0.82}
               >
                 <Ionicons name="call-outline" size={18} color={Colors.white} />
@@ -4135,7 +4145,13 @@ const BookingModal: React.FC<{ visible: boolean; onClose: () => void }> = ({
             <View style={bkStyles.footer}>
               <TouchableOpacity
                 style={[styles.primaryBtn, !canConfirm && bkStyles.btnDisabled]}
-                onPress={() => canConfirm && setConfirmed(true)}
+                onPress={() => {
+                  if (!canConfirm) return;
+                  posthog?.capture('eye_test_booking_confirmed', {
+                    branch_id: branchId,
+                  });
+                  setConfirmed(true);
+                }}
                 activeOpacity={canConfirm ? 0.82 : 1}
               >
                 <Ionicons
@@ -4257,7 +4273,10 @@ const RefractionResult: React.FC<{
         </AppText>
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={() => setShowBooking(true)}
+          onPress={() => {
+            posthog?.capture('eye_test_booking_opened', { risk });
+            setShowBooking(true);
+          }}
           activeOpacity={0.85}
         >
           <Ionicons name="calendar-outline" size={18} color={Colors.white} />
@@ -4400,9 +4419,29 @@ const RefractionFlow: React.FC = () => {
   const handleAstigmatismRightDone = (result: 'equal' | 'unequal') => {
     setAstigmatismRight(result);
     setStage('result');
+
+    // Outcome labels only — no raw scores. This is health information tied to
+    // the signed-in customer, so it stays as coarse as the result screen.
+    const finalAstigmatism =
+      astigmatismLeft === 'unequal' || result === 'unequal'
+        ? 'unequal'
+        : 'equal';
+    posthog?.capture('eye_test_completed', {
+      risk: computeRisk(
+        Math.min(acuityLeftPass, acuityRightPass),
+        finalAstigmatism,
+        colorVision,
+      ),
+      acuity_ok:
+        acuityLeftPass >= ACUITY_PASS_MARK &&
+        acuityRightPass >= ACUITY_PASS_MARK,
+      color_vision: colorVision,
+      astigmatism_ok: finalAstigmatism === 'equal',
+    });
   };
 
   const handleRetry = () => {
+    posthog?.capture('eye_test_restarted');
     setAcuityLeftPass(0);
     setAcuityRightPass(0);
     setAstigmatismLeft('equal');
@@ -4558,12 +4597,16 @@ const ScanScreen: React.FC = () => {
   // repeat scans skip the prompt. iOS: WKWebView reuses the app-level grant
   // (NSCameraUsageDescription) via mediaCapturePermissionGrantType="grant".
   const startFaceScan = useCallback(async () => {
+    posthog?.capture('face_scan_started');
     if (Platform.OS === 'android') {
       const result = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.CAMERA,
       );
       if (result !== PermissionsAndroid.RESULTS.GRANTED) {
         // Denied — fall back to manual face-shape selection.
+        posthog?.capture('face_scan_camera_unavailable', {
+          reason: 'permission_denied',
+        });
         setFaceScanStage('selecting');
         return;
       }
@@ -4578,6 +4621,11 @@ const ScanScreen: React.FC = () => {
     dbg: FaceDebug | null,
     photo: string | null,
   ) => {
+    // The shape only — never the photo or the face measurements.
+    posthog?.capture('face_scan_completed', {
+      face_shape: shape,
+      method: 'camera',
+    });
     setFaceShape(shape);
     setConfidence(conf);
     setMetrics(m);
@@ -4640,7 +4688,12 @@ const ScanScreen: React.FC = () => {
               <FaceScanCamera
                 armed={faceScanStage === 'scanning'}
                 onShapeDetected={handleShapeDetected}
-                onCameraError={() => setFaceScanStage('selecting')}
+                onCameraError={() => {
+                  posthog?.capture('face_scan_camera_unavailable', {
+                    reason: 'camera_error',
+                  });
+                  setFaceScanStage('selecting');
+                }}
                 onCancel={() => setFaceScanStage('idle')}
               />
               {faceScanStage === 'countdown' && (
@@ -4655,6 +4708,10 @@ const ScanScreen: React.FC = () => {
           {faceScanStage === 'selecting' && (
             <FaceShapeSelector
               onSelect={shape => {
+                posthog?.capture('face_scan_completed', {
+                  face_shape: shape,
+                  method: 'manual',
+                });
                 setFaceShape(shape);
                 setConfidence(null);
                 setMetrics(null);
@@ -4682,8 +4739,14 @@ const ScanScreen: React.FC = () => {
         <>
           <EyeTestDisclaimerModal
             visible={!testConsent}
-            onAccept={() => setTestConsent(true)}
-            onDecline={() => navigation.goBack()}
+            onAccept={() => {
+              posthog?.capture('eye_test_started');
+              setTestConsent(true);
+            }}
+            onDecline={() => {
+              posthog?.capture('eye_test_declined');
+              navigation.goBack();
+            }}
           />
 
           {/* Mounted only once consent is given, so the test cannot be

@@ -27,6 +27,11 @@ type GlassessProductImageSliderProps = {
    * buttons are disabled and a notice says why.
    */
   modelAvailable?: boolean;
+  /**
+   * Whether the selected colourway has a try-on GLB. When false the AR button
+   * is not shown at all — a product with no try-on model has no Try On.
+   */
+  tryOnAvailable?: boolean;
 };
 
 const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
@@ -35,6 +40,7 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
   onPress3DModel,
   onPressImage,
   modelAvailable = true,
+  tryOnAvailable = modelAvailable,
 }) => {
   const flatListRef = useRef<FlatList<string>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -146,22 +152,19 @@ const GlassessProductImageSlider: React.FC<GlassessProductImageSliderProps> = ({
         )}
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[
-              styles.floatingButton,
-              !modelAvailable && styles.floatingButtonDisabled,
-            ]}
-            activeOpacity={0.9}
-            onPress={onPressArTryOn}
-            disabled={!modelAvailable}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !modelAvailable }}
-          >
-            <View style={styles.iconWrap}>
-              <Ionicons name="scan-outline" size={16} color={Colors.black} />
-            </View>
-            <AppText style={styles.floatingButtonText}>{t('ArTryOn')}</AppText>
-          </TouchableOpacity>
+          {tryOnAvailable && (
+            <TouchableOpacity
+              style={styles.floatingButton}
+              activeOpacity={0.9}
+              onPress={onPressArTryOn}
+              accessibilityRole="button"
+            >
+              <View style={styles.iconWrap}>
+                <Ionicons name="scan-outline" size={16} color={Colors.black} />
+              </View>
+              <AppText style={styles.floatingButtonText}>{t('ArTryOn')}</AppText>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[

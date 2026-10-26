@@ -7,7 +7,8 @@ import { Product } from '../../../types/glasses';
 import AppText from '../../AppText';
 import AppImage from '../../AppImage';
 import { useFavorite } from '../../../hook/useFavorite';
-import { formatPrice } from '../../../utils/formatPrice';
+import { productPricing } from '../../../utils/salePrice';
+import PriceTag from '../PriceTag';
 
 const FAVORITE_RED = '#E5484D';
 
@@ -34,7 +35,7 @@ const GlassCard: React.FC<Props> = ({
   // The list endpoint (GET /products) returns lighter field names than the
   // detail endpoint, so fall back across both shapes.
   const name = item.item_name || item.name;
-  const price = item.item_price ?? item.price;
+  const pricing = productPricing(item);
   const brand = item.category_name || item.brand?.name || '';
 
   return (
@@ -86,16 +87,19 @@ const GlassCard: React.FC<Props> = ({
             accessibilityRole="button"
             accessibilityLabel="Log in to see the price"
           >
-            <AppText style={[styles.price, styles.priceBlurred]}>
-              {formatPrice(price)}
-            </AppText>
+            {/* The -20% badge stays readable: a sale is a reason to sign in. */}
+            <PriceTag
+              pricing={pricing}
+              priceStyle={[styles.price, styles.priceBlurred]}
+              hideOriginal
+            />
             <AppText style={styles.priceLockHint}>
               <Ionicons name="lock-closed" size={11} color={Colors.primary} />{' '}
               Log in to see price
             </AppText>
           </TouchableOpacity>
         ) : (
-          <AppText style={styles.price}>{formatPrice(price)}</AppText>
+          <PriceTag pricing={pricing} priceStyle={styles.price} />
         )}
       </View>
     </TouchableOpacity>

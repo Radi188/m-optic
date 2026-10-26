@@ -28,6 +28,8 @@ import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 import { useAppSelector } from '../store';
 import { selectMembershipEnabled } from '../store/slices/featuresSlice';
+import { posthog } from '../config/posthog';
+import { posthogLog } from '../config/posthogLogs';
 
 type RewardScreenProps = {
   navigation?: any;
@@ -98,6 +100,17 @@ const RewardScreen: React.FC<RewardScreenProps> = ({ navigation }) => {
           text: t('Redeem'),
           onPress: async () => {
             const result = await redeem(reward.id);
+            if (result.ok) {
+              posthog?.capture('reward_redeemed', {
+                reward_id: String(reward.id),
+                points_required: reward.points_required,
+              });
+              posthogLog.info('reward redemption completed', {
+                operation: 'reward_redemption',
+                outcome: 'success',
+                points_required: reward.points_required,
+              });
+            }
 
             Alert.alert(
               result.ok ? t('RedeemSuccess') : t('RedeemFailed'),

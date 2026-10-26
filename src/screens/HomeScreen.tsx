@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
-  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,7 +14,6 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import WebView from 'react-native-webview';
 import { Badge, GlassView } from '../components/ui';
 import {
   Colors,
@@ -36,12 +34,6 @@ import type {
   BottomTabParamList,
   RootStackParamList,
 } from '../types/navigation';
-import {
-  searchMOpticLocations,
-  getEmbedUrl,
-  groupHours,
-  type PlaceLocation,
-} from '../services/placesService';
 import LensTechSection from '../components/ui/Lens/LensTechSection';
 import { BRAND_LENS_CATEGORIES } from '../types/lens';
 import AnnouncementSection from '../components/ui/Home/AnnounmentsSection';
@@ -59,7 +51,8 @@ import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
-import { formatPrice } from '../utils/formatPrice';
+import PriceTag from '../components/ui/PriceTag';
+import { productPricing } from '../utils/salePrice';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -104,8 +97,6 @@ const ANN_CONFIG: Record<
     label: 'Info',
   },
 };
-
-// ─── Store locations fetched from Google Places API ───────────────────────────
 
 type GlassScreenNav = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Glass'>,
@@ -164,26 +155,12 @@ const HomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   // Best sellers show prices: no screenshots or recording while focused.
   useBlockScreenCapture();
-  const [locations, setLocations] = useState<PlaceLocation[]>([]);
-  const [locLoading, setLocLoading] = useState(true);
   const navigation = useNavigation<GlassScreenNav>();
   const { t } = useTranslation();
 
   const { data, loading, refreshing, error, onRefresh } = useHome();
   // The latest announcement, shown once per device (see AnnouncementPopup).
   const { popup, closePopup } = useAnnouncementPopup(data?.announcements);
-
-  useEffect(() => {
-    searchMOpticLocations()
-      .then(setLocations)
-      .finally(() => setLocLoading(false));
-  }, []);
-
-  const openMaps = (placeId: string) =>
-    Linking.openURL(`https://www.google.com/maps/place/?q=place_id:${placeId}`);
-
-  const callStore = (phone: string) =>
-    Linking.openURL(`tel:${phone.replace(/\s/g, '')}`);
 
   if (loading) {
     return <HomeSkeleton />;
@@ -303,9 +280,11 @@ const HomeScreen: React.FC = () => {
                   </AppText>
 
                   <View style={styles.bsFooter}>
-                    <AppText style={styles.bsPrice}>
-                      {formatPrice(item.price)}
-                    </AppText>
+                    <PriceTag
+                      pricing={productPricing(item)}
+                      priceStyle={styles.bsPrice}
+                      style={styles.bsPriceTag}
+                    />
 
                     <TouchableOpacity
                       style={styles.tryOnBtn}
@@ -495,6 +474,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bsPrice: { fontSize: FontSize.sm, fontWeight: '800', color: Colors.primary },
+  // Shares the row with Try On, so a sale wraps under the price instead of
+  // pushing the button out.
+  bsPriceTag: { flex: 1, marginRight: 6 },
   tryOnBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -601,7 +583,6 @@ const styles = StyleSheet.create({
   },
 
   // Store Location cards
-  locLoading: { height: 120, alignItems: 'center', justifyContent: 'center' },
   locationCardWrap: {
     width: SCREEN_WIDTH * 0.78,
     height: 450,
