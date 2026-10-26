@@ -77,8 +77,6 @@ export type LensCategory = {
   name: Localized;
   title: Localized;
   subtitle: Localized;
-  /** The family's headline benefit, shown big at the top of the tab. */
-  highlight?: LensHighlight;
   /** Empty string when the shop has not supplied copy for this category yet. */
   recommendedFor: Localized;
   /**
@@ -484,11 +482,6 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'HOYA Nulux Full Control',
     subtitle:
       'Best-selling HOYA single vision lenses, supplied with the complete Full Control coating package.',
-    highlight: {
-      icon: 'shield-checkmark-outline',
-      title: 'Full Control: 4 coatings in 1 lens',
-      text: 'Hi-Vision LongLife, BlueControl, UV Control and Hi-Vision Anti-bacterial — on every Nulux lens.',
-    },
     recommendedFor:
       'Ideal for everyday single vision wearers who want premium Japanese coating quality.',
     goodFor: [
@@ -574,11 +567,6 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor Crizal 1.56 AS',
     subtitle:
       'Everyday clear lenses with UV protection and the Blue UV Capture finish.',
-    highlight: {
-      icon: 'sunny-outline',
-      title: 'E-SPF 35 UV protection',
-      text: 'Every lens in this range carries E-SPF 35 UV protection and the Blue UV Capture finish.',
-    },
     recommendedFor:
       'Ideal for digital device users, office workers, and general everyday wear.',
     goodFor: [
@@ -660,11 +648,6 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor AirWear 1.59',
     subtitle:
       'Thin, light and impact-resistant polycarbonate lenses with the Crizal Sapphire HR finish.',
-    highlight: {
-      icon: 'shield-checkmark-outline',
-      title: 'Impact-resistant polycarbonate',
-      text: 'Resists impact far better than standard resin — the safest everyday choice.',
-    },
     recommendedFor:
       'Ideal for children, sports, and anyone who needs a tougher, lighter lens.',
     goodFor: [
@@ -708,11 +691,6 @@ export const BRAND_LENS_CATEGORIES: LensCategory[] = [
     title: 'Essilor Transitions',
     subtitle:
       'Photochromic lenses that darken in sunlight and turn clear again indoors.',
-    highlight: {
-      icon: 'partly-sunny-outline',
-      title: 'Dark outdoors, clear indoors',
-      text: 'One pair of glasses that changes with the light, so you need no separate sunglasses.',
-    },
     recommendedFor:
       'Ideal for people moving between indoors and outdoors all day, and for driving.',
     goodFor: [

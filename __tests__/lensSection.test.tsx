@@ -143,7 +143,7 @@ it('shows each branded tab\'s "Good for" chips under its recommendation', () => 
   }
 });
 
-it('shows the tab\'s key benefit and swaps the lens benefit with the chip', () => {
+it('swaps the lens benefit with the chip, with no tab-level banner', () => {
   const crizal = BRAND_LENS_CATEGORIES.find(c => c.id === 'essilor-crizal-156-as')!;
   const [eyezen, sapphire] = crizal.products;
   let tree: any;
@@ -153,7 +153,7 @@ it('shows the tab\'s key benefit and swaps the lens benefit with the chip', () =
   act(() => pressableLabelled(tree, localize(crizal.name, 'en')).props.onPress());
 
   let found = texts(tree.toJSON());
-  expect(found).toContain(localize(crizal.highlight!.title, 'en'));
+  expect(found).not.toContain('Key benefit');
   expect(found).toContain('Big optical centre');
   expect(found).not.toContain(localize(sapphire.highlight!.title, 'en'));
 

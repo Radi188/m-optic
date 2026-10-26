@@ -69,58 +69,25 @@ const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
   </View>
 );
 
-/**
- * The headline benefit, shown big. `variant="category"` is the solid banner at
- * the top of a tab; `variant="product"` is the softer panel inside a lens card.
- */
+/** The lens's headline benefit, shown big at the top of its card. */
 const HighlightPanel: React.FC<{
   highlight: LensHighlight;
   kicker: string;
-  variant: 'category' | 'product';
-}> = ({ highlight, kicker, variant }) => {
+}> = ({ highlight, kicker }) => {
   const { i18n } = useTranslation();
   const lang = i18n.language;
-  const isCategory = variant === 'category';
 
   return (
-    <View
-      style={[
-        styles.highlight,
-        isCategory ? styles.highlightCategory : styles.highlightProduct,
-      ]}
-    >
-      <View
-        style={[
-          styles.highlightIcon,
-          isCategory ? styles.highlightIconCategory : styles.highlightIconProduct,
-        ]}
-      >
-        <Ionicons
-          name={highlight.icon as any}
-          size={isCategory ? 30 : 26}
-          color={isCategory ? Colors.white : Colors.primary}
-        />
+    <View style={styles.highlight}>
+      <View style={styles.highlightIcon}>
+        <Ionicons name={highlight.icon as any} size={26} color={Colors.primary} />
       </View>
       <View style={styles.highlightTextBox}>
-        <AppText
-          style={[
-            styles.highlightKicker,
-            isCategory && styles.highlightOnDark,
-          ]}
-        >
-          {kicker}
-        </AppText>
-        <AppText
-          style={[
-            styles.highlightTitle,
-            isCategory && styles.highlightTitleCategory,
-          ]}
-        >
+        <AppText style={styles.highlightKicker}>{kicker}</AppText>
+        <AppText style={styles.highlightTitle}>
           {localize(highlight.title, lang)}
         </AppText>
-        <AppText
-          style={[styles.highlightText, isCategory && styles.highlightOnDark]}
-        >
+        <AppText style={styles.highlightText}>
           {localize(highlight.text, lang)}
         </AppText>
       </View>
@@ -158,7 +125,6 @@ const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
         <HighlightPanel
           highlight={product.highlight}
           kicker={t('LensWhyThisLens')}
-          variant="product"
         />
       )}
 
@@ -265,13 +231,6 @@ const LensTechSection: React.FC<LensTechSectionProps> = ({
             the selected tab's own label, and the description below it said the
             same thing again in longer form. The recommendation box is the
             first thing the tab has to add. */}
-        {active.highlight && (
-          <HighlightPanel
-            highlight={active.highlight}
-            kicker={t('LensKeyBenefit')}
-            variant="category"
-          />
-        )}
 
         {detailed && !!localize(active.subtitle, lang) && (
           <AppText style={styles.subtitle}>
@@ -443,13 +402,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
-  },
-  highlightCategory: {
-    backgroundColor: Colors.primary,
-    paddingVertical: Spacing.lg,
-    ...Shadow.sm,
-  },
-  highlightProduct: {
     backgroundColor: Colors.primaryLight,
     borderWidth: 1,
     borderColor: Colors.primary + '33',
@@ -460,9 +412,8 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.white,
   },
-  highlightIconCategory: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  highlightIconProduct: { backgroundColor: Colors.white },
   highlightTextBox: { flex: 1 },
   highlightKicker: {
     fontSize: FontSize.xs,
@@ -478,14 +429,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 24,
   },
-  highlightTitleCategory: { fontSize: 22, lineHeight: 28, color: Colors.white },
   highlightText: {
     fontSize: FontSize.sm,
     color: Colors.gray600,
     lineHeight: 19,
     marginTop: 4,
   },
-  highlightOnDark: { color: 'rgba(255,255,255,0.88)' },
 
   recommendBox: {
     flexDirection: 'row',

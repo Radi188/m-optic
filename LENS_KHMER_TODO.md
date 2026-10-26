@@ -217,8 +217,6 @@ them in place; say the word and I will strip these to English too.
 
 | where | field | English | Khmer |
 |---|---|---|---|
-| hoya-nulux-full-control | title | Full Control: 4 coatings in 1 lens |  |
-| hoya-nulux-full-control | text | Hi-Vision LongLife, BlueControl, UV Control and Hi-Vision Anti-bacterial — on every Nulux lens. |  |
 | nulux-fc-155 | title | Standard thickness, full coating |  |
 | nulux-fc-155 | text | The everyday 1.55 index with the complete Full Control package. |  |
 | nulux-fc-153 | title | Impact-resistant material |  |
@@ -227,20 +225,14 @@ them in place; say the word and I will strip these to English too.
 | nulux-fc-160 | text | A 1.60 index that keeps the lens slimmer than the standard 1.55. |  |
 | nulux-fc-167 | title | Extra thin for strong prescriptions |  |
 | nulux-fc-167 | text | A 1.67 index that keeps strong prescriptions slim and light. |  |
-| essilor-crizal-156-as | title | E-SPF 35 UV protection |  |
-| essilor-crizal-156-as | text | Every lens in this range carries E-SPF 35 UV protection and the Blue UV Capture finish. |  |
 | eyezen-start-156 | title | Big optical centre |  |
 | eyezen-start-156 | text | A larger clear-vision zone in the middle of the lens — designed for digital device users. |  |
 | crizal-sapphire-hr-blue-156 | title | 360° anti-reflection |  |
 | crizal-sapphire-hr-blue-156 | text | Fewer reflections from every angle, with E-SPF 35 UV protection. |  |
 | crizal-156 | title | Easy-care everyday lens |  |
 | crizal-156 | text | Scratch-, water- and dust-resistant, and easy to wipe clean. |  |
-| essilor-airwear-159 | title | Impact-resistant polycarbonate |  |
-| essilor-airwear-159 | text | Resists impact far better than standard resin — the safest everyday choice. |  |
 | airwear-crizal-sapphire-hr-159 | title | Thin, light and tough |  |
 | airwear-crizal-sapphire-hr-159 | text | Polycarbonate with the Crizal Sapphire HR finish and 360° anti-reflection. |  |
-| essilor-transitions | title | Dark outdoors, clear indoors |  |
-| essilor-transitions | text | One pair of glasses that changes with the light, so you need no separate sunglasses. |  |
 | transitions-gens-sapphire-hr-16 | title | Fastest colour change |  |
 | transitions-gens-sapphire-hr-16 | text | Best for moving in and out all day — it darkens and clears quickest. |  |
 | transitions-classic-easypro-156 | title | Classic colour change |  |

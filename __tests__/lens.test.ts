@@ -13,7 +13,6 @@ const walk = (): Localized[] => {
   for (const c of ALL_CATEGORIES) {
     out.push(c.name, c.title, c.subtitle, c.recommendedFor, ...c.tips);
     for (const g of c.goodFor ?? []) out.push(g.label);
-    if (c.highlight) out.push(c.highlight.title, c.highlight.text);
     for (const p of c.products) {
       out.push(p.coating.label, ...p.features);
       if (p.highlight) out.push(p.highlight.title, p.highlight.text);
@@ -274,9 +273,8 @@ describe('branded lens tabs', () => {
 });
 
 describe('headline benefits', () => {
-  it('gives every branded tab and every branded lens its own benefit', () => {
+  it('gives every branded lens its own benefit', () => {
     for (const c of BRAND_LENS_CATEGORIES) {
-      expect([c.id, !!c.highlight]).toEqual([c.id, true]);
       for (const p of c.products) {
         expect([p.id, !!p.highlight]).toEqual([p.id, true]);
       }
