@@ -1,3 +1,4 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 # Resolve react_native_pods.rb with node to allow for hoisting
 require Pod::Executable.execute_command('node', ['-p',
   'require.resolve(
@@ -16,7 +17,7 @@ require Pod::Executable.execute_command('node', ['-p',
 ENV['RCT_USE_RN_DEP'] = '0'
 ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
 
-platform :ios, min_ios_version_supported
+platform :ios, '16.4'
 prepare_react_native_project!
 
 # Required by @react-native-firebase: the Swift Firebase pods (e.g.
@@ -41,7 +42,24 @@ if linkage != nil
 end
 
 target 'MOptic' do
-  config = use_native_modules!
+  use_expo_modules!
+
+  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+  else
+    config_command = [
+      'node',
+      '--no-warnings',
+      '--eval',
+      'require(require.resolve(\'expo-modules-autolinking\', { paths: [require.resolve(\'expo/package.json\')] }))(process.argv.slice(1))',
+      'react-native-config',
+      '--json',
+      '--platform',
+      'ios'
+    ]
+  end
+
+  config = use_native_modules!(config_command)
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -102,6 +120,34 @@ target 'MOptic' do
       if content.include?(old_line) && !content.include?("#ifndef RCT_REMOVE_LEGACY_ARCH")
         File.chmod(0644, rea_swizzled_path)
         File.write(rea_swizzled_path, content.sub(old_line, new_line))
+      end
+    end
+
+    # fmt 11.0.x (built from source above) enables `consteval` format checks
+    # that newer Apple clang (Xcode 26.4+/27) rejects as "not a constant
+    # expression". fmt has no switch for it, so turn consteval off for Apple
+    # clang in its detection block; fmt then checks formats at runtime instead.
+    fmt_base = File.join(installer.sandbox.root, 'fmt/include/fmt/base.h')
+    if File.exist?(fmt_base)
+      fmt_src = File.read(fmt_base)
+      fmt_old = "#elif defined(__apple_build_version__) && __apple_build_version__ < 14000029L"
+      fmt_new = "#elif defined(__apple_build_version__) // patched: consteval breaks on newer Apple clang"
+      if fmt_src.include?(fmt_old)
+        File.chmod(0644, fmt_base)
+        File.write(fmt_base, fmt_src.sub(fmt_old, fmt_new))
+      end
+    end
+
+    # Xcode 27 refuses targets below its supported iOS range, and many pods
+    # (mostly their privacy/resource-bundle targets) still declare iOS 8–13.
+    # Lift every pod target to the app's own minimum (Expo SDK 56 needs 16.4).
+    app_min_ios = '16.4'
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        if current.nil? || Gem::Version.new(current) < Gem::Version.new(app_min_ios)
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = app_min_ios
+        end
       end
     end
 

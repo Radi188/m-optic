@@ -1,0 +1,24 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["moptic", "vto"],
+  "ios": {
+    "iosModuleName": "MOpticVTO"
+  },
+  "android": {
+    "androidNamespace": ["moptic", "vto"],
+    "androidCxxLibName": "MOpticVTO"
+  },
+  "autolinking": {
+    "VtoFactory": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridVtoFactory"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridVtoFactory"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules", "android/build", "ios/build"]
+}

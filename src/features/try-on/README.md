@@ -1,77 +1,95 @@
-# Virtual Try-On (app)
+# Virtual Try-On (app, native)
 
 Live glasses try-on, ported from the M-Optic website's try-on
-(`Cross-Technology/moptic-ecommerce-website`, `src/components/vto`,
-`src/components/r3f`, `src/data/vto`). Same MediaPipe Face Landmarker, same
-camera matching (vertical FOV 63°, near 1, far 10000 cm), same calibration
-numbers, same occluder and temple-arm logic.
+(`src/components/vto`, `src/components/r3f`, `src/data/vto`). Same MediaPipe
+Face Landmarker (0.10.35), same camera matching (vertical FOV 63°, near 1,
+far 10000 cm), same calibration numbers, same occluder, temple-arm and 1€
+smoothing logic. No WebView.
 
-## How it is built
+```
+camera thread                         JS thread (render on new pose only)
+VisionCamera frame output (480×640)   R3F native + three.js on expo-gl
+  └─ worklet: landmarker.detect()  →  readLatest() → matrix + 478 landmarks
+     (MediaPipe, GPU→CPU fallback)       Scene → Glasses + Occluder
+```
+
+## Layout
 
 ```
 src/features/try-on/
-  core/       shared pure TS, ported verbatim: frames, productCalibration,
-              faceShapeTypes — used by the app AND by the engine
-  engine/     engineHtml.ts (the WebView page) + engineBundle.generated.ts
-  ui/         TryOnScreen, PermissionGate, FrameSwitcher, CaptureReviewCard
-  glbDownload.ts   native GLB download with progress, in-memory cache
-tryon-engine/      the WebView engine source (website code) + its own build
+  core/      pure TS ported from the website: frames, productCalibration,
+             oneEuroFilter, templeSplay, faceShape, coverGeometry, and the
+             MediaPipe mesh tables (faceMeshTopology.generated.ts)
+  native/    react-native-moptic-vto — a Nitro module (iOS Swift / Android
+             Kotlin): MediaPipe Face Landmarker as a VisionCamera v5
+             frame-processor plugin, and the photo-card compositor.
+             Bundles face_landmarker.task and the photo-card logo.
+  render/    Scene, Glasses, Occluder (website ports),
+             TryOnCanvas (camera rig + on-demand render loop + snapshot),
+             buildGlasses, faceMeshOccluder, glbCache / glbLoader
+  ui/        TryOnScreen, PermissionGate, FrameSwitcher, CaptureReviewCard
+  store.ts   zustand, the website's vtoStore minus the dev-panel fields
+  useFaceTracking.ts
 ```
 
-The 3D part runs in a **WebView**: the website's three.js / React Three Fiber
-code, bundled by esbuild into one script and inlined into the page. The page's
-base URL is `VTO_ASSET_ORIGIN` (in `engine/engineHtml.ts`), so MediaPipe's WASM,
-`face_landmarker.task` and the Draco decoder load from the website's own
-self-hosted copies (`/mediapipe`, `/draco`), same-origin and over https.
+## Coordinate space (do not "fix" calibration numbers)
 
-GLBs are downloaded natively (no CORS on native, no `/api/vto-glb` proxy) and
-handed to the engine as data, which it turns into a `blob:` URL.
+- Frames are analysed **upright and unmirrored** (`enablePhysicalBufferRotation`,
+  `mirrorMode="off"`); any leftover rotation is applied natively before
+  inference.
+- `PerspectiveCamera` fov 63 / near 1 / far 10000, `aspect` = the analysed
+  frame's aspect (reported by the plugin), cover-fitted like the preview.
+  Instead of an oversized cover box, `setViewOffset` renders only the visible
+  window of the same frustum (`core/coverGeometry.ts`).
+- Preview and GL view are mirrored together, once, by a `scaleX(-1)` wrapper
+  (Android preview uses `implementationMode="compatible"` so transforms apply).
 
-### Rebuilding the engine
+## Loading speed
 
-After changing anything in `tryon-engine/src` or `src/features/try-on/core`:
+- `face_landmarker.task` ships in the app; the landmarker is created off the
+  JS thread while the camera starts.
+- GLBs are downloaded directly (no CORS → no `/api/vto-glb` proxy) into
+  `Paths.cache/vto-glb-v1/<url-hash>/`, and their ~25 embedded textures are
+  unpacked to files once, so later opens are disk-only and expo-gl decodes the
+  textures natively (R3F native's default path base64-encodes every texture on
+  the JS thread). expo-gl decodes texture files with stb_image, which has no
+  WebP, and every catalog GLB uses `EXT_texture_webp` — so `prepare` converts
+  WebP textures to PNG natively (`transcodeToPng`) and drops the extension.
+- iOS downloads use a foreground `URLSession` (expo-file-system defaults to a
+  background one there).
+- The product page prefetches the selected colourway's GLB; after the first
+  fitted frame the try-on prefetches the other colourways.
+- The TryOn screen is lazy-loaded, so three.js is not evaluated at app start.
+- Rendering is on demand (one frame per new pose, ~camera rate).
+
+## Rebuilding the native module
+
+After changing `native/specs/*.nitro.ts`:
 
 ```sh
-cd tryon-engine
-npm install      # first time only
-npm run build    # writes src/features/try-on/engine/engineBundle.generated.ts
+cd src/features/try-on/native && ../../../../node_modules/.bin/nitrogen
+cd ios && pod install   # from the repo root
 ```
 
-The generated file is committed; the app build does not need `tryon-engine`.
-Metro, Jest, TypeScript and ESLint all ignore `tryon-engine/`.
+## Deviations from `mobile-try-on-prompt.md`
 
-## Changes from the website code
-
-Behaviour-neutral edits only:
-
-- `mathjs` helpers → `Math` (identical results).
-- drei `useGLTF` → R3F `useLoader(GLTFLoader, url, extendGltfLoader)` (same
-  self-hosted Draco + bundled Meshopt decoders).
-- No CORS proxy, no HDR fallback (the live camera is always the environment
-  map), no experimental worker path, no dev calibration panel.
-- On-screen UI (status, hints, switcher, shutter, review card, face-shape
-  badge, consent) is native React Native instead of HTML.
-
-## Deviations from `mobile-try-on-prompt.md` (agreed before building)
-
-- **WebView instead of native VisionCamera + MediaPipe SDK + R3F native.** The
-  app is bare React Native without Expo; Hermes cannot run WebAssembly (so
-  Meshopt could not decode natively); `react-native-mediapipe` is unmaintained
-  and targets VisionCamera v4. The WebView runs the website's code nearly 1:1.
-  Inference runs in the WebView, not on the React Native JS thread.
-- **Assets come from the website host** (`moptic-ecommerce-website.vercel.app`),
-  first-party, not bundled in the app. Point `VTO_ASSET_ORIGIN` at the
-  production web domain once it serves `/mediapipe` and `/draco`.
-- **"Add to cart" → "Ask on Telegram"**: the app has no cart; the CTA reuses
-  the product page's Telegram enquiry (`src/utils/telegramInquiry.ts`).
-- **GLB cache is in memory, not on disk** — needs a file-system native module.
-- **Save to photos** needs a camera-roll native module (plus file system).
-  Today: iOS shares the photo card through the native share sheet; Android
-  shows a note instead of Save/Share.
+- **Draco / Meshopt are not decoded.** No catalog GLB uses them (all 166 were
+  checked: they use quantized meshes and WebP/PNG/JPEG textures), and Hermes
+  has no WebAssembly. A GLB that *requires* either is rejected with a clear
+  error and the "Couldn't load this frame's 3D model" hint.
+- **Environment map** is three's procedural `RoomEnvironment`, not the live
+  camera (no GPU bridge from the native preview into three).
+- **Occluder** uses the face mesh + procedural head (the website's fallback
+  when `occluder.glb` is missing); no `occluder.glb` is shipped.
+- **"Add to cart" → "Ask on Telegram"**: the app has no cart.
+- **expo-media-library** is called through its native module: its JS entry
+  imports `expo`, which needs Expo's Metro config (the app uses RN's).
+- Expo SDK 56 raised the iOS minimum to **16.4** (was 15.1).
 
 ## Not verified yet (needs real devices)
 
 fps and time-to-first-fit on iPhone 11 / Pixel 6a / Galaxy A54, low light,
-yaw/pitch/roll limits, and 20× open/close leak testing. The screen logs
-`[TryOn] delegate=… inference=…ms detectionFps=… renderFps=…` every second in
-development and sends `try_on_first_fit` (ms) to PostHog.
+yaw/pitch/roll limits, 2 mm parity with the website, photo crop alignment, and
+20× open/close leak testing. In development the screen logs
+`[TryOn] delegate=… inference=…ms detectionFps=… renderFps=…` every second and
+`first fitted frame after … ms`; `try_on_first_fit` (ms) goes to PostHog.

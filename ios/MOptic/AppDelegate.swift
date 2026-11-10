@@ -1,22 +1,24 @@
 import UIKit
+internal import Expo
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: ExpoAppDelegate {
   var window: UIWindow?
 
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
-  func application(
+  override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     let delegate = ReactNativeDelegate()
-    let factory = RCTReactNativeFactory(delegate: delegate)
+    let factory = ExpoReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
+    delegate.expoFactory = factory
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
@@ -33,13 +35,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       ScreenGuard.shared.protect(window: window)
     }
 
-    return true
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }
 
-class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
+class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
+  weak var expoFactory: ExpoReactNativeFactory?
+
+  /**
+   Expo SDK 56 installs `globalThis.expo` (which every Expo module — expo-gl,
+   expo-file-system, … — needs at import time) from the factory's
+   `host:didInitializeRuntime:`. React Native 0.85 calls that on the factory by
+   itself; 0.84 only calls `RCTHost.runtimeDelegate`, which nothing sets, so the
+   global was never installed ("Cannot read property 'EventEmitter' of
+   undefined"). Point the host at the factory as soon as it starts — the same
+   thing Expo does for react-native-macos 0.84. RCTHost is not visible to Swift,
+   hence the untyped parameter and KVC. Remove once the app is on RN 0.85.
+   */
+  @objc(hostDidStart:)
+  func hostDidStart(_ host: NSObject) {
+    guard let factory = expoFactory else { return }
+    host.setValue(factory, forKey: "runtimeDelegate")
+  }
+
   override func sourceURL(for bridge: RCTBridge) -> URL? {
-    self.bundleURL()
+    // needed to return the correct URL for expo-dev-client.
+    bridge.bundleURL ?? bundleURL()
   }
 
   override func bundleURL() -> URL? {

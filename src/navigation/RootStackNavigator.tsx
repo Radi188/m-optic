@@ -24,7 +24,10 @@ import GlassesListScreen from '../screens/GlassesListScreen';
 import SearchResultScreen from '../screens/SearchResultScreen';
 import SearchScreen from '../screens/SearchScreen';
 import ScanScreen from '../screens/ScanScreen';
-import TryOnScreen from '../features/try-on/ui/TryOnScreen';
+
+// Loaded on first open: the try-on pulls in three.js, R3F and the camera, none
+// of which the rest of the app needs at startup.
+const getTryOnScreen = () => require('../features/try-on/ui/TryOnScreen').default;
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -173,7 +176,7 @@ const RootStackNavigator: React.FC = () => {
           />
           <Stack.Screen
             name="TryOn"
-            component={TryOnScreen}
+            getComponent={getTryOnScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_bottom',
@@ -231,7 +234,7 @@ const RootStackNavigator: React.FC = () => {
           />
           <Stack.Screen
             name="TryOn"
-            component={TryOnScreen}
+            getComponent={getTryOnScreen}
             options={{
               headerShown: false,
               animation: 'slide_from_bottom',

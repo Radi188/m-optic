@@ -88,6 +88,12 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     ndkVersion rootProject.ext.ndkVersion
+
+    // The try-on's MediaPipe model (react-native-moptic-vto) is read straight
+    // out of the APK; keep it stored, not deflated.
+    androidResources {
+        noCompress += ["task"]
+    }
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 

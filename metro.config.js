@@ -6,7 +6,9 @@ const { assetExts, sourceExts } = defaultConfig.resolver;
 
 const config = {
   transformer: {
-    babelTransformerPath: require.resolve('react-native-svg-transformer'),
+    // The React Native entry explicitly: the default one switches to Expo's
+    // transformer whenever the `expo` package is installed (Expo modules).
+    babelTransformerPath: require.resolve('react-native-svg-transformer/react-native'),
   },
   resolver: {
     // ❗ REMOVE svg from assetExts
@@ -17,11 +19,22 @@ const config = {
     // ❗ ADD svg to sourceExts
     sourceExts: [...sourceExts, 'svg'],
 
-    // The WebView try-on engine is a separate web build with its own
-    // node_modules (react-dom, three, MediaPipe). Its output reaches the app as
-    // src/features/try-on/engine/engineBundle.generated.ts, so Metro must
-    // never resolve into it — a second React would break the app.
-    blockList: [/tryon-engine\/.*/],
+    // The try-on native module keeps its iOS/Android sources and their build
+    // output next to its JS (src/features/try-on/native); Metro has no use
+    // for them, and Gradle's .cxx folders are large.
+    blockList: [/src\/features\/try-on\/native\/(android|ios|nitrogen)\/.*/],
+
+    // One copy of three.js. Its package maps `import` to three.module.js and
+    // `require` to three.cjs, so ESM code (the try-on, GLTFLoader) and CJS code
+    // (@react-three/fiber/native) got different copies — and R3F's native
+    // TextureLoader/FileLoader patches only reached the CJS one, so every glTF
+    // texture failed to load ("Multiple instances of Three.js").
+    resolveRequest: (context, moduleName, platform) => {
+      if (moduleName === 'three') {
+        return { type: 'sourceFile', filePath: require.resolve('three') };
+      }
+      return context.resolveRequest(context, moduleName, platform);
+    },
   },
 };
 

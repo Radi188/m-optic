@@ -43,6 +43,7 @@ import {
 import { productPricing, variationPricing } from '../utils/salePrice';
 import PriceTag from '../components/ui/PriceTag';
 import { glbAssets } from '../features/try-on/core/productCalibration';
+import { prefetchGlb } from '../features/try-on/render/glbCache';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
 import ErrorComponent from '../components/ui/Error/ErrorComponent';
 import { useTranslation } from 'react-i18next';
@@ -254,6 +255,17 @@ const GlassDetailScreen: React.FC = () => {
       ).length > 0,
     [product, selectedColor],
   );
+
+  // Warm the try-on while the product is being read: the selected colourway's
+  // GLB is downloaded and its textures unpacked to disk in the background, so
+  // tapping "Try On" opens straight onto a cached model.
+  const tryOnGlbUrl = useMemo(
+    () => glbAssets(selectedColor ? selectedColor.variation.assets : product?.assets)[0]?.url,
+    [product, selectedColor],
+  );
+  useEffect(() => {
+    if (tryOnGlbUrl) prefetchGlb(tryOnGlbUrl).catch(() => {});
+  }, [tryOnGlbUrl]);
 
   const openTryOn = () => {
     posthog?.capture('product_viewer_opened', {

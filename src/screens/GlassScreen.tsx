@@ -262,7 +262,7 @@ const GlassScreen: React.FC = () => {
       <GlassCard
         item={item}
         onPress={() => navigation.navigate('GlassDetail', { id: item.id })}
-        onTryOn={() => navigation.navigate('VirtualTryOn', { glass: item })}
+        onTryOn={() => navigation.navigate('TryOn', { productId: String(item.id) })}
       />
     );
   };

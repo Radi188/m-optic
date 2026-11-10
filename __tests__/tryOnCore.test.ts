@@ -5,7 +5,7 @@ import {
   glbAssets,
   isRimlessFrame,
 } from '../src/features/try-on/core/productCalibration';
-import { FRAME_RECOMMENDATIONS, FACE_SHAPES } from '../src/features/try-on/core/faceShapeTypes';
+import { FRAME_RECOMMENDATIONS, FACE_SHAPES } from '../src/features/try-on/core/faceShape';
 import en from '../src/localizations/locales/en.json';
 import km from '../src/localizations/locales/km.json';
 

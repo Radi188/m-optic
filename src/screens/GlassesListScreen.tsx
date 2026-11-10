@@ -326,7 +326,7 @@ const GlassesListScreen: React.FC = () => {
         priceLocked={!isPriceVisible(isAuthenticated, index)}
         onRequestLogin={goToLogin}
         onPress={() => navigation.navigate('GlassDetail', { id: item.id })}
-        onTryOn={() => navigation.navigate('VirtualTryOn', { glass: item })}
+        onTryOn={() => navigation.navigate('TryOn', { productId: String(item.id) })}
       />
     );
   };

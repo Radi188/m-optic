@@ -1,77 +1,49 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  PermissionsAndroid,
-  Platform,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Linking, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
+import { useCameraPermission as useVisionCameraPermission } from 'react-native-vision-camera';
 
 import AppText from '../../../components/AppText';
 import { BorderRadius, Colors, FontSize, Spacing } from '../../../theme';
 
 /**
- * Camera permission for the try-on, asked only once the wearer has opened it.
+ * Camera permission for the try-on, asked only once the wearer has opened it
+ * (i.e. tapped "Try On"):
  *
- *   checking  → working out whether we may already use the camera
- *   rationale → our explanation, with an "Enable camera" button
- *   granted   → the engine may start
+ *   checking  → a request is in flight
+ *   rationale → our explanation, with an "Enable camera" button that triggers
+ *               the system prompt
+ *   granted   → the camera may start
  *   blocked   → the system will not ask again; only Settings can fix it
  *
- * Android has a real runtime permission to check and request. iOS has no API
- * for it without another native module: the system prompt appears when the
- * WebView first asks for the camera, so iOS shows our rationale once
- * (remembered) and learns about a refusal from the engine instead.
+ * Status comes from VisionCamera on both platforms and is re-read when the app
+ * returns to the foreground (e.g. from Settings).
  */
 export type CameraPermission = 'checking' | 'rationale' | 'granted' | 'blocked';
 
-const IOS_RATIONALE_SEEN = 'tryon.cameraRationaleSeen';
-
 export function useCameraPermission() {
-  const [state, setState] = useState<CameraPermission>('checking');
+  const { status, requestPermission } = useVisionCameraPermission();
+  const [requesting, setRequesting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let next: CameraPermission = 'rationale';
-      try {
-        if (Platform.OS === 'android') {
-          const ok = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
-          next = ok ? 'granted' : 'rationale';
-        } else {
-          next = (await AsyncStorage.getItem(IOS_RATIONALE_SEEN)) ? 'granted' : 'rationale';
-        }
-      } catch {
-        next = 'rationale';
-      }
-      if (!cancelled) setState(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const state: CameraPermission = requesting
+    ? 'checking'
+    : status === 'authorized'
+    ? 'granted'
+    : status === 'not-determined'
+    ? 'rationale'
+    : 'blocked';
 
   const request = useCallback(async () => {
-    if (Platform.OS === 'android') {
-      const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-      if (result === PermissionsAndroid.RESULTS.GRANTED) setState('granted');
-      else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) setState('blocked');
-      else setState('rationale');
-      return;
+    setRequesting(true);
+    try {
+      await requestPermission();
+    } finally {
+      setRequesting(false);
     }
-    await AsyncStorage.setItem(IOS_RATIONALE_SEEN, '1').catch(() => {});
-    setState('granted');
-  }, []);
+  }, [requestPermission]);
 
-  /** The engine reported the camera was refused (iOS learns it this way). */
-  const markBlocked = useCallback(() => setState('blocked'), []);
-
-  return { state, request, markBlocked };
+  return { state, request };
 }
 
 type Props = {

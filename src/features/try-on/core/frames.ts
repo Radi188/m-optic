@@ -4,8 +4,8 @@
  * website's demo frame list is left out, since the app only tries on catalog
  * products.
  *
- * Shared by the app (which builds the frames from the API) and the WebView
- * engine in /tryon-engine (which renders them), so both sides agree on shapes.
+ * Shared by the product integration (which builds the frames from the API)
+ * and the native renderer (src/features/try-on/render).
  *
  * ── Calibration fields ──────────────────────────────────────────────────────
  *   positionOffset  [x, y, z]  in CENTIMETRES, relative to the bridge.
@@ -82,7 +82,7 @@ export interface OccluderConfig {
 
 /**
  * Head occluder config. The authored shell is optional: when
- * /mediapipe/occluder.glb is absent the engine builds a procedural head, and
+ * /mediapipe/occluder.glb is absent the renderer builds a procedural head, and
  * while tracking runs the wearer's own landmark mesh is the occluder anyway.
  */
 export const OCCLUDER_CONFIG: OccluderConfig = {

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Linking,
   Modal,
-  Platform,
-  Share,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -16,10 +17,11 @@ import { useTranslation } from 'react-i18next';
 import AppText from '../../../components/AppText';
 import { BorderRadius, Colors, FontSize, Spacing } from '../../../theme';
 import { posthog } from '../../../config/posthog';
+import { savePhotoToLibrary, sharePhoto } from './savePhoto';
 
 export interface CapturedPhoto {
-  /** The finished card — photo, M-Optic mark, frame and colour — as JPEG. */
-  dataUrl: string;
+  /** The finished card (photo, M-Optic mark, frame and colour) as a JPEG file. */
+  uri: string;
   width: number;
   height: number;
 }
@@ -31,67 +33,112 @@ type Props = {
 };
 
 /**
- * The review card for a try-on shot. The image IS the saved card: the engine
- * composes it (the website's photoCard) at full resolution, so what the wearer
- * approves here is exactly the file they share.
- *
- * Sharing goes through React Native's own share sheet, which on iOS accepts the
- * image itself (and offers saving it from there). Android's built-in share can
- * only send text, and saving straight to the photo library needs a camera-roll
- * native module on both platforms — not in the app yet, so Android shows why
- * the buttons are missing rather than a button that does nothing.
+ * The review card for a try-on shot. The image IS the saved file — composed
+ * natively at full resolution like the website's photoCard — so what the
+ * wearer approves here is exactly what Save and Share hand over.
  */
 const CaptureReviewCard: React.FC<Props> = ({ photo, productId, onClose }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const canShareImage = Platform.OS === 'ios';
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // A new photo starts unsaved.
+  const [lastUri, setLastUri] = useState<string | null>(null);
+  if (photo && photo.uri !== lastUri) {
+    setLastUri(photo.uri);
+    setSaved(false);
+  }
 
   if (!photo) return null;
 
-  // Fit the card inside the screen, leaving room for the buttons.
   const maxW = width - Spacing.lg * 2;
-  const maxH = height - insets.top - insets.bottom - 180;
+  const maxH = height - insets.top - insets.bottom - 190;
   const scale = Math.min(maxW / photo.width, maxH / photo.height);
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const result = await savePhotoToLibrary(photo.uri);
+      if (result === 'saved') {
+        setSaved(true);
+        posthog?.capture('try_on_photo_saved', { product_id: productId });
+      } else {
+        Alert.alert(t('TryOn.photo_save_denied_title'), t('TryOn.photo_save_denied_body'), [
+          { text: t('Close'), style: 'cancel' },
+          { text: t('TryOn.open_settings'), onPress: () => Linking.openSettings().catch(() => {}) },
+        ]);
+      }
+    } catch (e) {
+      console.warn('[TryOn] save failed:', e);
+      Alert.alert(t('Error'), t('TryOn.photo_save_failed'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const share = async () => {
     try {
-      const result = await Share.share({ url: photo.dataUrl });
-      if (result.action === Share.sharedAction) {
-        posthog?.capture('try_on_photo_shared', { product_id: productId });
-      }
+      await sharePhoto(photo.uri, t('TryOn.photo_preview_title'));
+      posthog?.capture('try_on_photo_shared', { product_id: productId });
     } catch {
-      // The user cancelled or the sheet failed; nothing to recover.
+      // Cancelled or unavailable; nothing to recover.
     }
   };
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <View style={[styles.backdrop, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + Spacing.md }]}>
-        <AppText style={styles.title}>{t('TryOn.photo_preview_title')}</AppText>
+      <View
+        style={[
+          styles.backdrop,
+          { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + Spacing.md },
+        ]}
+      >
+        <View style={styles.header}>
+          <AppText style={styles.title}>{t('TryOn.photo_preview_title')}</AppText>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.close}
+            accessibilityRole="button"
+            accessibilityLabel={t('TryOn.photo_discard')}
+          >
+            <Ionicons name="close" size={22} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
 
         <Image
-          source={{ uri: photo.dataUrl }}
-          style={[styles.photo, { width: photo.width * scale, height: photo.height * scale }]}
+          source={{ uri: photo.uri }}
+          style={{ width: photo.width * scale, height: photo.height * scale }}
           resizeMode="contain"
           accessibilityLabel={t('TryOn.photo_preview_title')}
         />
-
-        {!canShareImage && (
-          <AppText style={styles.note}>{t('TryOn.photo_save_unavailable')}</AppText>
-        )}
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.secondary} activeOpacity={0.85} onPress={onClose}>
             <Ionicons name="refresh-outline" size={18} color={Colors.black} />
             <AppText style={styles.secondaryText}>{t('TryOn.photo_retake')}</AppText>
           </TouchableOpacity>
-          {canShareImage && (
-            <TouchableOpacity style={styles.primary} activeOpacity={0.85} onPress={share}>
-              <Ionicons name="share-outline" size={18} color={Colors.white} />
-              <AppText style={styles.primaryText}>{t('TryOn.photo_share')}</AppText>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.secondary}
+            activeOpacity={0.85}
+            onPress={save}
+            disabled={saving || saved}
+          >
+            {saving ? (
+              <ActivityIndicator color={Colors.black} />
+            ) : (
+              <Ionicons name={saved ? 'checkmark' : 'download-outline'} size={18} color={Colors.black} />
+            )}
+            <AppText style={styles.secondaryText}>
+              {saved ? t('TryOn.photo_saved') : t('TryOn.photo_save')}
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.primary} activeOpacity={0.85} onPress={share}>
+            <Ionicons name="share-outline" size={18} color={Colors.white} />
+            <AppText style={styles.primaryText}>{t('TryOn.photo_share')}</AppText>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -106,16 +153,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.md,
-    backgroundColor: 'rgba(15,12,10,0.92)',
+    backgroundColor: 'rgba(15,12,10,0.94)',
     paddingHorizontal: Spacing.lg,
   },
+  header: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   title: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
-  photo: { borderRadius: 4 },
-  note: {
-    fontSize: FontSize.xs,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
-    lineHeight: 18,
+  close: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   actions: { flexDirection: 'row', gap: Spacing.sm, alignSelf: 'stretch' },
   secondary: {
@@ -128,7 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  secondaryText: { fontSize: FontSize.md, fontWeight: '700', color: Colors.black },
+  secondaryText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.black },
   primary: {
     flex: 1,
     height: 50,
@@ -139,5 +193,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  primaryText: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
+  primaryText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.white },
 });

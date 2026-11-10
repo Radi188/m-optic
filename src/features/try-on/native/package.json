@@ -1,0 +1,20 @@
+{
+  "name": "react-native-moptic-vto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "M-Optic try-on native module: MediaPipe Face Landmarker as a VisionCamera frame-processor plugin, and the try-on photo-card compositor.",
+  "main": "index.ts",
+  "react-native": "index.ts",
+  "source": "index.ts",
+  "license": "UNLICENSED",
+  "author": "M-Optic",
+  "homepage": "https://m-eyewear.com",
+  "scripts": {
+    "specs": "nitrogen --logLevel=\"warning\""
+  },
+  "peerDependencies": {
+    "react-native": "*",
+    "react-native-nitro-modules": "*",
+    "react-native-vision-camera": "*"
+  }
+}

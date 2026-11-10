@@ -1,2 +1,4 @@
-tryon-engine/
-src/features/try-on/engine/engineBundle.generated.ts
+src/features/try-on/native/nitrogen/
+src/features/try-on/native/android/
+src/features/try-on/native/ios/
+src/features/try-on/core/faceMeshTopology.generated.ts
