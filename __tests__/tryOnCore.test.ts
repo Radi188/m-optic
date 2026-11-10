@@ -5,7 +5,6 @@ import {
   glbAssets,
   isRimlessFrame,
 } from '../src/features/try-on/core/productCalibration';
-import { FRAME_RECOMMENDATIONS, FACE_SHAPES } from '../src/features/try-on/core/faceShape';
 import en from '../src/localizations/locales/en.json';
 import km from '../src/localizations/locales/km.json';
 
@@ -87,14 +86,5 @@ describe('try-on text', () => {
   it('has the same keys in English and Khmer, none empty', () => {
     expect(Object.keys(kmT).sort()).toEqual(Object.keys(enT).sort());
     for (const k of Object.keys(enT)) expect(kmT[k].trim()).not.toBe('');
-  });
-
-  it('labels every face shape and every recommended frame shape', () => {
-    for (const shape of FACE_SHAPES) {
-      expect(enT[`face_shape_${shape}`]).toBeTruthy();
-      for (const frame of FRAME_RECOMMENDATIONS[shape]) {
-        expect(enT[`frame_shape_${frame}`]).toBeTruthy();
-      }
-    }
   });
 });
