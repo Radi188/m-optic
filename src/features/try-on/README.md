@@ -37,12 +37,19 @@ src/features/try-on/
 - Frames are analysed **upright and unmirrored** (`enablePhysicalBufferRotation`,
   `mirrorMode="off"`); any leftover rotation is applied natively before
   inference.
+- Outputs follow the **interface** orientation (`orientationSource="interface"`),
+  like the preview. With VisionCamera's default (`'device'`) a tablet standing
+  in landscape rotated the analysed frames but not the preview, so the glasses
+  missed the eyes.
 - `PerspectiveCamera` fov 63 / near 1 / far 10000, `aspect` = the analysed
   frame's aspect (reported by the plugin), cover-fitted like the preview.
   Instead of an oversized cover box, `setViewOffset` renders only the visible
   window of the same frustum (`core/coverGeometry.ts`).
-- Preview and GL view are mirrored together, once, by a `scaleX(-1)` wrapper
-  (Android preview uses `implementationMode="compatible"` so transforms apply).
+- Preview and GL view are each shown mirrored exactly once. The GL view always
+  gets `scaleX(-1)`; the preview gets it on iOS only, because Android's CameraX
+  `PreviewView` already mirrors the front camera (it ignores `mirrorMode`).
+  Mirroring it again there put the glasses on the opposite side of the face.
+  (Android preview uses `implementationMode="compatible"` so transforms apply.)
 
 ## Loading speed
 

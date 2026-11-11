@@ -52,6 +52,12 @@ class HybridFaceLandmarker(
   override val delegate: String
 
   private val lock = Any()
+
+  // Held for a whole detection. MediaPipe's TaskRunner.process() is
+  // synchronized but close() is not, so closing the graph from the JS thread
+  // while the camera thread is inside detectForVideo tears it down mid-run
+  // (native crash on leaving the try-on). close() takes this lock first.
+  private val inferenceLock = Any()
   private val latest = FloatArray(ResultLayout.COUNT)
   private var sequence = 0.0
   private var lastTimestampMs = 0L
@@ -111,7 +117,9 @@ class HybridFaceLandmarker(
   override val memorySize: Long
     get() = (ResultLayout.COUNT * 4L) + (bitmap?.byteCount?.toLong() ?: 0L)
 
-  override fun detect(frame: HybridFrameSpec): Boolean {
+  override fun detect(frame: HybridFrameSpec): Boolean = synchronized(inferenceLock) { detectLocked(frame) }
+
+  private fun detectLocked(frame: HybridFrameSpec): Boolean {
     val current = synchronized(lock) { landmarker } ?: return false
     val native = frame as? NativeFrame ?: return false
     val image = native.image
@@ -226,11 +234,18 @@ class HybridFaceLandmarker(
   }
 
   override fun close() {
-    synchronized(lock) {
-      landmarker?.close()
-      landmarker = null
-      sequence = 0.0
-    }
+    // Waits for an in-flight detection (one frame) so the graph is never
+    // closed while it runs; after this, detect() sees null and returns early.
+    val closing =
+      synchronized(inferenceLock) {
+        synchronized(lock) {
+          val current = landmarker
+          landmarker = null
+          sequence = 0.0
+          current
+        }
+      }
+    closing?.close()
   }
 
   override fun dispose() {

@@ -260,6 +260,46 @@ export interface ArmMesh {
 }
 
 /**
+ * Opacity of a see-through frame part at full transmission. Catalog colourways
+ * often keep their colour in a translucent acetate layer (e.g. the temples of
+ * a dark-fronted frame), so this stays high enough for that colour to read.
+ */
+const SEE_THROUGH_FRAME_OPACITY_AT_FULL = 0.5;
+
+/**
+ * Frame parts the artist made see-through (`KHR_materials_transmission`:
+ * coloured acetate, clear nose pads, nylon cord) are drawn as ordinary
+ * translucent colour instead. Real transmission refracts the 3D scene behind
+ * it, and the try-on scene behind the frame is empty (the camera image is a
+ * separate native view), so a 90%-transmissive brown or blue temple came out
+ * nearly black and every colourway looked the same. Lenses are skipped: they
+ * get makeLensMaterial(). Shared materials are converted once.
+ */
+function makeSeeThroughFramePartsTranslucent(model: THREE.Object3D): void {
+  const converted = new Map<THREE.Material, THREE.Material>();
+  const convert = (src: THREE.Material): THREE.Material => {
+    const physical = src as THREE.MeshPhysicalMaterial;
+    if (!physical.isMeshPhysicalMaterial || !(physical.transmission > 0)) return src;
+    let out = converted.get(src);
+    if (!out) {
+      const m = physical.clone();
+      m.opacity =
+        physical.opacity * (1 - physical.transmission * (1 - SEE_THROUGH_FRAME_OPACITY_AT_FULL));
+      m.transmission = 0;
+      m.transparent = true;
+      out = m;
+      converted.set(src, out);
+    }
+    return out;
+  };
+  model.traverse(node => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh || LENS_NAME_RE.test(mesh.name)) return;
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(convert) : convert(mesh.material);
+  });
+}
+
+/**
  * Clone a material and patch it to ramp alpha to 0 along the arm using the
  * per-vertex `aArmFade` attribute (0 at the hinge → 1 at the tip).
  */
@@ -474,6 +514,9 @@ export function buildGlassesGroup(modelScene: THREE.Object3D): GlassesBuild {
   const model = modelScene;
   model.rotation.set(MODEL_BASE_ROTATION[0], MODEL_BASE_ROTATION[1], MODEL_BASE_ROTATION[2]);
   model.updateMatrixWorld(true);
+
+  // Before the arms are prepared: their fade materials are clones of these.
+  makeSeeThroughFramePartsTranslucent(model);
 
   const temple = setupTempleSplay(model);
   model.updateMatrixWorld(true);

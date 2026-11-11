@@ -2,7 +2,7 @@
  * TryOnScreen — live AR try-on of one product, fully native.
  *
  *   PermissionGate   camera rationale / blocked (Open Settings)
- *   mirror wrapper   ┌ VisionCamera preview (front, unmirrored, cover)
+ *   camera layer     ┌ VisionCamera preview (front, cover; shown mirrored)
  *   (scaleX -1)      └ TryOnCanvas (three.js on expo-gl, transparent)
  *   overlays         status, "position your face", face-shape badge
  *   bottom panel     name, price, colour switcher, shutter, Telegram enquiry
@@ -10,8 +10,9 @@
  *
  * MediaPipe analyses the raw (unmirrored) frames on the camera thread and the
  * glasses are rendered in that same space; the preview and the GL view are
- * then mirrored together, once, by the wrapper — exactly like the website's
- * scaleX(-1) cover-box.
+ * then each shown mirrored exactly once — like the website's scaleX(-1)
+ * cover-box. The GL view always gets scaleX(-1); the preview only where the
+ * platform does not mirror it already (see PREVIEW_NEEDS_MIRROR).
  *
  * Camera, GL context and landmarker are released whenever the screen loses
  * focus or the app goes to the background (everything below is unmounted).
@@ -23,6 +24,7 @@ import {
   Alert,
   AppState,
   Linking,
+  Platform,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -71,6 +73,15 @@ type GlbState =
   | { status: 'error' };
 
 const PHOTO_DIR = 'vto-photos';
+
+/**
+ * Whether the front preview still has to be mirrored on screen. iOS honours
+ * mirrorMode="off" and shows the raw image. Android's CameraX PreviewView
+ * always mirrors the front camera itself (it ignores the Preview's mirror
+ * mode), so flipping it again there showed the raw image beside mirrored
+ * glasses: they sat on the opposite side of the face.
+ */
+const PREVIEW_NEEDS_MIRROR = Platform.OS !== 'android';
 
 /** Colourways with a try-on GLB, in the product's own order. */
 function tryOnOptions(product: Product): TryOnOption[] {
@@ -343,13 +354,20 @@ const TryOnScreen: React.FC = () => {
   return (
     <View style={styles.root} onLayout={onLayout}>
       {active && options.length > 0 && layout && (
-        <View style={[StyleSheet.absoluteFill, styles.mirror]} pointerEvents="none">
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Camera
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, PREVIEW_NEEDS_MIRROR && styles.mirror]}
             device="front"
             isActive
             outputs={outputs}
             mirrorMode="off"
+            // Analysed frames (and the photo) must be rotated exactly like the
+            // preview, which follows the screen. The default ('device', the
+            // accelerometer) rotates them on its own when a tablet stands in
+            // landscape while this portrait-locked screen does not rotate
+            // (e.g. Huawei floating windows), so MediaPipe saw the face turned
+            // 90° from what is on screen and the glasses landed off the eyes.
+            orientationSource="interface"
             resizeMode="cover"
             implementationMode="compatible"
             onStarted={() => {
@@ -362,16 +380,18 @@ const TryOnScreen: React.FC = () => {
               posthog?.capture('try_on_start_failed', { status: 'camera', product_id: productId });
             }}
           />
-          <TryOnCanvas
-            ref={canvasRef}
-            tracking={tracking}
-            gltf={gltf}
-            width={layout.width}
-            height={layout.height}
-            onFace={setFaceDetected}
-            onFirstFit={onFirstFit}
-            onGlbEmpty={() => setGlb({ status: 'error' })}
-          />
+          <View style={[StyleSheet.absoluteFill, styles.mirror]}>
+            <TryOnCanvas
+              ref={canvasRef}
+              tracking={tracking}
+              gltf={gltf}
+              width={layout.width}
+              height={layout.height}
+              onFace={setFaceDetected}
+              onFirstFit={onFirstFit}
+              onGlbEmpty={() => setGlb({ status: 'error' })}
+            />
+          </View>
         </View>
       )}
 

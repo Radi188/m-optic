@@ -7,6 +7,8 @@
  * module needs TextDecoder to exist when it is evaluated.
  */
 import { Platform } from 'react-native';
+import { setDynamicLoadingEnabled } from '@react-native-vector-icons/common';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -30,5 +32,24 @@ if (typeof g.TextDecoder === 'undefined') {
 const whatwg = require('expo/src/winter/url');
 g.URL = whatwg.URL;
 g.URLSearchParams = whatwg.URLSearchParams;
+
+// @react-native-vector-icons switches to "dynamic" font loading through
+// expo-font as soon as it sees Expo's modules. expo-font 56 is built for React
+// Native 0.85 and calls ReactFontManager.getCustomFontFamilies(), which 0.84
+// does not have, so on Android every <Ionicons> threw "Call to function
+// 'ExpoFontLoader.getLoadedFonts' has been rejected" (NoSuchMethodError). The
+// icon fonts are bundled natively on both platforms (as before Expo was
+// added), so dynamic loading is not needed. Revisit once the app is on RN 0.85.
+// Imported (not required): the package ships separate ESM and CJS builds, and
+// the icons import the ESM one, so a require() would switch off a copy of the
+// setting that nothing reads.
+// On RN 0.84 `globalThis.expo` is only installed by the first native-module
+// lookup, and the icons refuse the setting while it is missing (they would
+// then turn dynamic loading on by themselves once it appears), so install it
+// first.
+requireOptionalNativeModule('ExpoFontLoader');
+if (!setDynamicLoadingEnabled(false) && __DEV__) {
+  console.warn('[setupEnv] Could not turn off vector-icons dynamic font loading.');
+}
 
 export {};
