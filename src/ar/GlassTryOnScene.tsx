@@ -42,6 +42,7 @@ import {
   FACE_GEOMETRY_JS,
 } from './glassesModelWeb';
 import { formatPrice } from '../utils/formatPrice';
+import { usePriceVisible } from '../utils/priceGate';
 import { posthog } from '../config/posthog';
 
 interface Props {
@@ -675,6 +676,7 @@ else window.addEventListener('load', initFaceMesh);
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
+  const priceVisible = usePriceVisible();
   const webviewRef = useRef<WebView>(null);
   // Same per-product model as the 3-D viewer, so the frame being tried on is
   // the one being sold. Every tuning constant below is a fraction of the model's
@@ -809,7 +811,7 @@ const GlassTryOnScene: React.FC<Props> = ({ glass }) => {
         <View style={styles.glassInfo}>
           <AppText style={styles.glassName}>{glass.name}</AppText>
           <AppText style={styles.glassBrand}>
-            {glass.brand} · {formatPrice(glass.price)}
+            {priceVisible ? `${glass.brand} · ${formatPrice(glass.price)}` : glass.brand}
           </AppText>
         </View>
         <View style={styles.badge}>

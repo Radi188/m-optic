@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import RenderHTML, { defaultSystemFonts } from 'react-native-render-html';
+
+import { hasKhmer, khmerLineHeight } from '../../../utils/khmer';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Layout, Spacing } from '../../../theme';
 import type { AnnouncementItem } from '../../../types/home';
@@ -120,9 +122,18 @@ const AnnouncementDetailSheet: React.FC<Props> = ({
   const { readableWidth } = useResponsive();
   const contentWidth = readableWidth - Spacing.md * 2;
 
-  const isKhmer = i18n.language === 'km';
-  const bodyFont = isKhmer ? 'Hanuman-Regular' : 'DMSans-Regular';
-  const boldFont = isKhmer ? 'Hanuman-Bold' : 'DMSans-Bold';
+  // Pick the font from the TEXT, not only the app language: a Khmer post read
+  // with the app in English was drawn in DM Sans, which has no Khmer, so each
+  // line mixed a fallback Khmer font with DM Sans for "5$", "Premium", "M
+  // Optic"… on different baselines — the words did not line up. Hanuman has
+  // Latin too, so one font draws the whole post.
+  const khmerText =
+    i18n.language === 'km' ||
+    hasKhmer(`${announcement?.title ?? ''}${announcement?.content ?? ''}`);
+  const bodyFont = khmerText ? 'Hanuman-Regular' : 'DMSans-Regular';
+  const boldFont = khmerText ? 'Hanuman-Bold' : 'DMSans-Bold';
+  // Khmer stacks vowels and subscripts above and below the line.
+  const lineStyle = khmerText ? styles.htmlLineKhmer : null;
 
   const slideAnim = useRef(new Animated.Value(SHEET_OFFSET)).current;
   const [ratio, setRatio] = useState(FALLBACK_RATIO);
@@ -190,7 +201,9 @@ const AnnouncementDetailSheet: React.FC<Props> = ({
             {formatAnnouncementDate(announcement.created_at, i18n.language)}
           </AppText>
 
-          <AppText style={styles.title}>{announcement.title}</AppText>
+          <AppText style={[styles.title, khmerText && styles.titleKhmer]}>
+            {announcement.title}
+          </AppText>
 
           {/* The body is rich text with paragraphs and inline emoji images.
               Flattening it to a string collapsed the paragraph breaks into one
@@ -200,10 +213,10 @@ const AnnouncementDetailSheet: React.FC<Props> = ({
               contentWidth={contentWidth}
               source={{ html: inlineEmoji(announcement.content) }}
               systemFonts={HTML_SYSTEM_FONTS}
-              baseStyle={{ ...styles.htmlBase, fontFamily: bodyFont }}
+              baseStyle={{ ...styles.htmlBase, ...lineStyle, fontFamily: bodyFont }}
               tagsStyles={{
-                p: { ...styles.htmlP, fontFamily: bodyFont },
-                li: { ...styles.htmlP, fontFamily: bodyFont },
+                p: { ...styles.htmlP, ...lineStyle, fontFamily: bodyFont },
+                li: { ...styles.htmlP, ...lineStyle, ...styles.htmlLi, fontFamily: bodyFont },
                 strong: { ...styles.htmlStrong, fontFamily: boldFont },
                 b: { ...styles.htmlStrong, fontFamily: boldFont },
                 img: styles.htmlImg,
@@ -219,6 +232,12 @@ const AnnouncementDetailSheet: React.FC<Props> = ({
                 },
               }}
               enableExperimentalMarginCollapsing
+              // The editor writes each blank line as <p><br></p>. React Native
+              // prints that <br> as two lines (a browser prints one), so every
+              // blank line came out double height; these give browser line
+              // breaks and drop empty "ghost" lines.
+              enableExperimentalBRCollapsing
+              enableExperimentalGhostLinesPrevention
             />
           )}
 
@@ -293,17 +312,31 @@ const styles = StyleSheet.create({
     color: Colors.black,
     marginBottom: 10,
   },
+  titleKhmer: {
+    fontFamily: 'Hanuman-Bold',
+    lineHeight: khmerLineHeight(FontSize.lg),
+  },
   htmlBase: {
     fontSize: 14,
     lineHeight: 22,
     color: Colors.gray700,
   },
+  // No gap between paragraphs. The announcement editor writes every line as
+  // its own <p> and every blank line as an empty <p><br></p>, so the author's
+  // spacing is already in the markup. A margin here added a gap after every
+  // line, and a blank line came out about 52 px tall.
   htmlP: {
     marginTop: 0,
-    marginBottom: 10,
+    marginBottom: 0,
     fontSize: 14,
     lineHeight: 22,
     color: Colors.gray700,
+  },
+  htmlLi: {
+    marginBottom: 4,
+  },
+  htmlLineKhmer: {
+    lineHeight: 26,
   },
   htmlStrong: {
     fontWeight: '800',

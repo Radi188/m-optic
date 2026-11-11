@@ -14,8 +14,6 @@ import {
   selectFavorites,
   type FavoriteItem,
 } from '../store/slices/favoritesSlice';
-import { selectIsAuthenticated } from '../store/slices/authSlice';
-import { isPriceVisible } from '../utils/priceGate';
 import { useBlockScreenCapture } from '../hook/useBlockScreenCapture';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
@@ -31,14 +29,11 @@ const FavoritesScreen: React.FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const favorites = useAppSelector(selectFavorites);
-  const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   // Shows prices: no screenshots or screen recording while focused.
   useBlockScreenCapture();
 
-  const renderItem = ({ item, index }: { item: FavoriteItem; index: number }) => {
-    const showPrice = item.price !== null && isPriceVisible(isAuthenticated, index);
-
+  const renderItem = ({ item }: { item: FavoriteItem }) => {
     return (
       <TouchableOpacity
         style={styles.row}
@@ -66,21 +61,17 @@ const FavoritesScreen: React.FC = () => {
           <AppText style={styles.name} numberOfLines={2}>
             {item.name}
           </AppText>
-          {item.price !== null &&
-            (showPrice ? (
-              <PriceTag
-                pricing={{
-                  price: item.price,
-                  originalPrice: item.originalPrice ?? null,
-                  discountPercentage: item.discountPercentage ?? null,
-                }}
-                priceStyle={styles.price}
-              />
-            ) : (
-              <AppText style={[styles.price, styles.priceHidden]}>
-                {t('LoginToSeePrice')}
-              </AppText>
-            ))}
+          {/* Signed out, PriceTag shows "Log in to see price" itself. */}
+          {item.price !== null && (
+            <PriceTag
+              pricing={{
+                price: item.price,
+                originalPrice: item.originalPrice ?? null,
+                discountPercentage: item.discountPercentage ?? null,
+              }}
+              priceStyle={styles.price}
+            />
+          )}
         </View>
 
         <TouchableOpacity
@@ -236,11 +227,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: '800',
     color: Colors.primary,
-  },
-  priceHidden: {
-    fontSize: FontSize.xs,
-    fontWeight: '600',
-    color: Colors.gray400,
   },
   heartBtn: {
     width: 40,

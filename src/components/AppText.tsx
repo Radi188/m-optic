@@ -3,11 +3,16 @@ import { Text, TextProps, StyleSheet, TextStyle } from 'react-native';
 
 import { useTranslation } from 'react-i18next';
 
+import { hasKhmer } from '../utils/khmer';
+
 const fontFamilyMap = {
+  // Only Regular and Bold ship (android/app/src/main/assets/fonts, iOS
+  // Info.plist). The Medium/SemiBold names did not exist, so 500/600 Khmer
+  // text fell back to the system font.
   km: {
     400: 'Hanuman-Regular',
-    500: 'Hanuman-Medium',
-    600: 'Hanuman-SemiBold',
+    500: 'Hanuman-Regular',
+    600: 'Hanuman-Bold',
     700: 'Hanuman-Bold',
   },
 
@@ -42,8 +47,7 @@ const normalizeWeight = (weight?: TextStyle['fontWeight']): number => {
   return value;
 };
 
-const getFont = (language: string, weight?: TextStyle['fontWeight']) => {
-  const lang = language === 'km' ? 'km' : 'en';
+const getFont = (lang: 'km' | 'en', weight?: TextStyle['fontWeight']) => {
 
   const fontWeight = normalizeWeight(weight);
 
@@ -59,7 +63,12 @@ export default function AppText({ style, ...props }: TextProps) {
 
   const flattenStyle = StyleSheet.flatten(style) || {};
 
-  const fontFamily = getFont(i18n.language, flattenStyle.fontWeight);
+  // Khmer text gets the Khmer font even when the app is in English (product
+  // names, announcements). DM Sans has no Khmer, so Android mixed a fallback
+  // Khmer font with DM Sans in one line, on different baselines.
+  const lang =
+    i18n.language === 'km' || hasKhmer(props.children) ? 'km' : 'en';
+  const fontFamily = getFont(lang, flattenStyle.fontWeight);
 
   return (
     <Text

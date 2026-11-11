@@ -54,6 +54,8 @@ import type { Product } from '../types/glasses';
 import AppText from '../components/AppText';
 import AppImage from '../components/AppImage';
 import { formatPrice } from '../utils/formatPrice';
+import { usePriceVisible } from '../utils/priceGate';
+import LockedPrice from '../components/ui/LockedPrice';
 import { posthog } from '../config/posthog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2542,6 +2544,7 @@ const ProductRecommendations: React.FC<{
   hairStyle: HairStyle | null;
   onPickProduct: (id: number) => void;
 }> = ({ shape, recommendedFrames, mode, hairStyle, onPickProduct }) => {
+  const priceVisible = usePriceVisible();
   const { products, loading } = useProductList({
     page: 1,
     is_active_mobile: true,
@@ -2627,7 +2630,11 @@ const ProductRecommendations: React.FC<{
                 {reasonFor(p)}
               </AppText>
             </View>
-            <AppText style={prStyles.price}>{formatPrice(p.price)}</AppText>
+            {priceVisible ? (
+              <AppText style={prStyles.price}>{formatPrice(p.price)}</AppText>
+            ) : (
+              <LockedPrice style={prStyles.lockedPrice} />
+            )}
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.gray400} />
         </TouchableOpacity>
@@ -5085,6 +5092,7 @@ const prStyles = StyleSheet.create({
     color: Colors.primary,
     marginTop: 4,
   },
+  lockedPrice: { marginTop: 4 },
 });
 
 // ─── Glasses Bottom Sheet Styles ──────────────────────────────────────────────

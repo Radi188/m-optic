@@ -9,6 +9,7 @@ import AppImage from '../../AppImage';
 import { useFavorite } from '../../../hook/useFavorite';
 import { productPricing } from '../../../utils/salePrice';
 import PriceTag from '../PriceTag';
+import DiscountBadge from '../DiscountBadge';
 
 const FAVORITE_RED = '#E5484D';
 
@@ -16,19 +17,9 @@ type Props = {
   item: Product;
   onPress: () => void;
   onTryOn: () => void;
-  /** Hide the price behind a blur (signed-out browsers, past the free preview). */
-  priceLocked?: boolean;
-  /** Tapping the locked price sends the user to sign in. */
-  onRequestLogin?: () => void;
 };
 
-const GlassCard: React.FC<Props> = ({
-  item,
-  onPress,
-  onTryOn,
-  priceLocked = false,
-  onRequestLogin,
-}) => {
+const GlassCard: React.FC<Props> = ({ item, onPress, onTryOn }) => {
   // Saved to My Favorites (persisted on the device).
   const { isFavorite, toggle: toggleFavorite } = useFavorite(item);
 
@@ -47,6 +38,10 @@ const GlassCard: React.FC<Props> = ({
           style={styles.image}
           resizeMode="contain"
         />
+
+        {/* Sale badge: fixed on the image (top-left, like the product page),
+            so it does not move when signing in reveals the price. */}
+        <DiscountBadge percent={pricing.discountPercentage} style={styles.discount} />
 
         {/* Heart Icon */}
         <TouchableOpacity
@@ -76,31 +71,8 @@ const GlassCard: React.FC<Props> = ({
         </AppText>
         <AppText style={styles.brand}>{brand}</AppText>
 
-        {priceLocked ? (
-          // The digits are rendered transparent with a shadow spread under
-          // them, which smears the real glyphs into an unreadable smudge. Done
-          // this way rather than with a BlurView because it behaves identically
-          // on both platforms and needs no native view over the text.
-          <TouchableOpacity
-            onPress={onRequestLogin}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Log in to see the price"
-          >
-            {/* The -20% badge stays readable: a sale is a reason to sign in. */}
-            <PriceTag
-              pricing={pricing}
-              priceStyle={[styles.price, styles.priceBlurred]}
-              hideOriginal
-            />
-            <AppText style={styles.priceLockHint}>
-              <Ionicons name="lock-closed" size={11} color={Colors.primary} />{' '}
-              Log in to see price
-            </AppText>
-          </TouchableOpacity>
-        ) : (
-          <PriceTag pricing={pricing} priceStyle={styles.price} />
-        )}
+        {/* Signed out, PriceTag shows "Log in to see price" itself. */}
+        <PriceTag pricing={pricing} priceStyle={styles.price} hideDiscount />
       </View>
     </TouchableOpacity>
   );
@@ -154,6 +126,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
+  discount: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+  },
+
   heartIcon: {
     position: 'absolute',
     top: 10,
@@ -171,20 +149,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#b09080',
     marginVertical: 4,
-  },
-
-  priceBlurred: {
-    color: 'transparent',
-    textShadowColor: 'rgba(176,144,128,0.85)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 9,
-    marginVertical: 0,
-  },
-
-  priceLockHint: {
-    fontSize: 11,
-    color: '#b09080',
-    marginBottom: 4,
   },
 
   tryOnBtn: {

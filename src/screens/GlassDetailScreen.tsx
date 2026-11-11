@@ -42,6 +42,9 @@ import {
 } from '../utils/productMedia';
 import { productPricing, variationPricing } from '../utils/salePrice';
 import PriceTag from '../components/ui/PriceTag';
+import DiscountBadge from '../components/ui/DiscountBadge';
+import { usePriceVisible } from '../utils/priceGate';
+import { isOutOfStockFor } from '../utils/stock';
 import { glbAssets } from '../features/try-on/core/productCalibration';
 import { prefetchGlb } from '../features/try-on/render/glbCache';
 import GlassesDetailSkeleton from '../components/ui/Loading/GlassesDetailLoadingScreen';
@@ -75,6 +78,7 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
   onClose,
 }) => {
   const insets = useSafeAreaInsets();
+  const priceVisible = usePriceVisible();
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent>
@@ -100,7 +104,7 @@ const ViewerModal: React.FC<ViewerModalProps> = ({
               {mode === '3d' ? '3D Model' : 'Try On'} — {glass.name}
             </AppText>
             <AppText style={viewer.subtitle}>
-              {glass.brand} · {formatPrice(glass.price)}
+              {priceVisible ? `${glass.brand} · ${formatPrice(glass.price)}` : glass.brand}
             </AppText>
           </View>
           <View
@@ -171,7 +175,6 @@ const GlassDetailScreen: React.FC = () => {
   // while one is open.
   useBlockScreenCapture(viewerMode === null);
 
-  const accentColor = Colors.primary;
 
   const openViewer = (mode: ViewMode) => {
     posthog?.capture('product_viewer_opened', {
@@ -209,6 +212,8 @@ const GlassDetailScreen: React.FC = () => {
     () => colors.find(c => c.id === selectedColorId) ?? colors[0] ?? null,
     [colors, selectedColorId],
   );
+  // The selected colourway's stock state, else the product's.
+  const outOfStock = isOutOfStockFor(product, selectedColor?.variation);
 
   // A variation's own gallery wins; without one, fall back to the parent's.
   // galleryImages() filters out the 3-D model, which shares the assets array.
@@ -282,16 +287,15 @@ const GlassDetailScreen: React.FC = () => {
     if (!product) {
       return null;
     }
-    const stockType = (product.stock_type ?? '').toLowerCase();
     return {
       id: String(product.id),
       name: product.name ?? product.item_name ?? '',
       brand: product.brand?.name ?? '',
       price,
       stock: 0,
-      status: stockType.includes('out')
+      status: outOfStock
         ? 'Out of Stock'
-        : stockType.includes('low')
+        : (product.stock_type ?? '').toLowerCase().includes('low')
         ? 'Low Stock'
         : 'In Stock',
       image: images[0] ?? product.image ?? '',
@@ -302,7 +306,7 @@ const GlassDetailScreen: React.FC = () => {
       modelUrl: productModelUrl,
       frameWidthMm: frameWidthMm(measurements),
     };
-  }, [product, images, price, productModelUrl, measurements]);
+  }, [product, images, price, productModelUrl, measurements, outOfStock]);
 
   /**
    * The enquiry the customer sends us on Telegram: which frame, which colour,
@@ -358,20 +362,6 @@ const GlassDetailScreen: React.FC = () => {
           <AppText style={styles.headerTitle} numberOfLines={1}>
             {product?.name}
           </AppText>
-          <View
-            style={[
-              styles.stockBadge,
-              {
-                backgroundColor: accentColor + '20',
-                borderColor: accentColor + '50',
-              },
-            ]}
-          >
-            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
-            {/* <AppText style={[styles.stockText, { color: accentColor }]}>
-            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
-          </AppText> */}
-          </View>
         </View>
         <GlassesDetailSkeleton />
       </SafeAreaView>
@@ -392,20 +382,6 @@ const GlassDetailScreen: React.FC = () => {
           <AppText style={styles.headerTitle} numberOfLines={1}>
             {product?.name}
           </AppText>
-          <View
-            style={[
-              styles.stockBadge,
-              {
-                backgroundColor: accentColor + '20',
-                borderColor: accentColor + '50',
-              },
-            ]}
-          >
-            <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
-            {/* <AppText style={[styles.stockText, { color: accentColor }]}>
-            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
-          </AppText> */}
-          </View>
         </View>
         <ErrorComponent onRetry={refetch} />
       </SafeAreaView>
@@ -432,20 +408,12 @@ const GlassDetailScreen: React.FC = () => {
         <AppText style={styles.headerTitle} numberOfLines={1}>
           {product?.name}
         </AppText>
-        <View
-          style={[
-            styles.stockBadge,
-            {
-              backgroundColor: accentColor + '20',
-              borderColor: accentColor + '50',
-            },
-          ]}
-        >
-          <View style={[styles.stockDot, { backgroundColor: accentColor }]} />
-          {/* <AppText style={[styles.stockText, { color: accentColor }]}>
-            {glass.status === 'In Stock' ? `${glass.stock} left` : glass.status}
-          </AppText> */}
-        </View>
+        {/* Shown only when out of stock; an in-stock frame shows nothing. */}
+        {outOfStock && (
+          <View style={styles.stockBadge}>
+            <AppText style={styles.stockText}>{t('stockOut')}</AppText>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -493,6 +461,14 @@ const GlassDetailScreen: React.FC = () => {
           {/* <View style={styles.brandPill}>
             <AppText style={styles.brandPillText}>{glass.brand}</AppText>
           </View> */}
+          {/* The sale badge lives here rather than beside the price, so it
+              stays put when signing in swaps "Log in to see price" for the
+              amounts. */}
+          <DiscountBadge
+            percent={pricing.discountPercentage}
+            size="lg"
+            style={styles.heroDiscount}
+          />
         </View>
 
         {/* ── Name + Price ─────────────────────────────────────────────────── */}
@@ -504,6 +480,7 @@ const GlassDetailScreen: React.FC = () => {
               priceStyle={styles.framePrice}
               style={styles.framePriceTag}
               size="lg"
+              hideDiscount
             />
           </View>
           {/* {glass.description ? (
@@ -682,19 +659,23 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   stockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    gap: 4,
+    backgroundColor: Colors.error + '14',
+    borderColor: Colors.error + '55',
   },
-  stockDot: { width: 6, height: 6, borderRadius: 3 },
-  stockText: { fontSize: FontSize.xs, fontWeight: '700' },
+  stockText: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.error },
 
   // Hero image
   heroWrap: { width: '100%', height: 300, position: 'relative' },
+  heroDiscount: {
+    position: 'absolute',
+    top: Spacing.md,
+    left: Spacing.md,
+    ...Shadow.sm,
+  },
   heroImage: { width: '100%', height: '100%' },
   heroOverlay: {
     position: 'absolute',

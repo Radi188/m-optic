@@ -34,21 +34,36 @@ const SCALE_SMOOTH = 0.3;
 /** Same strength the website gives its environment map. */
 const ENVIRONMENT_INTENSITY = 0.55;
 
+/** Face size of the cube the room is rendered into (PMREM's own default). */
+const ENVIRONMENT_CUBE_SIZE = 256;
+
 /**
  * Reflections for metal and acetate. Built once per GL context; skipped (lights
  * only) if the context cannot render the half-float targets PMREM needs.
+ *
+ * The room is rendered into a cube map first and PMREM-filtered from that.
+ * `PMREMGenerator.fromScene` (the website's one-liner) yields an all-black map
+ * on expo-gl, with no GL error — measured on device: a white metal sphere lit
+ * by it read 0/255, by this path 255/255. With a black environment every
+ * metal frame (gunmetal, silver, gold) rendered black and acetate lost most of
+ * its light, so colourways looked alike.
  */
 function Environment() {
   const gl = useThree(s => s.gl);
   const scene = useThree(s => s.scene);
   useEffect(() => {
     let target: THREE.WebGLRenderTarget | null = null;
+    let cubeTarget: THREE.WebGLCubeRenderTarget | null = null;
     let pmrem: THREE.PMREMGenerator | null = null;
     let room: RoomEnvironment | null = null;
     try {
-      pmrem = new THREE.PMREMGenerator(gl);
       room = new RoomEnvironment();
-      target = pmrem.fromScene(room, 0.04);
+      cubeTarget = new THREE.WebGLCubeRenderTarget(ENVIRONMENT_CUBE_SIZE, {
+        type: THREE.HalfFloatType,
+      });
+      new THREE.CubeCamera(0.1, 100, cubeTarget).update(gl, room);
+      pmrem = new THREE.PMREMGenerator(gl);
+      target = pmrem.fromCubemap(cubeTarget.texture);
       scene.environment = target.texture;
       scene.environmentIntensity = ENVIRONMENT_INTENSITY;
     } catch (err) {
@@ -58,6 +73,7 @@ function Environment() {
     return () => {
       scene.environment = null;
       target?.dispose();
+      cubeTarget?.dispose();
       pmrem?.dispose();
       room?.dispose();
     };

@@ -23,6 +23,7 @@ import { useGlassesGlb } from './glassesModel';
 import { useTranslation } from 'react-i18next';
 import { GLB_SCRIPT_TAGS, GLB_HELPERS_JS } from './glassesModelWeb';
 import { formatPrice } from '../utils/formatPrice';
+import { usePriceVisible } from '../utils/priceGate';
 
 interface Props {
   glass: GlassItem;
@@ -58,7 +59,8 @@ function escapeHtml(raw: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function buildHtml(glass: GlassItem, glbDataUri: string): string {
+/** `showPrice` false (signed out) leaves the price line out of the page. */
+function buildHtml(glass: GlassItem, glbDataUri: string, showPrice: boolean): string {
   const accent = STATUS_HEX[glass.status] ?? Colors.primary;
   const accentNum = accent.replace('#', '');
 
@@ -101,7 +103,7 @@ function buildHtml(glass: GlassItem, glbDataUri: string): string {
 <div id="label">
   <div id="lname">${escapeHtml(glass.name)}</div>
   <div id="lbrand">${escapeHtml(glass.brand)}</div>
-  <div id="lprice">${escapeHtml(formatPrice(glass.price))}</div>
+  ${showPrice ? `<div id="lprice">${escapeHtml(formatPrice(glass.price))}</div>` : ''}
 </div>
 <div id="info">Drag to rotate · Pinch to zoom</div>
 <div id="boot"><div class="spinner"></div>Loading 3D model…</div>
@@ -455,11 +457,12 @@ const GlassModelScene: React.FC<Props> = ({ glass }) => {
   // The product's own .glb. There is no fallback model.
   const { dataUri, error, missing } = useGlassesGlb(glass.modelUrl);
   const { t } = useTranslation();
+  const priceVisible = usePriceVisible();
 
   const html = useMemo(
-    () => (dataUri ? buildHtml(glass, dataUri) : null),
+    () => (dataUri ? buildHtml(glass, dataUri, priceVisible) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [glass.id, glass.status, dataUri],
+    [glass.id, glass.status, dataUri, priceVisible],
   );
 
   if (missing) {

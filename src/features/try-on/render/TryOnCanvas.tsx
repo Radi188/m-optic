@@ -212,12 +212,12 @@ const TryOnCanvas = forwardRef<TryOnCanvasHandle, Props>(
         gl={{ antialias: true, alpha: true }}
         camera={{ fov: FOV_Y_DEG, near: NEAR_CM, far: FAR_CM, position: [0, 0, 0] }}
         onCreated={({ gl }) => {
-          // expo-gl has no renderbufferStorageMultisample, and three always
-          // renders KHR_materials_transmission (the catalog's acetate, nose
-          // pads, crystals…) into a 4-sample target that it then resolves
-          // with blitFramebuffer. Back that target with a plain single-sample
-          // renderbuffer: same pipeline and look as the website, minus MSAA
-          // on that internal buffer.
+          // expo-gl has no renderbufferStorageMultisample, and three renders
+          // any KHR_materials_transmission material into a 4-sample target
+          // that it then resolves with blitFramebuffer. Back that target with
+          // a plain single-sample renderbuffer. (buildGlasses now turns the
+          // catalog's transmissive frame parts into plain translucency, so
+          // this is a safety net for a model that still reaches that path.)
           type Storage = (target: number, format: number, w: number, h: number) => void;
           const ctx = gl.getContext() as unknown as {
             renderbufferStorage: Storage;

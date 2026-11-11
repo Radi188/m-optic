@@ -27,7 +27,6 @@ import type { RootStackParamList, GlassItem } from '../types/navigation';
 
 import { useAppDispatch, useAppSelector } from '../store';
 import { selectIsAuthenticated } from '../store/slices/authSlice';
-import { FREE_PRICE_PREVIEW, isPriceVisible } from '../utils/priceGate';
 import { addItem } from '../store/slices/glassSlice';
 import GlassCard from '../components/ui/GlassesCard/GlassesCard';
 import SearchTrigger from '../components/ui/Search/SearchBar';
@@ -313,18 +312,14 @@ const GlassesListScreen: React.FC = () => {
     return newData;
   };
 
-  const renderCard = ({ item, index }: { item: Product; index: number }) => {
+  const renderCard = ({ item }: { item: Product }) => {
     if ((item as any).empty) {
       return <View style={styles.gridSpacer} />;
     }
 
-    // formatData only pads the LAST row, so a real item's position in the
-    // padded list is still its position in `products`.
     return (
       <GlassCard
         item={item}
-        priceLocked={!isPriceVisible(isAuthenticated, index)}
-        onRequestLogin={goToLogin}
         onPress={() => navigation.navigate('GlassDetail', { id: item.id })}
         onTryOn={() => navigation.navigate('TryOn', { productId: String(item.id) })}
       />
@@ -506,8 +501,8 @@ const GlassesListScreen: React.FC = () => {
           </AppText>
         )}
 
-        {/* Only worth showing once there is actually a hidden price to reveal. */}
-        {!isAuthenticated && products.length > FREE_PRICE_PREVIEW && (
+        {/* Every price is hidden until sign-in; say so once, above the grid. */}
+        {!isAuthenticated && products.length > 0 && (
           <TouchableOpacity
             style={styles.priceGateBanner}
             activeOpacity={0.85}

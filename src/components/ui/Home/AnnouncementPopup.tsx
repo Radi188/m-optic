@@ -21,6 +21,7 @@ import {
 import type { AnnouncementItem } from '../../../types/home';
 import { buildFileUrl } from '../../../utils/fileUrlHelper';
 import AppText from '../../AppText';
+import { hasKhmer, khmerLineHeight } from '../../../utils/khmer';
 import AppImage from '../../AppImage';
 import AnnouncementDetailSheet from './AnnouncementDetailSheet';
 import { posthog } from '../../../config/posthog';
@@ -252,7 +253,10 @@ const AnnouncementPopup: React.FC<AnnouncementPopupProps> = ({
                 activeOpacity={0.7}
                 style={styles.preview}
               >
-                <AppText style={styles.title} numberOfLines={2}>
+                <AppText
+                  style={[styles.title, hasKhmer(announcement.title) && styles.titleKhmer]}
+                  numberOfLines={2}
+                >
                   {announcement.title}
                 </AppText>
                 {!!excerpt && (
@@ -332,6 +336,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.black,
   },
+  // Khmer marks need the taller line, or they spill out of the box.
+  titleKhmer: { lineHeight: khmerLineHeight(FontSize.lg), letterSpacing: 0 },
   excerpt: {
     fontSize: FontSize.sm,
     lineHeight: 21,

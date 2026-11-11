@@ -4,7 +4,10 @@ import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 import { Colors } from '../../theme';
 import AppText from '../AppText';
+import LockedPrice from './LockedPrice';
+import DiscountBadge from './DiscountBadge';
 import { formatPrice } from '../../utils/formatPrice';
+import { usePriceVisible } from '../../utils/priceGate';
 import type { Pricing } from '../../utils/salePrice';
 
 type Props = {
@@ -14,12 +17,13 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   /** `lg` for the product page; `sm` for cards and lists. */
   size?: 'sm' | 'lg';
-  /**
-   * Leave out the struck-through regular price — for a price that is blurred
-   * for signed-out browsers, where a readable "was" price would defeat the blur.
-   * The discount badge still shows.
-   */
+  /** Leave out the struck-through regular price. */
   hideOriginal?: boolean;
+  /**
+   * Leave out the discount badge — for a screen that shows it in a fixed spot
+   * of its own, so it does not move when signing in swaps the lock for prices.
+   */
+  hideDiscount?: boolean;
 };
 
 /**
@@ -27,7 +31,9 @@ type Props = {
  *
  *   $80   $100 (struck through)   -20%
  *
- * Renders nothing when there is no price at all.
+ * Renders nothing when there is no price at all. Signed out, the amounts are
+ * replaced by "Log in to see price" (tap → Login); the discount badge stays,
+ * since a sale is a reason to sign in.
  */
 const PriceTag: React.FC<Props> = ({
   pricing,
@@ -35,26 +41,31 @@ const PriceTag: React.FC<Props> = ({
   style,
   size = 'sm',
   hideOriginal = false,
+  hideDiscount = false,
 }) => {
+  const visible = usePriceVisible();
   if (pricing.price === null) return null;
   const large = size === 'lg';
 
   return (
     <View style={[styles.row, style]}>
-      <AppText style={priceStyle}>{formatPrice(pricing.price)}</AppText>
+      {visible ? (
+        <AppText style={priceStyle}>{formatPrice(pricing.price)}</AppText>
+      ) : (
+        <LockedPrice
+          textStyle={large && styles.lockedLarge}
+          iconSize={large ? 14 : 12}
+        />
+      )}
 
-      {!hideOriginal && pricing.originalPrice !== null && (
+      {visible && !hideOriginal && pricing.originalPrice !== null && (
         <AppText style={[styles.original, large && styles.originalLarge]}>
           {formatPrice(pricing.originalPrice)}
         </AppText>
       )}
 
-      {pricing.discountPercentage !== null && (
-        <View style={[styles.badge, large && styles.badgeLarge]}>
-          <AppText style={[styles.badgeText, large && styles.badgeTextLarge]}>
-            -{pricing.discountPercentage}%
-          </AppText>
-        </View>
+      {!hideDiscount && (
+        <DiscountBadge percent={pricing.discountPercentage} size={size} />
       )}
     </View>
   );
@@ -76,13 +87,5 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   originalLarge: { fontSize: 15 },
-  badge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    backgroundColor: Colors.error,
-  },
-  badgeLarge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  badgeText: { fontSize: 10, fontWeight: '800', color: Colors.white },
-  badgeTextLarge: { fontSize: 12 },
+  lockedLarge: { fontSize: 14 },
 });

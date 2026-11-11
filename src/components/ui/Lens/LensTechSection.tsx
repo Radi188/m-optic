@@ -24,6 +24,8 @@ import PhotochromicDemo from './PhotochromicDemo';
 import ImpactDemo from './ImpactDemo';
 import ZoneMapDemo from './ZoneMapDemo';
 import { formatPrice } from '../../../utils/formatPrice';
+import { usePriceVisible } from '../../../utils/priceGate';
+import LockedPrice from '../LockedPrice';
 
 const money = (v: number) => formatPrice(v, { decimals: 2 });
 
@@ -31,7 +33,9 @@ const money = (v: number) => formatPrice(v, { decimals: 2 });
  * One prescription band: its SPH/CYL range on the left and, when the lens is
  * priced per range, that range's price on the right.
  */
-const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
+const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => {
+  const priceVisible = usePriceVisible();
+  return (
   <View style={styles.tierRow}>
     <View style={styles.tierRange}>
       <AppText style={styles.rangeText}>
@@ -60,14 +64,21 @@ const TierRow: React.FC<{ tier: LensTier }> = ({ tier }) => (
 
     {tier.price !== undefined && (
       <View style={styles.tierPrice}>
-        <AppText style={styles.price}>{money(tier.price)}</AppText>
-        {tier.originalPrice !== undefined && (
-          <AppText style={styles.priceWas}>{money(tier.originalPrice)}</AppText>
+        {priceVisible ? (
+          <>
+            <AppText style={styles.price}>{money(tier.price)}</AppText>
+            {tier.originalPrice !== undefined && (
+              <AppText style={styles.priceWas}>{money(tier.originalPrice)}</AppText>
+            )}
+          </>
+        ) : (
+          <LockedPrice />
         )}
       </View>
     )}
   </View>
-);
+  );
+};
 
 /** The lens's headline benefit, shown big at the top of its card. */
 const HighlightPanel: React.FC<{
@@ -101,15 +112,19 @@ const HighlightPanel: React.FC<{
  */
 const LensCard: React.FC<{ product: LensProduct }> = ({ product }) => {
   const { t, i18n } = useTranslation();
+  const priceVisible = usePriceVisible();
   const lang = i18n.language;
 
   return (
     <View style={styles.lensCard}>
       <View style={styles.lensNameRow}>
         <AppText style={styles.lensName}>{product.name}</AppText>
-        {product.price !== undefined && (
-          <AppText style={styles.price}>{money(product.price)}</AppText>
-        )}
+        {product.price !== undefined &&
+          (priceVisible ? (
+            <AppText style={styles.price}>{money(product.price)}</AppText>
+          ) : (
+            <LockedPrice />
+          ))}
       </View>
 
       <View style={styles.coatingRow}>

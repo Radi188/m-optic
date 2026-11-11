@@ -5,6 +5,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import { Colors, FontSize, Spacing, Shadow } from '../../../theme';
 import { AnnouncementItem } from '../../../types/home';
 import AppText from '../../AppText';
+import { hasKhmer, khmerLineHeight } from '../../../utils/khmer';
 import AppImage from '../../AppImage';
 import AnnouncementDetailSheet, {
   formatAnnouncementDate,
@@ -83,7 +84,10 @@ const AnnouncementSection = ({ annoucements }: AnnouncementSectionProps) => {
               )}
             </View>
 
-            <AppText style={styles.title} numberOfLines={2}>
+            <AppText
+                  style={[styles.title, hasKhmer(item.title) && styles.titleKhmer]}
+                  numberOfLines={2}
+                >
               {item.title}
             </AppText>
 
@@ -206,6 +210,8 @@ const styles = StyleSheet.create({
     color: Colors.black,
     letterSpacing: -0.2,
   },
+  // Khmer marks need the taller line, or they spill out of the box.
+  titleKhmer: { lineHeight: khmerLineHeight(15), letterSpacing: 0 },
 
   readMoreRow: {
     flexDirection: 'row',
